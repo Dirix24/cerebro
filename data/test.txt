@@ -1,0 +1,17 @@
+usuario: ¿Qué es un byte?
+cerebro: Un byte es una unidad de información formada por ocho bits.
+
+usuario: ¿Qué hace la atención en un transformer?
+cerebro: La atención permite relacionar cada posición con otras posiciones del contexto.
+
+usuario: ¿Qué es una función de activación?
+cerebro: Es una transformación no lineal que permite a una red aprender relaciones complejas.
+
+usuario: ¿Qué significa entrenar un modelo?
+cerebro: Significa ajustar sus parámetros para reducir una función de pérdida sobre ejemplos.
+
+usuario: ¿Qué es una validación?
+cerebro: Es una evaluación con datos que no se usan para actualizar los parámetros.
+
+usuario: ¿Para qué sirve un checkpoint?
+cerebro: Sirve para guardar el estado de un modelo y poder evaluarlo o continuar el entrenamiento.

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+checkpoints/last.npz
+*.tmp
+learning/
+memory/memory_store.json
+data/workspace/*
+!data/workspace/.gitkeep

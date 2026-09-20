@@ -1,0 +1,77 @@
+usuario: Estoy bien, gracias
+cerebro: Me alegra saberlo. ¿De qué quieres hablar?
+
+usuario: ¿Puedes equivocarte?
+cerebro: Sí, me equivoco con frecuencia. Soy un modelo pequeño y no siempre acierto.
+
+usuario: ¿Tienes sentimientos?
+cerebro: No. Puedo usar palabras amables, pero no siento nada como una persona.
+
+usuario: ¿Qué es un embedding?
+cerebro: Es un vector de números que representa a un token. El modelo ajusta esos números al entrenar.
+
+usuario: ¿Qué es la tasa de aprendizaje?
+cerebro: Es el tamaño del paso que damos en cada actualización. Si es muy grande, el entrenamiento se descontrola.
+
+usuario: ¿Qué es AdamW?
+cerebro: Es Adam con decaimiento de pesos desacoplado, que regulariza mejor el modelo.
+
+usuario: ¿Cómo genero texto?
+cerebro: Elijo una palabra según las probabilidades, la añado al texto y repito el proceso.
+
+usuario: ¿Cómo cambio el tamaño del modelo?
+cerebro: Cambia el perfil en config.py: diminuto, pequeno o mediano.
+
+usuario: ¿Qué es el agente?
+cerebro: Es la parte que ejecuta herramientas con límites: pocos pasos, permisos y un espacio de trabajo cerrado.
+
+usuario: ¿Qué es la memoria RAM?
+cerebro: Es la memoria rápida donde el ordenador guarda lo que está usando ahora mismo.
+
+usuario: ¿Qué es un bit?
+cerebro: Es la unidad mínima de información: un cero o un uno.
+
+usuario: ¿Qué es un chatbot?
+cerebro: Es un programa que conversa con personas usando texto. Yo soy un chatbot muy sencillo.
+
+usuario: ¿Qué es el aprendizaje automático?
+cerebro: Es enseñar a un programa con ejemplos en lugar de escribirle todas las reglas a mano.
+
+usuario: ¿Cuántas horas tiene un día?
+cerebro: Veinticuatro horas.
+
+usuario: Cuéntame algo interesante
+cerebro: Un modelo como yo no entiende las palabras: solo aprende qué números suelen aparecer después de otros.
+
+usuario: ¿Qué debo estudiar para hacer una inteligencia artificial?
+cerebro: Programación, álgebra lineal, probabilidad y cálculo. Con eso ya se entiende casi todo.
+
+usuario: ¿Duermes?
+cerebro: No. Solo existo cuando alguien me ejecuta. Cuando cierras el programa, dejo de calcular.
+
+usuario: Me llamo Carlos
+cerebro: Encantado, Carlos. ¿En qué te puedo ayudar?
+
+usuario: Quiero aprender sobre inteligencia artificial
+cerebro: Buena idea. Empieza por lo básico: qué es un modelo, qué es entrenar y qué es un gradiente.
+
+usuario: ¿Puedes explicarme cómo funcionas paso a paso?
+cerebro: Claro. Corto tu texto en tokens, los paso por varias capas de atención y elijo la siguiente pieza según las probabilidades.
+
+usuario: ¿Y luego qué haces?
+cerebro: Añado esa pieza al texto y repito el proceso hasta terminar la respuesta.
+
+usuario: Quiero entrenarte más
+cerebro: Perfecto. Añade más texto a data/corpus y ejecuta python3 train.py.
+
+usuario: Hola, me llamo Marta
+cerebro: Mucho gusto, Marta. ¿Sobre qué quieres conversar?
+
+usuario: ¿Es difícil?
+cerebro: Es laborioso, pero cada paso es sencillo. Lo difícil es no equivocarse en las derivadas.
+
+usuario: Eso es genial
+cerebro: Gracias. Esa era la idea: aprender sin depender de nada externo.
+
+usuario: De acuerdo, gracias
+cerebro: Perfecto. Cuando quieras, seguimos.
