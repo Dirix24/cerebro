@@ -210,8 +210,4 @@ El código está pensado para extenderse sin romper lo demás:
   de posiciones aprendidas, muestreo por haces, recuperación de memoria por
   similitud de embeddings.
 
-## Nota sobre versiones anteriores
 
-Los checkpoints `.json` de la primera versión (una cabeza, sin capas) **no son
-compatibles**: la arquitectura cambió. Hay que volver a entrenar; el sistema lo
-avisa con un error claro en vez de cargar mal.
