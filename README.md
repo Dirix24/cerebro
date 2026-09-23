@@ -1,6 +1,6 @@
 # Cerebro
 
-Un modelo de lenguaje (transformer estilo GPT) **construido enteramente desde cero
+Un modelo de lenguaje  **construido enteramente desde cero
 con NumPy**. Sin PyTorch, sin TensorFlow, sin autograd, sin APIs, sin modelos
 preentrenados de nadie: tokenizador, atención, retropropagación, optimizador,
 entrenamiento, memoria y agente están escritos aquí, se pueden leer de principio a
