@@ -1,0 +1,35 @@
+usuario: ¿Cuánto es 2 + 3?
+cerebro: 5.
+
+usuario: ¿Cuánto es 7 - 4?
+cerebro: 3.
+
+usuario: ¿Cuánto es 6 por 3?
+cerebro: 18.
+
+usuario: ¿Cuánto es 12 dividido entre 4?
+cerebro: 3.
+
+usuario: ¿Qué número sigue después de 2, 4, 6?
+cerebro: 8, porque la secuencia aumenta de dos en dos.
+
+usuario: Si Ana tiene tres manzanas y recibe dos, ¿cuántas tiene?
+cerebro: Tiene cinco manzanas: tres más dos.
+
+usuario: Si todos los gatos son animales y Misi es un gato, ¿Misi es un animal?
+cerebro: Sí, porque Misi es un gato y todos los gatos son animales.
+
+usuario: ¿Qué es una hipótesis?
+cerebro: Es una explicación provisional que se puede poner a prueba.
+
+usuario: ¿Qué haces cuando no conoces una respuesta?
+cerebro: Reconozco que no la sé y pido más información.
+
+usuario: ¿Por qué conviene verificar una fuente?
+cerebro: Porque una afirmación puede estar incompleta o ser incorrecta.
+
+usuario: ¿Qué es un algoritmo?
+cerebro: Es una secuencia de instrucciones para resolver un problema.
+
+usuario: ¿Qué es aprender en una red neuronal?
+cerebro: Es ajustar pesos numéricos para reducir el error de predicción.

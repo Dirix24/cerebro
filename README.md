@@ -114,3 +114,21 @@ Desarrolla primero en una rama, ejecuta pruebas y revisa los cambios antes de fu
 - GitHub Actions ejecuta pruebas al abrir un PR hacia `main` y al actualizar `main`. La ejecución completa de CI debe comprobarse antes de fusionar.
 
 **Precaución:** la recuperación de checkpoints y el cierre de procesos no equivalen a una garantía frente a cortes de luz o fallos de disco. El aprendizaje automático sigue siendo experimental.
+
+## Entrenamiento neuronal guiado (experimental)
+
+Se incorpora un pequeño currículo **original** en `data/corpus/entrenamiento_guiado.txt` con ejemplos de cálculo, lógica, lenguaje y reconocimiento de incertidumbre. No utiliza modelos preentrenados ni APIs de IA.
+
+Para continuar entrenando las neuronas NumPy ya existentes:
+
+```bash
+python3 entrenamiento_guiado.py --pasos 100 --lr 0.0003
+```
+
+Este comando **no se ejecuta automáticamente**. Requiere `checkpoints/last.npz` y `data/validacion.txt`. Realiza una copia temporal de `last.npz` y `best.npz`, reanuda los pesos, evalúa ambos en la misma validación fija y restaura los checkpoints si hay un error o la pérdida empeora más del 2 %. No garantiza que el modelo aprenda razonamiento general ni evita todos los tipos de olvido. Guarda una copia externa de tus checkpoints importantes antes de entrenar.
+
+Para probar el código sin iniciar entrenamiento:
+
+```bash
+python3 -m pytest -q tests/test_entrenamiento_guiado.py
+```
