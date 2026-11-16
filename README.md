@@ -1,5 +1,38 @@
 # Cerebro
 
+## Aprendizaje diario desde Internet (opcional)
+
+```bash
+# Descargar unos pocos textos de Wikipedia y entrenar el motor NumPy pequeño
+python3 aprendizaje_internet.py --entrenar
+
+# Repetir cada día mientras el proceso esté abierto y el ordenador encendido
+python3 aprendizaje_internet.py --cada-dia --entrenar
+
+# Solo recopilar, sin modificar el modelo
+python3 aprendizaje_internet.py
+```
+
+El sistema obtiene hasta 3 introducciones de artículos públicos de Wikipedia
+en español por ciclo, guarda los enlaces de origen en
+`data/aprendizaje_internet/fuentes.jsonl`, evita duplicados por ID y limita
+el corpus acumulado a 20 MB. Requiere Internet para descargar datos, pero
+**no usa ninguna API de IA**. El entrenamiento se realiza en el ordenador.
+La fuente Wikipedia requiere respetar sus condiciones de reutilización y
+atribución; se conservan URLs, no se otorgan licencias nuevas al contenido.
+
+**Limitaciones:** es una función experimental y voluntaria, no un servicio que
+se ejecute solo al encender el equipo. La terminal debe permanecer abierta.
+El modelo original se vuelve a entrenar **desde cero** con el corpus de Internet,
+no continúa automáticamente los pesos existentes; los textos previos del
+corpus original no se mezclan en este proceso. El modelo PyTorch no reanuda
+si cambia el corpus. La calidad del conocimiento no está garantizada; se
+recomienda revisar los textos y medir el rendimiento antes de adoptar pesos.
+No se ha verificado todavía la descarga ni el entrenamiento en el equipo del
+usuario. El proceso puede consumir CPU y sobrescribir el checkpoint de
+entrenamiento original según las reglas de `train.py`.
+
+
 ## Uso sencillo: un solo comando
 
 No hace falta escribir `pip install torch` manualmente. Cerebro incorpora
