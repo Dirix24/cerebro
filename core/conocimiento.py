@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import sqlite3
+import unicodedata
 try:
     from core.semantic_memory import buscar_similares
 except ModuleNotFoundError:
