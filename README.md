@@ -432,3 +432,20 @@ El código está pensado para extenderse sin romper lo demás:
 ## Protección del aprendizaje automático
 
 El aprendizaje diario dispone ahora de respaldo temporal de `last.npz` y `best.npz`, reanudación de entrenamientos pendientes y una evaluación sobre **todos** los documentos de `data/validacion.txt`. Si el nuevo `best.npz` empeora más de un 2% en bits por byte, o falla el entrenamiento, restaura los checkpoints anteriores. Este control es experimental y no demuestra ausencia de olvido en otros temas. No hay modelos externos ni APIs de IA; solo se usa Wikipedia como fuente de texto. Es recomendable hacer una copia independiente de los checkpoints antes de usar el modo autónomo. El sistema no ha sido probado de extremo a extremo en el equipo del usuario.
+
+## Conocimiento local con fuentes (sin IA externa)
+
+```bash
+python3 cerebro.py conocimiento guardar "¿Qué es la Luna?" "Un satélite natural" --fuente "manual"
+python3 cerebro.py conocimiento buscar "Luna"
+python3 cerebro.py aprender --cada-dia --entrenar
+```
+
+La base SQLite `data/conocimiento.sqlite3` conserva preguntas, respuestas y fuentes.
+El aprendizaje de Wikipedia alimenta también esa base. La búsqueda utiliza
+TF-IDF local de palabras y trigramas, **no embeddings de otra IA**. Si dos
+respuestas de una misma pregunta difieren en negación, se registra una alerta
+heurística (puede equivocarse). La memoria puede consultarse desde la línea
+de comandos, pero **todavía no se inyecta automáticamente en el chat**.
+Las respuestas de Wikipedia son datos externos, no modelos de terceros.
+Estas funciones no han sido verificadas de extremo a extremo en el ordenador.
