@@ -36,6 +36,8 @@ AYUDA = """Comandos:
   /estadisticas texto      cuenta palabras, frases y lineas
   /comparar A || B          compara dos textos
   /fichas concepto: dato   crea fichas de estudio
+  /preguntas texto         preguntas de repaso desde frases X es Y
+  /duplicados A || B      detecta textos similares
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -243,6 +245,19 @@ class Conversacion:
                 fichas = fichas_estudio(resto.replace(" ; ", "\n"))
                 return (str(fichas) if fichas
                         else "Uso: /fichas concepto: definición ; otro: definición"), False
+            except ValueError as exc:
+                return f"No pude procesarlo: {exc}", False
+        if cmd in ("/preguntas", "/duplicados"):
+            from core.repaso_local import generar_preguntas, detectar_duplicados
+            try:
+                if cmd == "/preguntas":
+                    preguntas = generar_preguntas(resto)
+                    return (str(preguntas) if preguntas
+                            else "No encontré frases del tipo 'X es Y'."), False
+                textos = [t.strip() for t in resto.split(" || ")]
+                if len(textos) < 2:
+                    return "Uso: /duplicados texto uno || texto dos", False
+                return str(detectar_duplicados(textos)), False
             except ValueError as exc:
                 return f"No pude procesarlo: {exc}", False
         if cmd == "/experimentos":
