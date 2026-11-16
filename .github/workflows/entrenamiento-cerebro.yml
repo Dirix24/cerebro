@@ -1,0 +1,42 @@
+name: Cerebro - entrenamiento local de prueba
+on:
+  workflow_dispatch:
+  push:
+    branches: [mejoras-cerebro-local]
+    paths:
+      - 'cerebro_torch.py'
+      - 'core/**'
+      - 'tests/**'
+      - 'config.py'
+      - '.github/workflows/entrenamiento-cerebro.yml'
+jobs:
+  entrenar-y-probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        arquitectura: [clasica, avanzada]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencias CPU
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pytest
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Pruebas de componentes
+        run: python -m pytest -q tests/test_nuevas_capacidades.py tests/test_cerebro_torch.py tests/test_local_search.py
+      - name: Entrenamiento propio de prueba
+        run: |
+          python cerebro_torch.py --corpus data/corpus.txt --perfil diminuto --arquitectura ${{ matrix.arquitectura }} --pasos 2 --batch 1 --acumulacion 2 --guardar-cada 1 --salida checkpoints/smoke-${{ matrix.arquitectura }}.pt --dispositivo cpu
+          python cerebro_torch.py --corpus data/corpus.txt --perfil diminuto --arquitectura ${{ matrix.arquitectura }} --pasos 1 --batch 1 --acumulacion 2 --resume --salida checkpoints/smoke-${{ matrix.arquitectura }}.pt --dispositivo cpu
+          python cerebro_torch.py --generar "Hola" --salida checkpoints/smoke-${{ matrix.arquitectura }}.pt --max-tokens 3
+      - name: Guardar pesos de prueba como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: cerebro-smoke-${{ matrix.arquitectura }}
+          path: checkpoints/smoke-${{ matrix.arquitectura }}.pt
+          retention-days: 7
