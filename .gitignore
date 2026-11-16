@@ -13,3 +13,6 @@ data/corpus_fts.sqlite3*
 
 # Entorno aislado autogenerado por cerebro.py
 .cerebro-env/
+
+# Textos obtenidos de Internet y estado local
+data/aprendizaje_internet/
