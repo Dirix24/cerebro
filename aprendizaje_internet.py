@@ -6,6 +6,7 @@ preentrenados ni servicios de IA. Mantén el proceso abierto para el modo diario
 import argparse
 from datetime import date
 import json
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -55,6 +56,10 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     hoy = date.today().isoformat()
     if estado.get("ultimo_dia") == hoy:
         print("Hoy ya se recopiló información; no se repite.")
+        if entrenar and estado.get("entrenamiento_pendiente"):
+            entrenar_pendiente(pasos, perfil, estado_ckpt)
+            estado["entrenamiento_pendiente"] = False
+            ESTADO.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
         return
     vistos = set(estado.get("vistos", []))
     nuevos = [p for p in obtener_paginas(paginas) if p["id"] not in vistos]
@@ -74,27 +79,53 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
                                ensure_ascii=False) + "\n")
     vistos.update(p["id"] for p in nuevos)
     # Guardar el día antes del entrenamiento evita duplicar textos si falla.
-    ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos)},
+    ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos), "entrenamiento_pendiente": bool(entrenar)},
                                  ensure_ascii=False), encoding="utf-8")
     print(f"Guardados {len(nuevos)} artículos y sus fuentes.")
     if entrenar:
         entrenar_pendiente(pasos, perfil, estado_ckpt)
+        estado["entrenamiento_pendiente"] = False
+        ESTADO.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
 
 
 def entrenar_pendiente(pasos, perfil, estado_ckpt):
+    """Entrena con respaldo y validación fija; revierte si empeora."""
+    import config
+    from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
     if not CORPUS.exists() or not CORPUS.stat().st_size:
         print("No hay textos para entrenar.")
         return
-    # --resume conserva los pesos y el estado del optimizador; el tokenizador
-    # original es de bytes/BPE y codifica nuevos documentos con el mismo vocab.
-    cmd = [sys.executable, str(RAIZ / "cerebro.py"), "entrenar",
-           "--corpus", str(CORPUS), "--perfil", perfil, "--pasos", str(pasos)]
-    if estado_ckpt.exists():
-        cmd.append("--resume")
-        print("Continuando los pesos existentes y el optimizador.", flush=True)
-    else:
-        print("Primer entrenamiento: se creará un checkpoint.", flush=True)
-    subprocess.run(cmd, cwd=RAIZ, check=True)
+    rutas = [Path(config.CKPT_ULTIMO), Path(config.CKPT_MEJOR)]
+    # El test fijo no se incorpora al corpus descargado.
+    validacion = Path(config.VALIDACION_FILE)
+    if not validacion.is_file():
+        raise RuntimeError("Falta data/validacion.txt; no se entrena sin evaluación fija.")
+    carpeta, copias = respaldar(rutas)
+    try:
+        referencia = Path(config.CKPT_MEJOR)
+        previo = evaluar_fijo(referencia, validacion)
+        cmd = [sys.executable, str(RAIZ / "cerebro.py"), "entrenar",
+               "--corpus", str(CORPUS), "--perfil", perfil,
+               "--pasos", str(pasos), "--batch", "2"]
+        if estado_ckpt.exists():
+            cmd.append("--resume")
+            print("Reanudando pesos y optimizador guardados.", flush=True)
+        else:
+            print("Entrenamiento inicial con pesos propios.", flush=True)
+        subprocess.run(cmd, cwd=RAIZ, check=True)
+        nuevo = evaluar_fijo(Path(config.CKPT_MEJOR), validacion)
+        # La mejora en un conjunto de validación fijo es condición necesaria,
+        # pero no garantiza que todos los conocimientos se hayan conservado.
+        if previo is not None and (nuevo is None or nuevo > previo * 1.02):
+            restaurar(copias)
+            raise RuntimeError(
+                f"Entrenamiento revertido: validación {previo:.4f} -> {nuevo} bpb")
+        print(f"Validación fija aceptada: antes={previo}, después={nuevo} bpb.")
+    except BaseException:
+        restaurar(copias)
+        raise
+    finally:
+        shutil.rmtree(carpeta, ignore_errors=True)
 
 
 def main():
