@@ -23,7 +23,7 @@ atribución; se conservan URLs, no se otorgan licencias nuevas al contenido.
 
 **Limitaciones:** es una función experimental y voluntaria, no un servicio que
 se ejecute solo al encender el equipo. La terminal debe permanecer abierta.
-El modelo original se vuelve a entrenar **desde cero** con el corpus de Internet,
+El primer ciclo entrena desde cero si no hay checkpoint; los siguientes usan\n`--resume` para conservar los pesos y el optimizador del modelo NumPy.\nEl corpus descargado se convierte a pares `usuario:/cerebro:` compatibles\ncon la función de pérdida del entrenador.\n**Aviso:** el checkpoint original preexistente puede corresponder a otro corpus;\nla reanudación ajusta ese modelo con los nuevos textos, y un cambio de corpus\npuede empeorar respuestas antiguas.\nLos datos se añaden a un corpus acumulativo, pero no existe todavía un sistema\nde evaluación de regresiones que garantice conservar conocimientos anteriores.\nAntes de activar entrenamiento automático conviene guardar una copia de los\ncheckpoints.\nEl corpus de Internet,
 no continúa automáticamente los pesos existentes; los textos previos del
 corpus original no se mezclan en este proceso. El modelo PyTorch no reanuda
 si cambia el corpus. La calidad del conocimiento no está garantizada; se
