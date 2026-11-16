@@ -9,6 +9,7 @@ from core.planificador_local import Plan
 from core.analizador_codigo_local import analizar
 from core.investigador_local import preparar_fuente, deduplicar
 from core.laboratorio_local import registrar, historial
+from core.estudio_local import resumir, palabras_clave
 
 
 class TestCapacidades(unittest.TestCase):
@@ -51,6 +52,13 @@ class TestCapacidades(unittest.TestCase):
         self.assertEqual(len(deduplicar([f, f])), 1)
         with self.assertRaises(ValueError):
             preparar_fuente("http://ejemplo.com", "texto")
+
+    def test_resumen_y_palabras_clave(self):
+        texto = "La Luna orbita la Tierra. La Luna es un satélite. Marte es un planeta."
+        self.assertEqual(resumir(texto, max_frases=2).count("."), 2)
+        self.assertIn("luna", palabras_clave(texto))
+        with self.assertRaises(ValueError):
+            resumir(texto, max_frases=0)
 
     def test_laboratorio(self):
         with tempfile.TemporaryDirectory() as tmp:
