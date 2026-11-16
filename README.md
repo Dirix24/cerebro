@@ -47,7 +47,21 @@ python3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --
 python3 cerebro_torch.py --generar "Hola Cerebro"
 ```
 
-Para entrenar en varias sesiones y guardar avances cada 50 pasos:\n\n```bash\npython3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --guardar-cada 50\npython3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --resume --guardar-cada 50\n```\n\n`--resume` restaura pesos, optimizador, contador de pasos y estado aleatorio.\nComprueba la huella SHA-256 del corpus y rechaza cambios de datos o perfil.\nEl checkpoint se escribe mediante archivo temporal y reemplazo atómico.\n**No cambies el corpus entre reanudaciones.** Checkpoints anteriores v1 pueden\nutilizarse para generar, pero no para reanudar. Los checkpoints guardan también\nel estado de AdamW, por lo que requieren más espacio.\n\nPyTorch es una biblioteca para cálculos y gradientes; **no se carga otra IA**.
+Para entrenar en varias sesiones y guardar avances cada 50 pasos:
+
+```bash
+python3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --guardar-cada 50
+python3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --resume --guardar-cada 50
+```
+
+`--resume` restaura pesos, optimizador, contador de pasos y estado aleatorio.
+Comprueba la huella SHA-256 del corpus y rechaza cambios de datos o perfil.
+El checkpoint se escribe mediante archivo temporal y reemplazo atómico.
+**No cambies el corpus entre reanudaciones.** Checkpoints anteriores v1 pueden
+utilizarse para generar, pero no para reanudar. Los checkpoints guardan también
+el estado de AdamW, por lo que requieren más espacio.
+
+PyTorch es una biblioteca para cálculos y gradientes; **no se carga otra IA**.
 Este motor guarda pesos independientes en `checkpoints/torch_cerebro.pt` y no
 reemplaza el chat NumPy de `main.py`. La generación de PyTorch es experimental;
 no hay resultados de calidad confirmados ni pruebas ejecutadas de este motor.
@@ -63,6 +77,86 @@ python3 -m core.local_search --buscar "atención"
 
 Usa SQLite FTS5, sin servicios externos. Requiere crear el índice después de
 cambiar el corpus. Más detalles en [MEJORAS_LOCALES.md](MEJORAS_LOCALES.md).
+
+## Nuevas capacidades experimentales (rama mejoras-cerebro-local)
+
+Estas funciones se implementaron **sin Ollama, APIs ni modelos preentrenados**.
+El motor NumPy y su checkpoint original permanecen disponibles.
+
+### Arquitectura neuronal avanzada
+
+`core/advanced_torch.py` implementa **RoPE, RMSNorm, SwiGLU y atención causal
+SDPA**. Se selecciona con `--arquitectura avanzada`; sus pesos **no son
+compatibles** con la arquitectura clásica. No se han entrenado los perfiles grandes.
+
+```bash
+python3 cerebro_torch.py --corpus data/corpus.txt --perfil diminuto --arquitectura avanzada --pasos 20 --acumulacion 2 --guardar-cada 10
+python3 cerebro_torch.py --corpus data/corpus.txt --perfil diminuto --arquitectura avanzada --pasos 20 --acumulacion 2 --resume
+```
+
+La acumulación divide el gradiente entre microbatches y permite aumentar el
+batch efectivo sin mantener todos los ejemplos simultáneamente en memoria.
+El checkpoint guarda el optimizador y el estado aleatorio; reanudar con otra
+acumulación o LR cambia la trayectoria del entrenamiento. No se ha añadido
+precisión mixta ni optimizador cuantizado.
+
+### Perfiles 250M, 500M y 1B (objetivos aproximados)
+
+| Perfil | Capas | Dimensión | Cabezas | Contexto |
+|---|---:|---:|---:|---:|
+| `cerebro_250m` | 16 | 1024 | 16 | 1024 |
+| `cerebro_500m` | 22 | 1280 | 20 | 1024 |
+| `cerebro_1b` | 20 | 2048 | 32 | 2048 |
+
+Son **perfiles experimentales**, no checkpoints ni recuentos exactos. El
+número real de parámetros depende del vocabulario aprendido y la arquitectura.
+Su entrenamiento puede requerir decenas de GB de RAM/VRAM, grandes conjuntos
+de datos y tiempos largos. No se ha verificado su entrenamiento completo.
+
+### Memoria por similitud local
+
+`core/semantic_memory.py` calcula TF-IDF de palabras y trigramas de caracteres
+sin descargar embeddings. `AdvancedMemoryManager.buscar_similar(texto)` busca
+entre los recuerdos persistidos. **No es comprensión semántica profunda** y
+no sustituye al método léxico `buscar` ya existente.
+
+### Programación y herramientas seguras
+
+`core/code_tools.py` analiza archivos Python mediante `ast`, sin ejecutarlos,
+limitado a `data/workspace`. Informa funciones, clases, imports y líneas.
+
+```bash
+python3 herramientas_locales.py analizar ejemplo.py
+```
+
+`ejemplo.py` debe existir dentro de `data/workspace`. Esta herramienta es
+independiente: no ejecuta código arbitrario ni concede nuevos permisos al agente.
+
+### Voz local (funcionalidad parcial)
+
+`core/local_voice.py` añade **síntesis de voz local opcional** mediante
+`pyttsx3` y **grabación WAV** mediante `sounddevice`, utilizando los
+dispositivos y voces disponibles en el sistema:
+
+```bash
+pip install pyttsx3 sounddevice
+python3 herramientas_locales.py hablar "Hola, soy Cerebro"
+python3 herramientas_locales.py grabar data/workspace/voz.wav --segundos 3
+```
+
+**No se ha implementado reconocimiento de voz ni transcripción**: grabar un
+WAV no equivale a comprenderlo. La síntesis depende de un motor de voz instalado
+en el sistema, no de un modelo de IA descargado por Cerebro.
+
+### Pruebas
+
+```bash
+pip install pytest
+python3 -m pytest -q tests/test_nuevas_capacidades.py tests/test_cerebro_torch.py
+```
+
+**Estado:** código subido a la rama, pero las pruebas y los entrenamientos
+grandes no se han ejecutado ni verificado aquí.
 
 ## Alcance honesto
 
@@ -114,7 +208,8 @@ python3 tests/tests_final.py         # comprueba que todo funciona
 python3 main.py                      # a conversar
 ```
 
-Para el motor original, la dependencia principal es `numpy`; `psutil` es opcional.\nPyTorch y pytest solo se necesitan para el motor nuevo y sus pruebas.
+Para el motor original, la dependencia principal es `numpy`; `psutil` es opcional.
+PyTorch y pytest solo se necesitan para el motor nuevo y sus pruebas.
 
 ## Uso
 
@@ -232,7 +327,9 @@ Todo esto lo comprueban las pruebas:
 ## Estructura
 
 ```
-config.py               configuración central y perfiles\ncerebro_torch.py         Transformer propio opcional en PyTorch\ncore/local_search.py    índice y búsqueda offline SQLite FTS5
+config.py               configuración central y perfiles
+cerebro_torch.py         Transformer propio opcional en PyTorch
+core/local_search.py    índice y búsqueda offline SQLite FTS5
 main.py  chat.py        chat interactivo y su lógica
 train.py                entrenamiento (CLI)
 trainer_engine.py       bucle de entrenamiento y evaluación
@@ -246,7 +343,8 @@ core/
 agent/                  agente, herramientas y enrutador de intenciones
 memory/                 memoria de corto y largo plazo
 benchmarks/             medición de velocidad y RAM
-tests/tests_final.py    pruebas originales\ntests/test_cerebro_torch.py y tests/test_local_search.py    pruebas nuevas
+tests/tests_final.py    pruebas originales
+tests/test_cerebro_torch.py y tests/test_local_search.py    pruebas nuevas
 data/                   corpus, validación, generalización, workspace
 checkpoints/best.npz    modelo entrenado incluido
 ```
