@@ -167,3 +167,11 @@ La nueva implementación de voz queda **fuera de esta integración** y se reserv
 ### Utilidades nuevas de estudio
 
 `/resumir texto` selecciona frases del texto original y `/palabras-clave texto` extrae términos frecuentes. También están disponibles en `panel_cerebro.py`. Son funciones deterministas y no generan conocimientos nuevos; el resumen puede omitir detalles importantes.
+
+### Herramientas educativas adicionales
+
+- `/estadisticas Hola mundo.` cuenta palabras, frases, caracteres y líneas.
+- `/comparar hola mundo || hola luna` muestra similitud y cambios de palabras.
+- `/fichas Luna: satélite natural ; Marte: planeta` crea tarjetas de estudio a partir de definiciones explícitas.
+
+Las tres opciones también están en el panel Tkinter. Son algoritmos locales, no aprendizaje neuronal. La voz avanzada sigue aplazada.
