@@ -163,3 +163,7 @@ La nueva implementación de voz queda **fuera de esta integración** y se reserv
 ### Nuevos comandos del chat
 
 `/biblioteca Luna`, `/calcular-local 2+3*4`, `/analizar-codigo def f(): return 1` y `/experimentos` permiten acceder a varias herramientas desde el chat original. No requieren modelos externos.
+
+### Utilidades nuevas de estudio
+
+`/resumir texto` selecciona frases del texto original y `/palabras-clave texto` extrae términos frecuentes. También están disponibles en `panel_cerebro.py`. Son funciones deterministas y no generan conocimientos nuevos; el resumen puede omitir detalles importantes.
