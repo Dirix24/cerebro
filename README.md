@@ -132,3 +132,27 @@ Para probar el código sin iniciar entrenamiento:
 ```bash
 python3 -m pytest -q tests/test_entrenamiento_guiado.py
 ```
+
+## Capacidades locales adicionales (integración experimental)
+
+Estas herramientas son **prototipos funcionales**, no sustituyen un modelo conversacional entrenado:
+
+- `core/razonamiento_local.py`: aritmética con AST restringido y un silogismo simple.
+- `core/biblioteca_local.py`: lectura y búsqueda de TXT/Markdown dentro de una carpeta.
+- `core/planificador_local.py`: planes con aprobación explícita; no ejecuta acciones.
+- `core/analizador_codigo_local.py`: inspección AST de Python sin ejecutar código.
+- `core/investigador_local.py`: normalización y deduplicación de fuentes HTTPS; la descarga existente sigue en `aprendizaje_internet.py`.
+- `core/laboratorio_local.py`: registro JSONL de métricas y experimentos.
+- `core/voz_local.py`: inspección de WAV; **no reconoce voz**.
+- `panel_cerebro.py`: interfaz Tkinter para cálculo, búsqueda, análisis de código e historial; no es todavía un chat gráfico.
+
+Ejemplos:
+
+```bash
+python3 panel_cerebro.py
+python3 panel_cerebro.py --accion calcular --texto "12 / 4 + 2"
+python3 panel_cerebro.py --accion biblioteca --texto "Luna"
+python3 -m pytest -q tests/test_capacidades_locales.py
+```
+
+El currículo de entrenamiento y el respaldo de checkpoints se desarrollan en la rama previa `integracion-entrenamiento-neuronal`. **Pendiente de desarrollar:** reconocimiento de voz real, lectura de PDF, razonamiento avanzado, aprendizaje curricular automático, comparación experimental de modelos y conexión de todas las herramientas con el chat principal. Ninguna herramienta nueva toma el control del ordenador de forma autónoma.
