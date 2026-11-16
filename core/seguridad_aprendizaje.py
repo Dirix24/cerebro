@@ -30,10 +30,10 @@ def evaluar_fijo(ruta, corpus_validacion):
     """Métrica comparable: mismo conjunto de validación, en bits por byte."""
     from core.checkpoint import cargar_checkpoint
     from trainer_engine import evaluar_modelo_en_docs
-    from core.data import cargar_datos
+    from core.data import documentos_desde_texto
     if not Path(ruta).is_file():
         return None
-    docs_train, docs_val, _ = cargar_datos(str(corpus_validacion), 0.20)
+    docs_val = documentos_desde_texto(Path(corpus_validacion).read_text(encoding="utf-8"))
     if not docs_val:
         raise ValueError("No hay documentos para validación fija")
     modelo = cargar_checkpoint(str(ruta), con_optimizador=False)["modelo"]
