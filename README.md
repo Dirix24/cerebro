@@ -203,3 +203,7 @@ Después de entrenar el modelo propio con `python3 train.py`, abre `python3 chat
 4. **Solo si quieres entrenar y tienes checkpoints propios y validación fija**, ejecuta `python3 entrenar_ejemplos_aprobados.py --aplicar --entrenar --pasos 30`.
 
 El entrenamiento reutiliza `entrenamiento_guiado.py`: compara la validación antes/después y restaura checkpoints si detecta regresión superior al 2 %. El corpus exportado permanece disponible; no se hace entrenamiento automático al aprobar ejemplos. Las pruebas unitarias no prueban mejoras de calidad del modelo.
+
+### Monitor neuronal (primera etapa)
+
+Ejecuta `python3 monitor_neuronal.py --ckpt checkpoints/best.npz` para consultar estadísticas **reales** de los tensores numéricos del checkpoint propio NumPy: forma, media, desviación y magnitud máxima. Es una herramienta de lectura, no modifica pesos. No muestra aún activaciones en tiempo real ni mapas de atención; eso requiere instrumentación del modelo. Los checkpoints PyTorch `.pt` no son compatibles con este monitor.
