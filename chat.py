@@ -38,6 +38,8 @@ AYUDA = """Comandos:
   /fichas concepto: dato   crea fichas de estudio
   /preguntas texto         preguntas de repaso desde frases X es Y
   /duplicados A || B      detecta textos similares
+  /historial               consulta las últimas respuestas guardadas
+  /guardar-turno rol texto guarda un turno explícitamente
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -260,6 +262,25 @@ class Conversacion:
                 return str(detectar_duplicados(textos)), False
             except ValueError as exc:
                 return f"No pude procesarlo: {exc}", False
+        if cmd == "/historial":
+            from pathlib import Path
+            from core.historial_local import consultar
+            ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            turnos = consultar(ruta, limite=20)
+            return ("\n".join(f"{t['rol']}: {t['texto']}" for t in turnos)
+                    if turnos else "No hay turnos guardados."), False
+        if cmd == "/guardar-turno":
+            from pathlib import Path
+            from core.historial_local import guardar
+            partes_turno = resto.split(None, 1)
+            if len(partes_turno) != 2:
+                return "Uso: /guardar-turno usuario|cerebro texto", False
+            try:
+                ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+                guardar(ruta, partes_turno[0], partes_turno[1])
+                return "Turno guardado localmente.", False
+            except (ValueError, OSError) as exc:
+                return f"No pude guardar el turno: {exc}", False
         if cmd == "/experimentos":
             from pathlib import Path
             from core.laboratorio_local import historial
