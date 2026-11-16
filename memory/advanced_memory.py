@@ -85,6 +85,14 @@ class AdvancedMemoryManager:
         resultados.sort(reverse=True)
         return {k: v for _, k, v in resultados[:max(0, limite)]}
 
+    def buscar_similar(self, texto, limite=5):
+        """Búsqueda TF-IDF de palabras y trigramas, sin modelos externos."""
+        from core.semantic_memory import buscar_similares
+        claves = list(self.long_term_memory)
+        documentos = [f"{k} {self.long_term_memory[k].get('valor', '')}" for k in claves]
+        return {claves[i]: self.long_term_memory[claves[i]]["valor"]
+                for i, _ in buscar_similares(texto, documentos, limite)}
+
     # -- persistencia ---------------------------------------------------------------
 
     def persistir(self):
