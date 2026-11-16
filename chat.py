@@ -27,6 +27,21 @@ AYUDA = """Comandos:
   /calc 12 * (3 + 4)        calculadora segura
   /buscar-corpus texto      busca información en el corpus local indexado
   /conocimiento texto       consulta la memoria con fuentes
+  /biblioteca texto         busca en documentos locales
+  /calcular-local cuenta    calcula expresiones aritmeticas
+  /analizar-codigo texto    analiza Python sin ejecutarlo
+  /experimentos             muestra metricas registradas
+  /resumir texto            resumen extractivo local
+  /palabras-clave texto     palabras frecuentes del texto
+  /estadisticas texto      cuenta palabras, frases y lineas
+  /comparar A || B          compara dos textos
+  /fichas concepto: dato   crea fichas de estudio
+  /preguntas texto         preguntas de repaso desde frases X es Y
+  /duplicados A || B      detecta textos similares
+  /historial               consulta las últimas respuestas guardadas
+  /guardar-turno rol texto guarda un turno explícitamente
+  /aprobar-ejemplo pregunta || respuesta  aprueba un ejemplo local
+  /ejemplos-aprobados       muestra ejemplos aprobados
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -191,6 +206,107 @@ class Conversacion:
                 return ("No hay resultados locales. Crea el índice con "
                         "python3 -m core.local_search --indexar"), False
             return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
+        if cmd == "/biblioteca":
+            if not resto:
+                return "Uso: /biblioteca texto", False
+            from pathlib import Path
+            from core.biblioteca_local import buscar_en_biblioteca
+            raiz = Path(__file__).resolve().parent / "data"
+            resultados = buscar_en_biblioteca(resto, raiz)
+            return ("\n\n".join(f"[{r['archivo']}] {r['fragmento']}" for r in resultados)
+                    if resultados else "No encontré documentos relacionados."), False
+        if cmd == "/calcular-local":
+            from core.razonamiento_local import calcular
+            try:
+                return f"{resto} = {calcular(resto)}", False
+            except (SyntaxError, ValueError, ZeroDivisionError, OverflowError) as exc:
+                return f"No pude calcularlo: {exc}", False
+        if cmd == "/analizar-codigo":
+            from core.analizador_codigo_local import analizar
+            try:
+                return str(analizar(resto)), False
+            except (SyntaxError, ValueError) as exc:
+                return f"No pude analizarlo: {exc}", False
+        if cmd in ("/resumir", "/palabras-clave"):
+            if not resto:
+                return f"Uso: {cmd} texto", False
+            from core.estudio_local import resumir, palabras_clave
+            try:
+                return (resumir(resto) if cmd == "/resumir"
+                        else ", ".join(palabras_clave(resto))), False
+            except ValueError as exc:
+                return f"No pude procesar el texto: {exc}", False
+        if cmd in ("/estadisticas", "/comparar", "/fichas"):
+            from core.herramientas_texto import estadisticas, comparar_textos, fichas_estudio
+            try:
+                if cmd == "/estadisticas":
+                    return str(estadisticas(resto)), False
+                if cmd == "/comparar":
+                    if " || " not in resto:
+                        return "Uso: /comparar primer texto || segundo texto", False
+                    primero, segundo = resto.split(" || ", 1)
+                    return str(comparar_textos(primero, segundo)), False
+                fichas = fichas_estudio(resto.replace(" ; ", "\n"))
+                return (str(fichas) if fichas
+                        else "Uso: /fichas concepto: definición ; otro: definición"), False
+            except ValueError as exc:
+                return f"No pude procesarlo: {exc}", False
+        if cmd in ("/preguntas", "/duplicados"):
+            from core.repaso_local import generar_preguntas, detectar_duplicados
+            try:
+                if cmd == "/preguntas":
+                    preguntas = generar_preguntas(resto)
+                    return (str(preguntas) if preguntas
+                            else "No encontré frases del tipo 'X es Y'."), False
+                textos = [t.strip() for t in resto.split(" || ")]
+                if len(textos) < 2:
+                    return "Uso: /duplicados texto uno || texto dos", False
+                return str(detectar_duplicados(textos)), False
+            except ValueError as exc:
+                return f"No pude procesarlo: {exc}", False
+        if cmd in ("/aprobar-ejemplo", "/ejemplos-aprobados"):
+            from pathlib import Path
+            from core.ejemplos_aprobados import aprobar, listar
+            ruta = Path(__file__).resolve().parent / "data" / "ejemplos_aprobados.jsonl"
+            if cmd == "/ejemplos-aprobados":
+                ejemplos = listar(ruta)
+                return ("\n".join(f"P: {e['pregunta']}\nR: {e['respuesta']}"
+                                  for e in ejemplos)
+                        if ejemplos else "Todavía no hay ejemplos aprobados."), False
+            if " || " not in resto:
+                return "Uso: /aprobar-ejemplo pregunta || respuesta", False
+            pregunta, respuesta = resto.split(" || ", 1)
+            try:
+                aprobar(ruta, pregunta, respuesta)
+                return "Ejemplo aprobado y guardado. No se han modificado los pesos del modelo.", False
+            except (ValueError, OSError) as exc:
+                return f"No pude aprobar el ejemplo: {exc}", False
+        if cmd == "/historial":
+            from pathlib import Path
+            from core.historial_local import consultar
+            ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            turnos = consultar(ruta, limite=20)
+            return ("\n".join(f"{t['rol']}: {t['texto']}" for t in turnos)
+                    if turnos else "No hay turnos guardados."), False
+        if cmd == "/guardar-turno":
+            from pathlib import Path
+            from core.historial_local import guardar
+            partes_turno = resto.split(None, 1)
+            if len(partes_turno) != 2:
+                return "Uso: /guardar-turno usuario|cerebro texto", False
+            try:
+                ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+                guardar(ruta, partes_turno[0], partes_turno[1])
+                return "Turno guardado localmente.", False
+            except (ValueError, OSError) as exc:
+                return f"No pude guardar el turno: {exc}", False
+        if cmd == "/experimentos":
+            from pathlib import Path
+            from core.laboratorio_local import historial
+            ruta = Path(__file__).resolve().parent / "learning/evolution/experimentos.jsonl"
+            registros = historial(ruta, limite=10)
+            return ("\n".join(str(r) for r in registros)
+                    if registros else "Todavía no hay experimentos registrados."), False
         if cmd == "/calc":
             return self._responder_con_agente(
                 [{"tool": "calculator", "arguments": {"expression": resto}}]), False

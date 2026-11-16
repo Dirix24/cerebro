@@ -38,6 +38,7 @@ def main():
     ap.add_argument("--semilla", type=int, default=None)
     ap.add_argument("--ckpt", default=None)
     ap.add_argument("--debug", action="store_true")
+    ap.add_argument("--guardar-historial", action="store_true", help="guardar turnos localmente")
     args = ap.parse_args()
 
     modelo, meta, ruta = cargar_modelo(args.ckpt)
@@ -52,7 +53,15 @@ def main():
                         info_checkpoint=meta, seed=args.semilla)
 
     if args.una_vez is not None:
-        print(conv.procesar(args.una_vez)[0])
+        respuesta, _ = conv.procesar(args.una_vez)
+        print(respuesta)
+        if args.guardar_historial:
+            from core.historial_local import guardar
+            from pathlib import Path
+            ruta_hist = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            guardar(ruta_hist, "usuario", args.una_vez)
+            if respuesta:
+                guardar(ruta_hist, "cerebro", respuesta)
         return
 
     print("\n========================================")
@@ -68,6 +77,16 @@ def main():
         respuesta, salir = conv.procesar(entrada)
         if respuesta:
             print(f"Cerebro: {respuesta}")
+        if args.guardar_historial and entrada.strip() and not entrada.startswith("/"):
+            from core.historial_local import guardar
+            from pathlib import Path
+            ruta_hist = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            try:
+                guardar(ruta_hist, "usuario", entrada)
+                if respuesta:
+                    guardar(ruta_hist, "cerebro", respuesta)
+            except (ValueError, OSError) as exc:
+                print(f"[aviso] No se pudo guardar el historial: {exc}", file=sys.stderr)
         if salir:
             break
 

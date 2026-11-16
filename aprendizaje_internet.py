@@ -4,7 +4,7 @@ Opt-in. Conserva pesos/optimizador NumPy mediante --resume; sin modelos
 preentrenados ni servicios de IA. Mantén el proceso abierto para el modo diario.
 """
 import argparse
-from datetime import date
+from datetime import date, datetime, timedelta
 import json
 import shutil
 import os
@@ -113,8 +113,9 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     print(f"Guardados {len(nuevos)} artículos y sus fuentes; alertas de contradicción: {alertas}.")
     if entrenar:
         entrenar_pendiente(pasos, perfil, estado_ckpt)
-        estado["entrenamiento_pendiente"] = False
-        ESTADO.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
+        estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
+        estado_actual["entrenamiento_pendiente"] = False
+        ESTADO.write_text(json.dumps(estado_actual, ensure_ascii=False), encoding="utf-8")
 
 
 def entrenar_pendiente(pasos, perfil, estado_ckpt):
@@ -172,6 +173,8 @@ def main():
     signal.signal(signal.SIGTERM, detener_entrenamiento)
     signal.signal(signal.SIGINT, detener_entrenamiento)
     ap = argparse.ArgumentParser(description="Recopilación y entrenamiento local diario")
+    ap.add_argument("--dias", type=int, default=None,
+                    help="ejecutar como máximo N días naturales y detenerse")
     ap.add_argument("--cada-dia", action="store_true",
                     help="Comprobar diariamente mientras este programa siga abierto")
     ap.add_argument("--entrenar", action="store_true",
@@ -183,13 +186,20 @@ def main():
     args = ap.parse_args()
     if not (1 <= args.paginas <= 5 and 1 <= args.pasos <= 1000 and 1 <= args.max_mb <= 100):
         ap.error("Límites: 1-5 páginas, 1-1000 pasos, 1-100 MB")
+    if args.dias is not None and not 1 <= args.dias <= 30:
+        ap.error("--dias debe estar entre 1 y 30")
     import config
     if args.perfil not in config.PERFILES:
         ap.error("Perfil desconocido")
     # Se utilizan los checkpoints existentes del motor NumPy; al reanudar
     # el perfil efectivo será el almacenado en el checkpoint.
     estado_ckpt = Path(config.CKPT_ULTIMO)
+    fecha_inicio = date.today()
+    fecha_fin = fecha_inicio + timedelta(days=args.dias) if args.dias else None
     while True:
+        if fecha_fin is not None and date.today() >= fecha_fin:
+            print("Período de aprendizaje finalizado.")
+            break
         try:
             ciclo(args.paginas, args.pasos, args.entrenar,
                   args.max_mb * 1024 * 1024, args.perfil, estado_ckpt)
@@ -197,9 +207,10 @@ def main():
             print(f"Error de actualización: {exc}", file=sys.stderr)
             if not args.cada_dia:
                 raise SystemExit(1)
-        if not args.cada_dia:
+        if not args.cada_dia and args.dias is None:
             break
-        time.sleep(24 * 60 * 60)
+        # Comprobación horaria para respetar el fin del período sin esperar 24 h extra.
+        time.sleep(60 * 60)
 
 
 if __name__ == "__main__":

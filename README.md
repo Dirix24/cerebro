@@ -132,3 +132,82 @@ Para probar el código sin iniciar entrenamiento:
 ```bash
 python3 -m pytest -q tests/test_entrenamiento_guiado.py
 ```
+
+## Capacidades locales adicionales (integración experimental)
+
+Estas herramientas son **prototipos funcionales**, no sustituyen un modelo conversacional entrenado:
+
+- `core/razonamiento_local.py`: aritmética con AST restringido y un silogismo simple.
+- `core/biblioteca_local.py`: lectura y búsqueda de TXT/Markdown dentro de una carpeta.
+- `core/planificador_local.py`: planes con aprobación explícita; no ejecuta acciones.
+- `core/analizador_codigo_local.py`: inspección AST de Python sin ejecutar código.
+- `core/investigador_local.py`: normalización y deduplicación de fuentes HTTPS; la descarga existente sigue en `aprendizaje_internet.py`.
+- `core/laboratorio_local.py`: registro JSONL de métricas y experimentos.
+- `panel_cerebro.py`: interfaz Tkinter para cálculo, búsqueda, análisis de código e historial; no es todavía un chat gráfico.
+
+Ejemplos:
+
+```bash
+python3 panel_cerebro.py
+python3 panel_cerebro.py --accion calcular --texto "12 / 4 + 2"
+python3 panel_cerebro.py --accion biblioteca --texto "Luna"
+python3 -m pytest -q tests/test_capacidades_locales.py
+```
+
+El currículo de entrenamiento y el respaldo de checkpoints se desarrollan en la rama previa `integracion-entrenamiento-neuronal`. **Pendiente de desarrollar:** lectura de PDF, razonamiento avanzado, aprendizaje curricular automático, comparación experimental de modelos y conexión de todas las herramientas con el chat principal. Ninguna herramienta nueva toma el control del ordenador de forma autónoma.
+
+### Voz avanzada: pospuesta
+
+La nueva implementación de voz queda **fuera de esta integración** y se reserva para una versión futura. Las funciones de audio anteriores del proyecto no se modifican.
+
+### Nuevos comandos del chat
+
+`/biblioteca Luna`, `/calcular-local 2+3*4`, `/analizar-codigo def f(): return 1` y `/experimentos` permiten acceder a varias herramientas desde el chat original. No requieren modelos externos.
+
+### Utilidades nuevas de estudio
+
+`/resumir texto` selecciona frases del texto original y `/palabras-clave texto` extrae términos frecuentes. También están disponibles en `panel_cerebro.py`. Son funciones deterministas y no generan conocimientos nuevos; el resumen puede omitir detalles importantes.
+
+### Herramientas educativas adicionales
+
+- `/estadisticas Hola mundo.` cuenta palabras, frases, caracteres y líneas.
+- `/comparar hola mundo || hola luna` muestra similitud y cambios de palabras.
+- `/fichas Luna: satélite natural ; Marte: planeta` crea tarjetas de estudio a partir de definiciones explícitas.
+
+Las tres opciones también están en el panel Tkinter. Son algoritmos locales, no aprendizaje neuronal. La voz avanzada sigue aplazada.
+
+### Repaso y limpieza de textos
+
+- `/preguntas La Luna es un satélite. Marte es un planeta.` genera preguntas literales con respuestas basadas en frases explícitas.
+- `/duplicados La Luna es blanca || la luna es blanca` compara textos y señala similitudes por palabras.
+
+Ambas funciones también están disponibles en `panel_cerebro.py` mediante interfaz gráfica o `--accion`. No utilizan modelos externos ni modifican los datos.
+
+### Fase 1: historial local explícito
+
+`/guardar-turno usuario Hola` y `/guardar-turno cerebro Hola` guardan entradas JSONL en `data/historial_cerebro.jsonl`. `/historial` consulta las últimas 20. Por ahora el guardado es **manual**, no automático; no debe confundirse con memoria neuronal ni entrenamiento. Los límites de tamaño y las pruebas se encuentran en `core/historial_local.py` y `tests/test_historial_local.py`.
+
+### Chat gráfico local (fase 1)
+
+Después de entrenar el modelo propio con `python3 train.py`, abre `python3 chat_grafico.py`. Para guardar turnos automáticamente en JSONL, utiliza `python3 chat_grafico.py --guardar-historial` o `python3 main.py --guardar-historial`. El guardado está desactivado por defecto. El panel gráfico necesita Tkinter y un entorno de escritorio; las pruebas CI solo verifican sintaxis, no la interacción visual. El botón «Ver historial» muestra los últimos 30 registros.
+
+### Ejemplos de aprendizaje aprobados
+
+`/aprobar-ejemplo ¿Qué es la Luna? || Un satélite natural.` guarda un ejemplo de pregunta/respuesta con aprobación explícita en `data/ejemplos_aprobados.jsonl`. `/ejemplos-aprobados` muestra los últimos 20. **No entrena ni modifica los pesos automáticamente**: es un banco local para una futura fase de entrenamiento supervisado. No se usa ninguna API externa.
+
+### Entrenamiento con ejemplos aprobados (opt-in)
+
+1. Aprueba ejemplos desde el chat con `/aprobar-ejemplo pregunta || respuesta`.
+2. Comprueba cuántos ejemplos se exportarían sin modificar archivos: `python3 entrenar_ejemplos_aprobados.py`.
+3. Exporta al corpus local con `python3 entrenar_ejemplos_aprobados.py --aplicar`.
+4. **Solo si quieres entrenar y tienes checkpoints propios y validación fija**, ejecuta `python3 entrenar_ejemplos_aprobados.py --aplicar --entrenar --pasos 30`.
+
+El entrenamiento reutiliza `entrenamiento_guiado.py`: compara la validación antes/después y restaura checkpoints si detecta regresión superior al 2 %. El corpus exportado permanece disponible; no se hace entrenamiento automático al aprobar ejemplos. Las pruebas unitarias no prueban mejoras de calidad del modelo.
+
+### Monitor neuronal (primera etapa)
+
+Ejecuta `python3 monitor_neuronal.py --ckpt checkpoints/best.npz` para consultar estadísticas **reales** de los tensores numéricos del checkpoint propio NumPy: forma, media, desviación y magnitud máxima. Es una herramienta de lectura, no modifica pesos. No muestra aún activaciones en tiempo real ni mapas de atención; eso requiere instrumentación del modelo. Los checkpoints PyTorch `.pt` no son compatibles con este monitor.
+
+### Aprendizaje desde internet durante siete días
+
+`python3 aprendizaje_internet.py --dias 7 --paginas 3` recopila una vez al día hasta 3 artículos aleatorios de Wikipedia en español, guarda el corpus y la procedencia localmente y termina al transcurrir siete días naturales. El proceso debe seguir ejecutándose y requiere conexión a internet. **Por defecto no modifica pesos neuronales**. Para entrenar también cada día, utiliza expresamente `python3 aprendizaje_internet.py --dias 7 --paginas 3 --entrenar --pasos 20`; exige validación fija y dispone de copia de seguridad y reversión de checkpoints. Se recomienda revisar el corpus antes de activar el entrenamiento, porque el contenido público puede contener errores. El programa no es un servicio en segundo plano y, si se reinicia, el contador de días vuelve a comenzar; el estado diario evita duplicar recopilaciones en la misma fecha.
