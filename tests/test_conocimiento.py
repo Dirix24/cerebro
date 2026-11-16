@@ -2,7 +2,7 @@
 import tempfile
 from pathlib import Path
 import unittest
-from core.conocimiento import guardar, buscar, respuesta_exacta
+from core.conocimiento import guardar, buscar, respuesta_exacta, _clave
 
 
 class TestConocimiento(unittest.TestCase):
@@ -21,6 +21,10 @@ class TestConocimiento(unittest.TestCase):
             self.assertEqual(respuesta_exacta("que es la luna", db)["fuente"], "fuente-a")
             guardar("¿Qué es la Luna?", "Un planeta.", "fuente-b", db)
             self.assertIsNone(respuesta_exacta("¿Qué es la Luna?", db))
+
+    def test_normalizacion_sin_confundir_enye(self):
+        self.assertEqual(_clave("¿Qué es la Luna?"), _clave("que es la luna"))
+        self.assertNotEqual(_clave("año"), _clave("ano"))
 
     def test_alerta_de_negacion(self):
         with tempfile.TemporaryDirectory() as tmp:

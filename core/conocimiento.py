@@ -32,7 +32,11 @@ def conectar(ruta=BASE):
 
 
 def _clave(s):
-    return " ".join(re.findall(r"\w+", s.casefold()))
+    """Compara sin tildes ni puntuación, conservando ñ como letra distinta."""
+    texto = s.casefold().replace("ñ", "\ufff0")
+    texto = "".join(c for c in unicodedata.normalize("NFKD", texto)
+                    if not unicodedata.combining(c))
+    return " ".join(re.findall(r"\w+", texto.replace("\ufff0", "ñ")))
 
 
 def posibles_contradicciones(pregunta, respuesta, existentes):
