@@ -190,3 +190,7 @@ Ambas funciones también están disponibles en `panel_cerebro.py` mediante inter
 ### Chat gráfico local (fase 1)
 
 Después de entrenar el modelo propio con `python3 train.py`, abre `python3 chat_grafico.py`. Para guardar turnos automáticamente en JSONL, utiliza `python3 chat_grafico.py --guardar-historial` o `python3 main.py --guardar-historial`. El guardado está desactivado por defecto. El panel gráfico necesita Tkinter y un entorno de escritorio; las pruebas CI solo verifican sintaxis, no la interacción visual. El botón «Ver historial» muestra los últimos 30 registros.
+
+### Ejemplos de aprendizaje aprobados
+
+`/aprobar-ejemplo ¿Qué es la Luna? || Un satélite natural.` guarda un ejemplo de pregunta/respuesta con aprobación explícita en `data/ejemplos_aprobados.jsonl`. `/ejemplos-aprobados` muestra los últimos 20. **No entrena ni modifica los pesos automáticamente**: es un banco local para una futura fase de entrenamiento supervisado. No se usa ninguna API externa.
