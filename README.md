@@ -175,3 +175,10 @@ La nueva implementación de voz queda **fuera de esta integración** y se reserv
 - `/fichas Luna: satélite natural ; Marte: planeta` crea tarjetas de estudio a partir de definiciones explícitas.
 
 Las tres opciones también están en el panel Tkinter. Son algoritmos locales, no aprendizaje neuronal. La voz avanzada sigue aplazada.
+
+### Repaso y limpieza de textos
+
+- `/preguntas La Luna es un satélite. Marte es un planeta.` genera preguntas literales con respuestas basadas en frases explícitas.
+- `/duplicados La Luna es blanca || la luna es blanca` compara textos y señala similitudes por palabras.
+
+Ambas funciones también están disponibles en `panel_cerebro.py` mediante interfaz gráfica o `--accion`. No utilizan modelos externos ni modifican los datos.
