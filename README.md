@@ -1,5 +1,36 @@
 # Cerebro
 
+## Uso sencillo: un solo comando
+
+No hace falta escribir `pip install torch` manualmente. Cerebro incorpora
+`cerebro.py`, que prepara un entorno virtual privado `.cerebro-env` e instala
+las bibliotecas del motor avanzado **automáticamente la primera vez**.
+**Importante:** PyTorch no está empaquetado dentro del repositorio: es una
+biblioteca grande y la primera preparación requiere Internet. Después, el
+entrenamiento y la generación son locales, sin APIs ni modelos externos.
+
+```bash
+# Chat con el modelo original (NumPy)
+python3 cerebro.py chat
+
+# Entrenamiento del motor original (no requiere PyTorch)
+python3 cerebro.py entrenar --pasos 100
+
+# Entrenamiento avanzado: prepara PyTorch automáticamente si falta
+python3 cerebro.py entrenar --motor avanzado --corpus data/corpus.txt --perfil diminuto --pasos 100
+
+# Generación del motor avanzado ya entrenado
+python3 cerebro.py generar --motor avanzado "Hola Cerebro"
+```
+
+Para evitar cualquier descarga automática, añade `--sin-instalar`. Para usar
+la arquitectura clásica PyTorch, selecciona `--motor clasico`. El motor
+original NumPy sigue siendo independiente y funciona sin PyTorch. El
+lanzador requiere Python 3 con `venv` y `pip` disponibles; el motor NumPy
+requiere además NumPy instalado. No hay instalación completamente sin
+bibliotecas ni descarga inicial garantizada en todos los sistemas.
+
+
 Un modelo de lenguaje **local y construido desde cero**. El motor original usa
 NumPy con retropropagación manual; esta rama añade un motor **PyTorch opcional**
 para entrenar otra red propia desde cero, sin Ollama, sin APIs, sin modelos
@@ -42,8 +73,7 @@ python3 train.py --perfil experto --pasos 100
 ### Entrenamiento PyTorch (motor propio opcional)
 
 ```bash
-pip install torch
-python3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --dispositivo auto
+python3 cerebro.py entrenar --motor clasico --corpus data/corpus.txt --perfil grande --pasos 100 --dispositivo auto
 python3 cerebro_torch.py --generar "Hola Cerebro"
 ```
 
