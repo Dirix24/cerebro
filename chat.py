@@ -40,6 +40,8 @@ AYUDA = """Comandos:
   /duplicados A || B      detecta textos similares
   /historial               consulta las últimas respuestas guardadas
   /guardar-turno rol texto guarda un turno explícitamente
+  /aprobar-ejemplo pregunta || respuesta  aprueba un ejemplo local
+  /ejemplos-aprobados       muestra ejemplos aprobados
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -262,6 +264,23 @@ class Conversacion:
                 return str(detectar_duplicados(textos)), False
             except ValueError as exc:
                 return f"No pude procesarlo: {exc}", False
+        if cmd in ("/aprobar-ejemplo", "/ejemplos-aprobados"):
+            from pathlib import Path
+            from core.ejemplos_aprobados import aprobar, listar
+            ruta = Path(__file__).resolve().parent / "data" / "ejemplos_aprobados.jsonl"
+            if cmd == "/ejemplos-aprobados":
+                ejemplos = listar(ruta)
+                return ("\n".join(f"P: {e['pregunta']}\nR: {e['respuesta']}"
+                                  for e in ejemplos)
+                        if ejemplos else "Todavía no hay ejemplos aprobados."), False
+            if " || " not in resto:
+                return "Uso: /aprobar-ejemplo pregunta || respuesta", False
+            pregunta, respuesta = resto.split(" || ", 1)
+            try:
+                aprobar(ruta, pregunta, respuesta)
+                return "Ejemplo aprobado y guardado. No se han modificado los pesos del modelo.", False
+            except (ValueError, OSError) as exc:
+                return f"No pude aprobar el ejemplo: {exc}", False
         if cmd == "/historial":
             from pathlib import Path
             from core.historial_local import consultar
