@@ -16,3 +16,6 @@ data/corpus_fts.sqlite3*
 
 # Textos obtenidos de Internet y estado local
 data/aprendizaje_internet/
+
+# Base de conocimientos personal local
+data/conocimiento.sqlite3*
