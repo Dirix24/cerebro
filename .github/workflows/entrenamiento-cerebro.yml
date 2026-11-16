@@ -35,7 +35,7 @@ jobs:
       - name: Pruebas originales y memoria
         run: |
           python tests/tests_final.py
-          python -m pytest -q tests/test_conocimiento.py tests/test_aprendizaje_internet.py tests/test_entrenamiento_guiado.py
+          python -m pytest -q tests/test_conocimiento.py tests/test_aprendizaje_internet.py tests/test_entrenamiento_guiado.py tests/test_capacidades_locales.py
       - name: Pruebas de componentes
         run: python -m pytest -q tests/test_nuevas_capacidades.py tests/test_cerebro_torch.py tests/test_local_search.py
       - name: Entrenamiento propio de prueba
