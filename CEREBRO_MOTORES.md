@@ -11,8 +11,10 @@ Se añadieron dos perfiles a `config.PERFILES`:
 |---|---:|---:|---:|---:|---:|
 | grande | 256 | 6 | 8 | 256 | 1024 |
 | experto | 384 | 8 | 8 | 384 | 1536 |
+| gigante | 512 | 12 | 16 | 512 | 2048 |
+| maximo | 768 | 16 | 16 | 768 | 3072 |
 
-Los parámetros exactos dependen del vocabulario realmente aprendido.
+Estimaciones de parámetros NumPy con vocabulario objetivo: grande ~5,3 M; experto ~15,9 M; gigante ~42,3 M; maximo ~126,6 M. Los parámetros exactos dependen del vocabulario realmente aprendido. Los perfiles mayores pueden requerir muchos gigabytes de memoria.
 Un modelo más grande **no garantiza** mejores respuestas: requiere más
 datos, RAM, tiempo y evaluación de calidad.
 
