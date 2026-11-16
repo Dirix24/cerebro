@@ -41,6 +41,10 @@ PERFILES = {
                    n_layers=6, dim_ffn=1024, dropout=0.10),
     "experto": dict(vocab_objetivo=4096, block_size=384, dim=384, n_heads=8,
                     n_layers=8, dim_ffn=1536, dropout=0.12),
+    "gigante": dict(vocab_objetivo=8192, block_size=512, dim=512, n_heads=16,
+                    n_layers=12, dim_ffn=2048, dropout=0.10),
+    "maximo": dict(vocab_objetivo=16384, block_size=768, dim=768, n_heads=16,
+                   n_layers=16, dim_ffn=3072, dropout=0.10),
     # V2: más capacidad y contexto, manteniendo NumPy puro.
     "v2":      dict(vocab_objetivo=768, block_size=192, dim=96, n_heads=4,
                      n_layers=4, dim_ffn=384, dropout=0.08),
