@@ -1,7 +1,7 @@
-"""Actualización diaria opt-in: Wikipedia -> corpus -> entrenamiento local.
+"""Aprendizaje local diario desde artículos públicos de Wikipedia.
 
-No usa APIs de IA ni modelos preentrenados. Sí consulta la API pública de
-Wikipedia para obtener textos; requiere conexión y respeta límites de descarga.
+Opt-in. Conserva pesos/optimizador NumPy mediante --resume; sin modelos
+preentrenados ni servicios de IA. Mantén el proceso abierto para el modo diario.
 """
 import argparse
 from datetime import date
@@ -17,84 +17,111 @@ RAIZ = Path(__file__).resolve().parent
 CARPETA = RAIZ / "data" / "aprendizaje_internet"
 ESTADO = CARPETA / "estado.json"
 CORPUS = CARPETA / "corpus_diario.txt"
+FUENTES = CARPETA / "fuentes.jsonl"
 API = "https://es.wikipedia.org/w/api.php"
 
 
 def obtener_paginas(cantidad):
-    params = {
-        "action": "query", "generator": "random", "grnnamespace": "0",
-        "grnlimit": str(cantidad), "prop": "extracts|info",
-        "explaintext": "1", "exintro": "1", "inprop": "url",
-        "format": "json", "formatversion": "2"
-    }
+    params = {"action": "query", "generator": "random", "grnnamespace": "0",
+              "grnlimit": str(cantidad), "prop": "extracts|info",
+              "explaintext": "1", "exintro": "1", "inprop": "url",
+              "format": "json", "formatversion": "2"}
     req = Request(API + "?" + urlencode(params),
-                  headers={"User-Agent": "CerebroLocal/0.1 (aprendizaje personal; uso moderado)"})
+                  headers={"User-Agent": "CerebroLocal/0.2 (uso personal; contacto: GitHub Dirix24/cerebro)"})
     with urlopen(req, timeout=25) as respuesta:
         datos = json.load(respuesta)
-    paginas = datos.get("query", {}).get("pages", [])
     salida = []
-    for pagina in paginas:
+    for pagina in datos.get("query", {}).get("pages", []):
         texto = " ".join(pagina.get("extract", "").split())
-        if 250 <= len(texto) <= 10000 and pagina.get("fullurl", "").startswith("https://es.wikipedia.org/"):
+        if (250 <= len(texto) <= 10000 and
+                pagina.get("fullurl", "").startswith("https://es.wikipedia.org/") and
+                isinstance(pagina.get("pageid"), int)):
             salida.append({"id": pagina["pageid"], "titulo": pagina["title"],
                            "url": pagina["fullurl"], "texto": texto})
     return salida
 
 
-def ciclo(paginas, pasos, entrenar, max_bytes):
+def documento(pagina):
+    # El motor original solo calcula pérdida sobre líneas 'cerebro:'.
+    # Transformar artículos a pares evita un entrenamiento sin objetivos.
+    titulo = " ".join(pagina["titulo"].replace("\n", " ").split())
+    texto = pagina["texto"].replace("\n", " ").strip()
+    return f"usuario: ¿Qué es {titulo}?\ncerebro: {texto}\n\n"
+
+
+def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     CARPETA.mkdir(parents=True, exist_ok=True)
     estado = json.loads(ESTADO.read_text(encoding="utf-8")) if ESTADO.exists() else {}
     hoy = date.today().isoformat()
     if estado.get("ultimo_dia") == hoy:
-        print("Hoy ya se realizó la recopilación; no se repite.")
+        print("Hoy ya se recopiló información; no se repite.")
         return
     vistos = set(estado.get("vistos", []))
     nuevos = [p for p in obtener_paginas(paginas) if p["id"] not in vistos]
     if not nuevos:
         print("No se encontraron artículos nuevos adecuados.")
         return
-    bloque = "".join("\n\n" + p["texto"] + "\n" for p in nuevos)
+    bloque = "".join(documento(p) for p in nuevos)
     anterior = CORPUS.stat().st_size if CORPUS.exists() else 0
     if anterior + len(bloque.encode("utf-8")) > max_bytes:
-        print("Límite de almacenamiento alcanzado; no se descarga más contenido.")
+        print("Límite de almacenamiento alcanzado; no se recopila más.")
         return
     with CORPUS.open("a", encoding="utf-8") as f:
         f.write(bloque)
-    manifiesto = CARPETA / "fuentes.jsonl"
-    with manifiesto.open("a", encoding="utf-8") as f:
+    with FUENTES.open("a", encoding="utf-8") as f:
         for p in nuevos:
             f.write(json.dumps({k: p[k] for k in ("id", "titulo", "url")},
                                ensure_ascii=False) + "\n")
     vistos.update(p["id"] for p in nuevos)
+    # Guardar el día antes del entrenamiento evita duplicar textos si falla.
     ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos)},
                                  ensure_ascii=False), encoding="utf-8")
-    print(f"Guardados {len(nuevos)} artículos con sus URLs de origen.")
+    print(f"Guardados {len(nuevos)} artículos y sus fuentes.")
     if entrenar:
-        # El corpus cambia cada día: el motor PyTorch no permite --resume si
-        # cambia la huella. Se entrena el motor NumPy original desde cero.
-        print("Entrenamiento local desde cero con el corpus recopilado.")
-        subprocess.run([sys.executable, str(RAIZ / "cerebro.py"),
-                        "entrenar", "--corpus", str(CORPUS),
-                        "--perfil", "diminuto", "--pasos", str(pasos)], check=True)
+        entrenar_pendiente(pasos, perfil, estado_ckpt)
+
+
+def entrenar_pendiente(pasos, perfil, estado_ckpt):
+    if not CORPUS.exists() or not CORPUS.stat().st_size:
+        print("No hay textos para entrenar.")
+        return
+    # --resume conserva los pesos y el estado del optimizador; el tokenizador
+    # original es de bytes/BPE y codifica nuevos documentos con el mismo vocab.
+    cmd = [sys.executable, str(RAIZ / "cerebro.py"), "entrenar",
+           "--corpus", str(CORPUS), "--perfil", perfil, "--pasos", str(pasos)]
+    if estado_ckpt.exists():
+        cmd.append("--resume")
+        print("Continuando los pesos existentes y el optimizador.", flush=True)
+    else:
+        print("Primer entrenamiento: se creará un checkpoint.", flush=True)
+    subprocess.run(cmd, cwd=RAIZ, check=True)
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Recopilación y entrenamiento diario local")
+    ap = argparse.ArgumentParser(description="Recopilación y entrenamiento local diario")
     ap.add_argument("--cada-dia", action="store_true",
-                    help="Mantenerse activo y comprobar una vez cada 24 horas")
+                    help="Comprobar diariamente mientras este programa siga abierto")
     ap.add_argument("--entrenar", action="store_true",
-                    help="Entrenar el modelo NumPy original tras recopilar")
+                    help="Continuar el entrenamiento NumPy tras recopilar")
     ap.add_argument("--paginas", type=int, default=3)
     ap.add_argument("--pasos", type=int, default=20)
     ap.add_argument("--max-mb", type=int, default=20)
+    ap.add_argument("--perfil", default="diminuto")
     args = ap.parse_args()
     if not (1 <= args.paginas <= 5 and 1 <= args.pasos <= 1000 and 1 <= args.max_mb <= 100):
         ap.error("Límites: 1-5 páginas, 1-1000 pasos, 1-100 MB")
+    import config
+    if args.perfil not in config.PERFILES:
+        ap.error("Perfil desconocido")
+    # Se utilizan los checkpoints existentes del motor NumPy; al reanudar
+    # el perfil efectivo será el almacenado en el checkpoint.
+    estado_ckpt = Path(config.CKPT_ULTIMO)
     while True:
         try:
-            ciclo(args.paginas, args.pasos, args.entrenar, args.max_mb * 1024 * 1024)
+            ciclo(args.paginas, args.pasos, args.entrenar,
+                  args.max_mb * 1024 * 1024, args.perfil, estado_ckpt)
         except Exception as exc:
-            print(f"Error de actualización (se volverá a intentar): {exc}", file=sys.stderr)
+            print(f"Error de actualización: {exc}", file=sys.stderr)
             if not args.cada_dia:
                 raise SystemExit(1)
         if not args.cada_dia:
