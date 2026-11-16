@@ -2,7 +2,7 @@ name: Cerebro - entrenamiento local de prueba
 on:
   workflow_dispatch:
   push:
-    branches: [main, integracion-entrenamiento-neuronal, integracion-capacidades-cerebro]
+    branches: [main, integracion-entrenamiento-neuronal, integracion-capacidades-cerebro, fase-1-historial-y-herramientas]
     paths:
       - 'cerebro_torch.py'
       - 'cerebro.py'
@@ -13,7 +13,7 @@ on:
       - 'config.py'
       - '.github/workflows/entrenamiento-cerebro.yml'
   pull_request:
-    branches: [main, integracion-entrenamiento-neuronal]
+    branches: [main, integracion-entrenamiento-neuronal, integracion-capacidades-cerebro]
 jobs:
   entrenar-y-probar:
     runs-on: ubuntu-latest
@@ -35,7 +35,7 @@ jobs:
       - name: Pruebas originales y memoria
         run: |
           python tests/tests_final.py
-          python -m pytest -q tests/test_conocimiento.py tests/test_aprendizaje_internet.py tests/test_entrenamiento_guiado.py tests/test_capacidades_locales.py tests/test_herramientas_texto.py tests/test_repaso_local.py tests/test_historial_local.py
+          python -m pytest -q tests/test_conocimiento.py tests/test_aprendizaje_internet.py tests/test_entrenamiento_guiado.py tests/test_capacidades_locales.py tests/test_herramientas_texto.py tests/test_repaso_local.py tests/test_historial_local.py tests/test_ejemplos_aprobados.py
       - name: Pruebas de componentes
         run: python -m pytest -q tests/test_nuevas_capacidades.py tests/test_cerebro_torch.py tests/test_local_search.py
       - name: Entrenamiento propio de prueba
