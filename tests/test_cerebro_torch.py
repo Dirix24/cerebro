@@ -33,6 +33,17 @@ def test_torch_forward_y_entrenamiento_minimo(tmp_path):
     assert guardado == destino
     assert n > 0
     assert destino.is_file()
+    estado = torch.load(destino, map_location="cpu", weights_only=True)
+    assert estado["formato"] == "cerebro-torch-v2"
+    assert estado["paso"] == 1
+    cerebro_torch.entrenar(corpus, "diminuto", pasos=1, batch=1,
+                           salida=destino, dispositivo="cpu", resume=True)
+    estado = torch.load(destino, map_location="cpu", weights_only=True)
+    assert estado["paso"] == 2
+    with pytest.raises(ValueError, match="incompatible"):
+        corpus.write_text("Corpus modificado " * 20, encoding="utf-8")
+        cerebro_torch.entrenar(corpus, "diminuto", pasos=1, batch=1,
+                               salida=destino, dispositivo="cpu", resume=True)
     assert isinstance(cerebro_torch.generar(destino, "Hola", max_tokens=2), str)
 
 
