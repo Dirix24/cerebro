@@ -2,7 +2,7 @@
 import tempfile
 from pathlib import Path
 import unittest
-from core.conocimiento import guardar, buscar
+from core.conocimiento import guardar, buscar, respuesta_exacta
 
 
 class TestConocimiento(unittest.TestCase):
@@ -12,6 +12,15 @@ class TestConocimiento(unittest.TestCase):
             self.assertEqual(guardar("¿Qué es la Luna?", "Un satélite natural.", "fuente-a", db), [])
             resultados = buscar("Luna satélite", ruta=db)
             self.assertEqual(resultados[0]["fuente"], "fuente-a")
+
+    def test_respuesta_exacta_y_conflictos(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "datos.sqlite"
+            self.assertIsNone(respuesta_exacta("¿Qué es la Luna?", db))
+            guardar("¿Qué es la Luna?", "Satélite natural.", "fuente-a", db)
+            self.assertEqual(respuesta_exacta("que es la luna", db)["fuente"], "fuente-a")
+            guardar("¿Qué es la Luna?", "Un planeta.", "fuente-b", db)
+            self.assertIsNone(respuesta_exacta("¿Qué es la Luna?", db))
 
     def test_alerta_de_negacion(self):
         with tempfile.TemporaryDirectory() as tmp:
