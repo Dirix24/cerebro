@@ -36,6 +36,22 @@ PERFILES = {
                      n_layers=3, dim_ffn=256, dropout=0.05),
     "mediano":  dict(vocab_objetivo=1024, block_size=160, dim=128, n_heads=4,
                      n_layers=4, dim_ffn=512, dropout=0.15),
+    # Perfiles de mayor capacidad; requieren más RAM y tiempo de entrenamiento.
+    "grande": dict(vocab_objetivo=2048, block_size=256, dim=256, n_heads=8,
+                   n_layers=6, dim_ffn=1024, dropout=0.10),
+    "experto": dict(vocab_objetivo=4096, block_size=384, dim=384, n_heads=8,
+                    n_layers=8, dim_ffn=1536, dropout=0.12),
+    "gigante": dict(vocab_objetivo=8192, block_size=512, dim=512, n_heads=16,
+                    n_layers=12, dim_ffn=2048, dropout=0.10),
+    "maximo": dict(vocab_objetivo=16384, block_size=768, dim=768, n_heads=16,
+                   n_layers=16, dim_ffn=3072, dropout=0.10),
+    # Perfiles objetivo aproximados para arquitectura avanzada SwiGLU (no entrenados).
+    "cerebro_250m": dict(vocab_objetivo=16384, block_size=1024, dim=1024,
+                         n_heads=16, n_layers=16, dim_ffn=2816, dropout=0.10),
+    "cerebro_500m": dict(vocab_objetivo=16384, block_size=1024, dim=1280,
+                         n_heads=20, n_layers=22, dim_ffn=3584, dropout=0.10),
+    "cerebro_1b": dict(vocab_objetivo=32768, block_size=2048, dim=2048,
+                       n_heads=32, n_layers=20, dim_ffn=5504, dropout=0.10),
     # V2: más capacidad y contexto, manteniendo NumPy puro.
     "v2":      dict(vocab_objetivo=768, block_size=192, dim=96, n_heads=4,
                      n_layers=4, dim_ffn=384, dropout=0.08),

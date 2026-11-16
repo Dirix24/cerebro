@@ -25,6 +25,7 @@ AYUDA = """Comandos:
   /recordar clave = valor   guarda un dato
   /olvidar clave            borra un dato
   /calc 12 * (3 + 4)        calculadora segura
+  /buscar-corpus texto      busca información en el corpus local indexado
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -163,6 +164,15 @@ class Conversacion:
         if cmd == "/olvidar":
             return (f"Olvidé «{resto}»." if self.memoria.eliminar_largo_plazo(resto)
                     else f"No tengo nada guardado como «{resto}»."), False
+        if cmd == "/buscar-corpus":
+            if not resto:
+                return "Uso: /buscar-corpus palabras a buscar", False
+            from core.local_search import buscar
+            resultados = buscar(resto)
+            if not resultados:
+                return ("No hay resultados locales. Crea el índice con "
+                        "python3 -m core.local_search --indexar"), False
+            return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
         if cmd == "/calc":
             return self._responder_con_agente(
                 [{"tool": "calculator", "arguments": {"expression": resto}}]), False
