@@ -1,3 +1,4 @@
+import ast
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,6 +24,11 @@ class TestHistorialLocal(unittest.TestCase):
                 guardar(ruta, "usuario", "x" * 4001)
             with self.assertRaises(ValueError):
                 consultar(ruta, limite=0)
+
+    def test_chat_grafico_y_cli_sintaxis(self):
+        raiz = Path(__file__).resolve().parents[1]
+        for nombre in ("chat_grafico.py", "main.py", "chat.py"):
+            ast.parse((raiz / nombre).read_text(encoding="utf-8"))
 
     def test_lineas_corruptas(self):
         with tempfile.TemporaryDirectory() as tmp:
