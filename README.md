@@ -428,3 +428,7 @@ El código está pensado para extenderse sin romper lo demás:
   similitud de embeddings.
 
 
+
+## Protección del aprendizaje automático
+
+El aprendizaje diario dispone ahora de respaldo temporal de `last.npz` y `best.npz`, reanudación de entrenamientos pendientes y una evaluación sobre **todos** los documentos de `data/validacion.txt`. Si el nuevo `best.npz` empeora más de un 2% en bits por byte, o falla el entrenamiento, restaura los checkpoints anteriores. Este control es experimental y no demuestra ausencia de olvido en otros temas. No hay modelos externos ni APIs de IA; solo se usa Wikipedia como fuente de texto. Es recomendable hacer una copia independiente de los checkpoints antes de usar el modo autónomo. El sistema no ha sido probado de extremo a extremo en el equipo del usuario.
