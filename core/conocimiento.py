@@ -8,7 +8,10 @@ import json
 from pathlib import Path
 import re
 import sqlite3
-from core.semantic_memory import buscar_similares
+try:
+    from core.semantic_memory import buscar_similares
+except ModuleNotFoundError:
+    from semantic_memory import buscar_similares
 
 BASE = Path(__file__).resolve().parents[1] / "data" / "conocimiento.sqlite3"
 
