@@ -65,6 +65,20 @@ def guardar(pregunta, respuesta, fuente, ruta=BASE):
     return alertas
 
 
+def respuesta_exacta(consulta, ruta=BASE):
+    """Responde solo si la pregunta coincide y las fuentes no discrepan."""
+    ruta = Path(ruta)
+    if not ruta.is_file() or ruta.is_symlink():
+        return None
+    with conectar(ruta) as con:
+        filas = con.execute("SELECT pregunta,respuesta,fuente FROM hechos ORDER BY id DESC LIMIT 2000").fetchall()
+    coinciden = [(r, f) for p, r, f in filas if _clave(p) == _clave(consulta)]
+    if not coinciden or len({_clave(r) for r, _ in coinciden}) != 1:
+        return None
+    respuesta, fuente = coinciden[0]
+    return {"respuesta": respuesta, "fuente": fuente}
+
+
 def buscar(consulta, limite=3, ruta=BASE):
     ruta = Path(ruta)
     if not ruta.is_file() or ruta.is_symlink():
