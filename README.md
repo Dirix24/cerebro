@@ -194,3 +194,12 @@ Después de entrenar el modelo propio con `python3 train.py`, abre `python3 chat
 ### Ejemplos de aprendizaje aprobados
 
 `/aprobar-ejemplo ¿Qué es la Luna? || Un satélite natural.` guarda un ejemplo de pregunta/respuesta con aprobación explícita en `data/ejemplos_aprobados.jsonl`. `/ejemplos-aprobados` muestra los últimos 20. **No entrena ni modifica los pesos automáticamente**: es un banco local para una futura fase de entrenamiento supervisado. No se usa ninguna API externa.
+
+### Entrenamiento con ejemplos aprobados (opt-in)
+
+1. Aprueba ejemplos desde el chat con `/aprobar-ejemplo pregunta || respuesta`.
+2. Comprueba cuántos ejemplos se exportarían sin modificar archivos: `python3 entrenar_ejemplos_aprobados.py`.
+3. Exporta al corpus local con `python3 entrenar_ejemplos_aprobados.py --aplicar`.
+4. **Solo si quieres entrenar y tienes checkpoints propios y validación fija**, ejecuta `python3 entrenar_ejemplos_aprobados.py --aplicar --entrenar --pasos 30`.
+
+El entrenamiento reutiliza `entrenamiento_guiado.py`: compara la validación antes/después y restaura checkpoints si detecta regresión superior al 2 %. El corpus exportado permanece disponible; no se hace entrenamiento automático al aprobar ejemplos. Las pruebas unitarias no prueban mejoras de calidad del modelo.
