@@ -81,7 +81,12 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     # Guardar el día antes del entrenamiento evita duplicar textos si falla.
     ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos), "entrenamiento_pendiente": bool(entrenar)},
                                  ensure_ascii=False), encoding="utf-8")
-    print(f"Guardados {len(nuevos)} artículos y sus fuentes.")
+    from core.conocimiento import guardar as guardar_conocimiento
+    alertas = 0
+    for pagina in nuevos:
+        pregunta = "¿Qué es " + " ".join(pagina["titulo"].split()) + "?"
+        alertas += len(guardar_conocimiento(pregunta, pagina["texto"], pagina["url"]))
+    print(f"Guardados {len(nuevos)} artículos y sus fuentes; alertas de contradicción: {alertas}.")
     if entrenar:
         entrenar_pendiente(pasos, perfil, estado_ckpt)
         estado["entrenamiento_pendiente"] = False
