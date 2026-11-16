@@ -11,6 +11,7 @@ from core.biblioteca_local import buscar_en_biblioteca
 from core.analizador_codigo_local import analizar
 from core.laboratorio_local import historial
 from core.estudio_local import resumir, palabras_clave
+from core.herramientas_texto import estadisticas, comparar_textos, fichas_estudio
 
 RAIZ = Path(__file__).resolve().parent
 
@@ -26,6 +27,15 @@ def ejecutar(accion, valor=""):
         return resumir(valor)
     if accion == "palabras-clave":
         return ", ".join(palabras_clave(valor))
+    if accion == "estadisticas":
+        return json.dumps(estadisticas(valor), ensure_ascii=False, indent=2)
+    if accion == "comparar":
+        if " || " not in valor:
+            raise ValueError("Separa los dos textos con:  ||  ")
+        a, b = valor.split(" || ", 1)
+        return json.dumps(comparar_textos(a, b), ensure_ascii=False, indent=2)
+    if accion == "fichas":
+        return json.dumps(fichas_estudio(valor), ensure_ascii=False, indent=2)
     if accion == "metricas":
         return json.dumps(historial(RAIZ / "learning/evolution/experimentos.jsonl"), ensure_ascii=False, indent=2)
     raise ValueError("Acción no disponible")
@@ -40,7 +50,7 @@ def ventana():
     ttk.Label(root, text="Cerebro · Panel de herramientas", font=("Arial", 16)).pack(pady=10)
     accion = tk.StringVar(value="calcular")
     ttk.Combobox(root, textvariable=accion,
-                 values=("calcular", "biblioteca", "codigo", "metricas", "resumir", "palabras-clave"), state="readonly").pack(fill="x", padx=12)
+                 values=("calcular", "biblioteca", "codigo", "metricas", "resumir", "palabras-clave", "estadisticas", "comparar", "fichas"), state="readonly").pack(fill="x", padx=12)
     entrada = tk.Text(root, height=5)
     entrada.pack(fill="x", padx=12, pady=8)
     salida = tk.Text(root, height=18)
