@@ -47,7 +47,7 @@ python3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --
 python3 cerebro_torch.py --generar "Hola Cerebro"
 ```
 
-PyTorch es una biblioteca para cálculos y gradientes; **no se carga otra IA**.
+Para entrenar en varias sesiones y guardar avances cada 50 pasos:\n\n```bash\npython3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --guardar-cada 50\npython3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --resume --guardar-cada 50\n```\n\n`--resume` restaura pesos, optimizador, contador de pasos y estado aleatorio.\nComprueba la huella SHA-256 del corpus y rechaza cambios de datos o perfil.\nEl checkpoint se escribe mediante archivo temporal y reemplazo atómico.\n**No cambies el corpus entre reanudaciones.** Checkpoints anteriores v1 pueden\nutilizarse para generar, pero no para reanudar. Los checkpoints guardan también\nel estado de AdamW, por lo que requieren más espacio.\n\nPyTorch es una biblioteca para cálculos y gradientes; **no se carga otra IA**.
 Este motor guarda pesos independientes en `checkpoints/torch_cerebro.pt` y no
 reemplaza el chat NumPy de `main.py`. La generación de PyTorch es experimental;
 no hay resultados de calidad confirmados ni pruebas ejecutadas de este motor.
