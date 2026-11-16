@@ -7,6 +7,8 @@ import argparse
 from datetime import date
 import json
 import shutil
+import os
+import signal
 from pathlib import Path
 import subprocess
 import sys
@@ -20,6 +22,28 @@ ESTADO = CARPETA / "estado.json"
 CORPUS = CARPETA / "corpus_diario.txt"
 FUENTES = CARPETA / "fuentes.jsonl"
 API = "https://es.wikipedia.org/w/api.php"
+PROCESO_ENTRENAMIENTO = None
+
+
+def detener_entrenamiento(signum, frame):
+    """No dejar entrenadores huérfanos al cerrar el modo todo."""
+    global PROCESO_ENTRENAMIENTO
+    hijo = PROCESO_ENTRENAMIENTO
+    if hijo is not None and hijo.poll() is None:
+        if os.name == "posix":
+            os.killpg(hijo.pid, signal.SIGTERM)
+        else:
+            hijo.terminate()
+        try:
+            hijo.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            if os.name == "posix":
+                os.killpg(hijo.pid, signal.SIGKILL)
+            else:
+                hijo.kill()
+            hijo.wait()
+    raise SystemExit(128 + signum)
+
 
 
 def obtener_paginas(cantidad):
@@ -109,6 +133,8 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
     try:
         referencia = Path(config.CKPT_MEJOR)
         previo = evaluar_fijo(referencia, validacion)
+        ultimo_previo = evaluar_fijo(Path(config.CKPT_ULTIMO), validacion)
+        referencia_ultimo = ultimo_previo if ultimo_previo is not None else previo
         cmd = [sys.executable, str(RAIZ / "cerebro.py"), "entrenar",
                "--corpus", str(CORPUS), "--perfil", perfil,
                "--pasos", str(pasos), "--batch", "2"]
@@ -117,15 +143,24 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
             print("Reanudando pesos y optimizador guardados.", flush=True)
         else:
             print("Entrenamiento inicial con pesos propios.", flush=True)
-        subprocess.run(cmd, cwd=RAIZ, check=True)
+        global PROCESO_ENTRENAMIENTO
+        PROCESO_ENTRENAMIENTO = subprocess.Popen(cmd, cwd=RAIZ,
+            start_new_session=(os.name == "posix"))
+        codigo = PROCESO_ENTRENAMIENTO.wait()
+        PROCESO_ENTRENAMIENTO = None
+        if codigo:
+            raise subprocess.CalledProcessError(codigo, cmd)
         nuevo = evaluar_fijo(Path(config.CKPT_MEJOR), validacion)
+        ultimo_nuevo = evaluar_fijo(Path(config.CKPT_ULTIMO), validacion)
         # La mejora en un conjunto de validación fijo es condición necesaria,
         # pero no garantiza que todos los conocimientos se hayan conservado.
-        if previo is not None and (nuevo is None or nuevo > previo * 1.02):
+        if ((previo is not None and (nuevo is None or nuevo > previo * 1.02))
+                or (referencia_ultimo is not None and
+                    (ultimo_nuevo is None or ultimo_nuevo > referencia_ultimo * 1.02))):
             restaurar(copias)
             raise RuntimeError(
-                f"Entrenamiento revertido: validación {previo:.4f} -> {nuevo} bpb")
-        print(f"Validación fija aceptada: antes={previo}, después={nuevo} bpb.")
+                f"Entrenamiento revertido: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb")
+        print(f"Validación aceptada: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb.")
     except BaseException:
         restaurar(copias)
         raise
@@ -134,6 +169,8 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
 
 
 def main():
+    signal.signal(signal.SIGTERM, detener_entrenamiento)
+    signal.signal(signal.SIGINT, detener_entrenamiento)
     ap = argparse.ArgumentParser(description="Recopilación y entrenamiento local diario")
     ap.add_argument("--cada-dia", action="store_true",
                     help="Comprobar diariamente mientras este programa siga abierto")
