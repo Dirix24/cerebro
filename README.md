@@ -20,7 +20,7 @@ python3 cerebro.py todo
 
 **Para detenerlo:** escribe `/salir` en el chat. El lanzador intenta detener el proceso de aprendizaje. **No es un servicio permanente:** no arranca con el sistema operativo y la terminal debe seguir abierta. El primer ciclo puede empezar inmediatamente. El entrenamiento consume CPU y puede afectar a la fluidez del chat; el chat ya abierto no recarga automáticamente los pesos nuevos. **Haz copia de `checkpoints/` antes de activar el aprendizaje automático.** No ejecutes varias instancias de `todo` a la vez.
 
-La memoria de conocimientos se guarda localmente y puede consultarse desde comandos; **todavía no está conectada automáticamente a la generación del chat**. El motor PyTorch avanzado **no** se activa ni se entrena con `todo`, para evitar descargas pesadas y consumo de recursos inesperado.
+La memoria de conocimientos se guarda localmente. El chat consulta automáticamente **solo preguntas exactas** y muestra la fuente; si existen respuestas distintas para esa pregunta, se abstiene y deja responder al modelo. Para buscar coincidencias aproximadas utiliza `/conocimiento palabras`. El motor PyTorch avanzado **no** se activa ni se entrena con `todo`, para evitar descargas pesadas y consumo de recursos inesperado.
 
 ## Comandos disponibles
 
@@ -44,7 +44,7 @@ En Windows, sustituye `python3` por `python` si corresponde.
 - **Motor neuronal NumPy:** Transformer causal, atención multi-cabeza, BPE por bytes, retropropagación manual, AdamW, gradientes acumulados, validación y checkpoints `.npz`.
 - **Motor PyTorch opcional:** Transformer clásico o avanzado con RoPE, RMSNorm, SwiGLU y atención SDPA. Sus checkpoints `.pt` son independientes e incompatibles con el motor NumPy. PyTorch se instala automáticamente en `.cerebro-env` la primera vez que lo necesites (requiere Internet para descargar la biblioteca).
 - **Aprendizaje diario experimental:** recopila hasta 3 artículos de Wikipedia por ciclo, conserva las URLs, evita IDs duplicados y limita el corpus a 20 MB por defecto. Utiliza Internet como **fuente de texto**, nunca como IA externa.
-- **Protección del aprendizaje NumPy:** intenta continuar desde `last.npz`, hace respaldos temporales de `last.npz` y `best.npz`, evalúa `best.npz` contra `data/validacion.txt` y restaura checkpoints ante errores o un empeoramiento superior al 2% en bits por byte. Esto **no garantiza ausencia de olvido**.
+- **Protección del aprendizaje NumPy:** intenta continuar desde `last.npz`, hace respaldos temporales de `last.npz` y `best.npz`, evalúa `best.npz` contra `data/validacion.txt` y restaura ambos checkpoints ante errores o un empeoramiento superior al 2% en bits por byte, evaluando tanto `best.npz` como `last.npz` sobre la misma validación fija. Esto **no garantiza ausencia de olvido**.
 - **Conocimiento local:** SQLite con preguntas, respuestas y fuentes, búsqueda estadística TF-IDF de palabras/trigramas, y alertas heurísticas de contradicción. Las alertas pueden tener falsos positivos.
 - **Herramientas:** búsqueda local FTS5, análisis estático de Python, calculadora, archivos limitados a `data/workspace`, memoria persistente y voz opcional (síntesis/grabación; **no** reconocimiento de voz).
 
@@ -105,3 +105,12 @@ Más detalles técnicos: [CEREBRO_MOTORES.md](CEREBRO_MOTORES.md) y [MEJORAS_LOC
 ## Contribuciones
 
 Desarrolla primero en una rama, ejecuta pruebas y revisa los cambios antes de fusionar con `main`. El objetivo es mejorar **una IA propia y auditable**, sin depender de modelos de terceros.
+
+## Correcciones para la siguiente fusión
+
+- El aprendizaje evalúa **best y last** en el mismo conjunto fijo, y revierte ambos ante regresiones superiores al 2%.
+- Al cerrar `todo` se envía una señal al recopilador, que detiene el entrenamiento hijo antes de restaurar checkpoints si se interrumpe.
+- El chat muestra respuestas almacenadas con fuente para coincidencias exactas y no elige arbitrariamente entre fuentes contradictorias.
+- GitHub Actions ejecuta pruebas al abrir un PR hacia `main` y al actualizar `main`. La ejecución completa de CI debe comprobarse antes de fusionar.
+
+**Precaución:** la recuperación de checkpoints y el cierre de procesos no equivalen a una garantía frente a cortes de luz o fallos de disco. El aprendizaje automático sigue siendo experimental.

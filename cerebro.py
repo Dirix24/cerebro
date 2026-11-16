@@ -7,6 +7,7 @@ import argparse
 import os
 from pathlib import Path
 import subprocess
+import signal
 import sys
 import venv
 
@@ -44,16 +45,23 @@ def ejecutar_todo():
     print("Cerebro completo: chat local, memoria y aprendizaje diario.", flush=True)
     print("Internet solo aporta textos; ninguna IA de terceros.", flush=True)
     aprendizaje = subprocess.Popen([sys.executable, str(RAIZ / "aprendizaje_internet.py"),
-                                    "--cada-dia", "--entrenar"], cwd=str(RAIZ))
+                                    "--cada-dia", "--entrenar"], cwd=str(RAIZ),
+                                    start_new_session=(os.name == "posix"))
     try:
         return _ejecutar([sys.executable, str(RAIZ / "main.py")])
     finally:
         if aprendizaje.poll() is None:
-            aprendizaje.terminate()
+            if os.name == "posix":
+                os.killpg(aprendizaje.pid, signal.SIGTERM)
+            else:
+                aprendizaje.terminate()
             try:
                 aprendizaje.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                aprendizaje.kill()
+                if os.name == "posix":
+                    os.killpg(aprendizaje.pid, signal.SIGKILL)
+                else:
+                    aprendizaje.kill()
                 aprendizaje.wait()
 
 

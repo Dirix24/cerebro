@@ -26,6 +26,7 @@ AYUDA = """Comandos:
   /olvidar clave            borra un dato
   /calc 12 * (3 + 4)        calculadora segura
   /buscar-corpus texto      busca información en el corpus local indexado
+  /conocimiento texto       consulta la memoria con fuentes
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -79,6 +80,14 @@ class Conversacion:
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
+        # No inventar conocimiento: respuesta automática solo ante pregunta exacta.
+        try:
+            from core.conocimiento import respuesta_exacta
+            dato = respuesta_exacta(entrada)
+            if dato:
+                return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
+        except (OSError, ValueError):
+            pass
         return self.responder_modelo(entrada), False
 
     # -- respuesta del modelo -----------------------------------------------------------
@@ -164,6 +173,15 @@ class Conversacion:
         if cmd == "/olvidar":
             return (f"Olvidé «{resto}»." if self.memoria.eliminar_largo_plazo(resto)
                     else f"No tengo nada guardado como «{resto}»."), False
+        if cmd == "/conocimiento":
+            if not resto:
+                return "Uso: /conocimiento palabras a buscar", False
+            from core.conocimiento import buscar as buscar_conocimiento
+            resultados = buscar_conocimiento(resto, limite=3)
+            if not resultados:
+                return "No encontré conocimientos relacionados.", False
+            return "\n\n".join(x["respuesta"][:500] + "\nFuente: " + x["fuente"]
+                                for x in resultados), False
         if cmd == "/buscar-corpus":
             if not resto:
                 return "Uso: /buscar-corpus palabras a buscar", False
