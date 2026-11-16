@@ -10,3 +10,6 @@ data/workspace/*
 
 # Índice derivado, reconstruible localmente
 data/corpus_fts.sqlite3*
+
+# Entorno aislado autogenerado por cerebro.py
+.cerebro-env/
