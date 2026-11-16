@@ -143,7 +143,6 @@ Estas herramientas son **prototipos funcionales**, no sustituyen un modelo conve
 - `core/analizador_codigo_local.py`: inspección AST de Python sin ejecutar código.
 - `core/investigador_local.py`: normalización y deduplicación de fuentes HTTPS; la descarga existente sigue en `aprendizaje_internet.py`.
 - `core/laboratorio_local.py`: registro JSONL de métricas y experimentos.
-- `core/voz_local.py`: inspección de WAV; **no reconoce voz**.
 - `panel_cerebro.py`: interfaz Tkinter para cálculo, búsqueda, análisis de código e historial; no es todavía un chat gráfico.
 
 Ejemplos:
@@ -155,4 +154,12 @@ python3 panel_cerebro.py --accion biblioteca --texto "Luna"
 python3 -m pytest -q tests/test_capacidades_locales.py
 ```
 
-El currículo de entrenamiento y el respaldo de checkpoints se desarrollan en la rama previa `integracion-entrenamiento-neuronal`. **Pendiente de desarrollar:** reconocimiento de voz real, lectura de PDF, razonamiento avanzado, aprendizaje curricular automático, comparación experimental de modelos y conexión de todas las herramientas con el chat principal. Ninguna herramienta nueva toma el control del ordenador de forma autónoma.
+El currículo de entrenamiento y el respaldo de checkpoints se desarrollan en la rama previa `integracion-entrenamiento-neuronal`. **Pendiente de desarrollar:** lectura de PDF, razonamiento avanzado, aprendizaje curricular automático, comparación experimental de modelos y conexión de todas las herramientas con el chat principal. Ninguna herramienta nueva toma el control del ordenador de forma autónoma.
+
+### Voz avanzada: pospuesta
+
+La nueva implementación de voz queda **fuera de esta integración** y se reserva para una versión futura. Las funciones de audio anteriores del proyecto no se modifican.
+
+### Nuevos comandos del chat
+
+`/biblioteca Luna`, `/calcular-local 2+3*4`, `/analizar-codigo def f(): return 1` y `/experimentos` permiten acceder a varias herramientas desde el chat original. No requieren modelos externos.
