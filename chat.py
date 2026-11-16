@@ -27,6 +27,10 @@ AYUDA = """Comandos:
   /calc 12 * (3 + 4)        calculadora segura
   /buscar-corpus texto      busca información en el corpus local indexado
   /conocimiento texto       consulta la memoria con fuentes
+  /biblioteca texto         busca en documentos locales
+  /calcular-local cuenta    calcula expresiones aritmeticas
+  /analizar-codigo texto    analiza Python sin ejecutarlo
+  /experimentos             muestra metricas registradas
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -191,6 +195,34 @@ class Conversacion:
                 return ("No hay resultados locales. Crea el índice con "
                         "python3 -m core.local_search --indexar"), False
             return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
+        if cmd == "/biblioteca":
+            if not resto:
+                return "Uso: /biblioteca texto", False
+            from pathlib import Path
+            from core.biblioteca_local import buscar_en_biblioteca
+            raiz = Path(__file__).resolve().parent / "data"
+            resultados = buscar_en_biblioteca(resto, raiz)
+            return ("\n\n".join(f"[{r['archivo']}] {r['fragmento']}" for r in resultados)
+                    if resultados else "No encontré documentos relacionados."), False
+        if cmd == "/calcular-local":
+            from core.razonamiento_local import calcular
+            try:
+                return f"{resto} = {calcular(resto)}", False
+            except (SyntaxError, ValueError, ZeroDivisionError, OverflowError) as exc:
+                return f"No pude calcularlo: {exc}", False
+        if cmd == "/analizar-codigo":
+            from core.analizador_codigo_local import analizar
+            try:
+                return str(analizar(resto)), False
+            except (SyntaxError, ValueError) as exc:
+                return f"No pude analizarlo: {exc}", False
+        if cmd == "/experimentos":
+            from pathlib import Path
+            from core.laboratorio_local import historial
+            ruta = Path(__file__).resolve().parent / "learning/evolution/experimentos.jsonl"
+            registros = historial(ruta, limite=10)
+            return ("\n".join(str(r) for r in registros)
+                    if registros else "Todavía no hay experimentos registrados."), False
         if cmd == "/calc":
             return self._responder_con_agente(
                 [{"tool": "calculator", "arguments": {"expression": resto}}]), False
