@@ -2,7 +2,7 @@ name: Cerebro - entrenamiento local de prueba
 on:
   workflow_dispatch:
   push:
-    branches: [main, correcciones-seguridad-autonomia]
+    branches: [main, integracion-entrenamiento-neuronal, integracion-capacidades-cerebro]
     paths:
       - 'cerebro_torch.py'
       - 'cerebro.py'
@@ -13,7 +13,7 @@ on:
       - 'config.py'
       - '.github/workflows/entrenamiento-cerebro.yml'
   pull_request:
-    branches: [main]
+    branches: [main, integracion-entrenamiento-neuronal]
 jobs:
   entrenar-y-probar:
     runs-on: ubuntu-latest
