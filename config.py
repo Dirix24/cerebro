@@ -36,6 +36,11 @@ PERFILES = {
                      n_layers=3, dim_ffn=256, dropout=0.05),
     "mediano":  dict(vocab_objetivo=1024, block_size=160, dim=128, n_heads=4,
                      n_layers=4, dim_ffn=512, dropout=0.15),
+    # Perfiles de mayor capacidad; requieren más RAM y tiempo de entrenamiento.
+    "grande": dict(vocab_objetivo=2048, block_size=256, dim=256, n_heads=8,
+                   n_layers=6, dim_ffn=1024, dropout=0.10),
+    "experto": dict(vocab_objetivo=4096, block_size=384, dim=384, n_heads=8,
+                    n_layers=8, dim_ffn=1536, dropout=0.12),
     # V2: más capacidad y contexto, manteniendo NumPy puro.
     "v2":      dict(vocab_objetivo=768, block_size=192, dim=96, n_heads=4,
                      n_layers=4, dim_ffn=384, dropout=0.08),
