@@ -1,18 +1,72 @@
 # Cerebro
 
-Un modelo de lenguaje  **construido enteramente desde cero
-con NumPy**. Sin PyTorch, sin TensorFlow, sin autograd, sin APIs, sin modelos
-preentrenados de nadie: tokenizador, atención, retropropagación, optimizador,
-entrenamiento, memoria y agente están escritos aquí, se pueden leer de principio a
-fin y funcionan sin internet.
+Un modelo de lenguaje **local y construido desde cero**. El motor original usa
+NumPy con retropropagación manual; esta rama añade un motor **PyTorch opcional**
+para entrenar otra red propia desde cero, sin Ollama, sin APIs, sin modelos
+preentrenados de terceros y sin necesidad de Internet.
 
 ```
 python3 main.py        # habla con el modelo que ya viene entrenado
 ```
 
+## Novedades de esta rama: más parámetros y tecnología local
+
+Se incorporan perfiles de entrenamiento más grandes para el Transformer propio,
+y un segundo motor opcional con PyTorch (CPU o CUDA). Los perfiles **no son
+modelos ya entrenados**: indican tamaños de redes que puedes entrenar con tus
+datos. Los parámetros de la tabla son **estimaciones para el vocabulario
+objetivo completo**; si BPE aprende menos tokens, la cantidad real será menor.
+
+| Perfil | Capas | Dimensión | Cabezas | Contexto | Parámetros estimados* |
+|---|---:|---:|---:|---:|---:|
+| grande | 6 | 256 | 8 | 256 | ~5,3 millones |
+| experto | 8 | 384 | 8 | 384 | ~15,9 millones |
+| gigante | 12 | 512 | 16 | 512 | ~42,3 millones |
+| maximo | 16 | 768 | 16 | 768 | ~126,6 millones |
+
+*Estimación para la arquitectura NumPy con embeddings compartidos y
+vocabulario objetivo. Entrenar los perfiles `gigante` y `maximo` puede consumir
+**muchos gigabytes de RAM/VRAM** y tardar considerablemente. Más parámetros
+por sí solos no implican mejor calidad: se necesitan más datos y evaluación.
+El modelo incluido de ~190 mil parámetros **no se convierte automáticamente**
+en uno grande.
+
+### Entrenamiento NumPy (motor original)
+
+```bash
+python3 train.py --perfil grande --pasos 100
+python3 train.py --perfil experto --pasos 100
+# gigante/maximo: solo con memoria y tiempo suficientes
+```
+
+### Entrenamiento PyTorch (motor propio opcional)
+
+```bash
+pip install torch
+python3 cerebro_torch.py --corpus data/corpus.txt --perfil grande --pasos 100 --dispositivo auto
+python3 cerebro_torch.py --generar "Hola Cerebro"
+```
+
+PyTorch es una biblioteca para cálculos y gradientes; **no se carga otra IA**.
+Este motor guarda pesos independientes en `checkpoints/torch_cerebro.pt` y no
+reemplaza el chat NumPy de `main.py`. La generación de PyTorch es experimental;
+no hay resultados de calidad confirmados ni pruebas ejecutadas de este motor.
+Consulta [CEREBRO_MOTORES.md](CEREBRO_MOTORES.md).
+
+### Búsqueda offline del corpus
+
+```bash
+python3 -m core.local_search --indexar
+python3 -m core.local_search --buscar "atención"
+# En main.py: /buscar-corpus atención
+```
+
+Usa SQLite FTS5, sin servicios externos. Requiere crear el índice después de
+cambiar el corpus. Más detalles en [MEJORAS_LOCALES.md](MEJORAS_LOCALES.md).
+
 ## Alcance honesto
 
-Cerebro **no** es un LLM competitivo ni sabe cosas del mundo. El perfil original tiene ~190 mil
+Cerebro **no** es un LLM competitivo ni sabe cosas del mundo. El checkpoint original incluido tiene ~190 mil
 parámetros y aprendió de un corpus propio de unos 80 mil tokens. Lo que sí hace bien:
 
 - Contesta con fluidez las preguntas de su corpus y sus reformulaciones
@@ -46,19 +100,21 @@ Mejorarlo pasa por darle más texto (`data/corpus/`) y usar un perfil mayor.
 | Reanudación reproducible | `trainer_engine.py`, `core/checkpoint.py` | Guarda RNG del modelo + muestreador de batches + AdamW; continuar produce los mismos pasos |
 | Entrenamiento eficiente | `trainer_engine.py` | Acumulación de gradientes, scheduler basado en paso global y early stopping configurable |
 | Evaluación | `data/test.txt`, `evaluate.py` | Conjunto TEST final que nunca selecciona checkpoints; huellas SHA-256 de train/validación |
-| Pruebas | `tests/tests_final.py` | 27 pruebas de integridad, sin frameworks |
+| Pruebas | `tests/tests_final.py` | Pruebas originales sin frameworks; los nuevos tests opcionales usan pytest |
+| Segundo motor propio | `cerebro_torch.py` | Transformer PyTorch desde cero, CPU/CUDA opcional, checkpoints separados |
+| Búsqueda offline | `core/local_search.py` | Índice SQLite FTS5 del corpus, sin Internet |
 
 ## Instalación
 
 ```bash
-git clone https://github.com/dminayaramos-afk/cerebro.git
+git clone https://github.com/Dirix24/cerebro.git
 cd cerebro
 pip install -r requirements.txt      # solo numpy
 python3 tests/tests_final.py         # comprueba que todo funciona
 python3 main.py                      # a conversar
 ```
 
-Única dependencia real: `numpy`. `psutil` es opcional.
+Para el motor original, la dependencia principal es `numpy`; `psutil` es opcional.\nPyTorch y pytest solo se necesitan para el motor nuevo y sus pruebas.
 
 ## Uso
 
@@ -68,7 +124,7 @@ python3 main.py                          # interactivo
 python3 main.py --una-vez "hola"         # un mensaje, para scripts
 python3 main.py --semilla 7              # respuestas reproducibles
 ```
-Comandos: `/ayuda /estado /memoria /recordar clave = valor /olvidar clave /calc 12*7
+Comandos: `/buscar-corpus texto /ayuda /estado /memoria /recordar clave = valor /olvidar clave /calc 12*7
 /hora /archivos /leer f /escribir f texto /temp 0.5 /limpiar /salir`.
 También entiende «cuánto es 12 por 7» y «qué hora es» (por reglas, no por el modelo).
 
@@ -152,7 +208,7 @@ verdad a la vez.
 
 | Qué | Dónde |
 |---|---|
-| Tamaño del modelo | `PERFILES` (`diminuto`, `pequeno`, `mediano`) o `CEREBRO_PERFIL=...` |
+| Tamaño del modelo | `PERFILES` (`diminuto`, `pequeno`, `mediano`, `v2`, `grande`, `experto`, `gigante`, `maximo`) o `CEREBRO_PERFIL=...` |
 | Entrenamiento | `BATCH_SIZE`, `TASA_APRENDIZAJE`, `WEIGHT_DECAY`, `GRAD_CLIP`, `OPTIMIZADOR`, `PASOS_POR_DEFECTO` |
 | Generación | `GEN_TEMPERATURA`, `GEN_TOP_K`, `GEN_TOP_P`, `GEN_PENALIZACION_REPETICION` |
 | Agente | `MAX_AGENT_STEPS`, `MAX_TOOL_CALLS`, `PERMISOS_AGENTE`, `MAX_FILE_BYTES`, `WORKSPACE_DIR` |
@@ -176,7 +232,7 @@ Todo esto lo comprueban las pruebas:
 ## Estructura
 
 ```
-config.py               configuración central y perfiles
+config.py               configuración central y perfiles\ncerebro_torch.py         Transformer propio opcional en PyTorch\ncore/local_search.py    índice y búsqueda offline SQLite FTS5
 main.py  chat.py        chat interactivo y su lógica
 train.py                entrenamiento (CLI)
 trainer_engine.py       bucle de entrenamiento y evaluación
@@ -190,7 +246,7 @@ core/
 agent/                  agente, herramientas y enrutador de intenciones
 memory/                 memoria de corto y largo plazo
 benchmarks/             medición de velocidad y RAM
-tests/tests_final.py    pruebas
+tests/tests_final.py    pruebas originales\ntests/test_cerebro_torch.py y tests/test_local_search.py    pruebas nuevas
 data/                   corpus, validación, generalización, workspace
 checkpoints/best.npz    modelo entrenado incluido
 ```
