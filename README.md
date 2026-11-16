@@ -182,3 +182,7 @@ Las tres opciones también están en el panel Tkinter. Son algoritmos locales, n
 - `/duplicados La Luna es blanca || la luna es blanca` compara textos y señala similitudes por palabras.
 
 Ambas funciones también están disponibles en `panel_cerebro.py` mediante interfaz gráfica o `--accion`. No utilizan modelos externos ni modifican los datos.
+
+### Fase 1: historial local explícito
+
+`/guardar-turno usuario Hola` y `/guardar-turno cerebro Hola` guardan entradas JSONL en `data/historial_cerebro.jsonl`. `/historial` consulta las últimas 20. Por ahora el guardado es **manual**, no automático; no debe confundirse con memoria neuronal ni entrenamiento. Los límites de tamaño y las pruebas se encuentran en `core/historial_local.py` y `tests/test_historial_local.py`.
