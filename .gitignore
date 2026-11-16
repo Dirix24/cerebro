@@ -7,3 +7,6 @@ learning/
 memory/memory_store.json
 data/workspace/*
 !data/workspace/.gitkeep
+
+# Índice derivado, reconstruible localmente
+data/corpus_fts.sqlite3*
