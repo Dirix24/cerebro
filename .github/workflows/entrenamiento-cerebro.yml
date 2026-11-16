@@ -2,13 +2,18 @@ name: Cerebro - entrenamiento local de prueba
 on:
   workflow_dispatch:
   push:
-    branches: [mejoras-cerebro-local]
+    branches: [main, correcciones-seguridad-autonomia]
     paths:
       - 'cerebro_torch.py'
+      - 'cerebro.py'
+      - 'chat.py'
+      - 'aprendizaje_internet.py'
       - 'core/**'
       - 'tests/**'
       - 'config.py'
       - '.github/workflows/entrenamiento-cerebro.yml'
+  pull_request:
+    branches: [main]
 jobs:
   entrenar-y-probar:
     runs-on: ubuntu-latest
@@ -27,6 +32,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install numpy pytest
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Pruebas originales y memoria
+        run: |
+          python tests/tests_final.py
+          python -m pytest -q tests/test_conocimiento.py tests/test_aprendizaje_internet.py
       - name: Pruebas de componentes
         run: python -m pytest -q tests/test_nuevas_capacidades.py tests/test_cerebro_torch.py tests/test_local_search.py
       - name: Entrenamiento propio de prueba
