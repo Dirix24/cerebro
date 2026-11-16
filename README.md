@@ -186,3 +186,7 @@ Ambas funciones también están disponibles en `panel_cerebro.py` mediante inter
 ### Fase 1: historial local explícito
 
 `/guardar-turno usuario Hola` y `/guardar-turno cerebro Hola` guardan entradas JSONL en `data/historial_cerebro.jsonl`. `/historial` consulta las últimas 20. Por ahora el guardado es **manual**, no automático; no debe confundirse con memoria neuronal ni entrenamiento. Los límites de tamaño y las pruebas se encuentran en `core/historial_local.py` y `tests/test_historial_local.py`.
+
+### Chat gráfico local (fase 1)
+
+Después de entrenar el modelo propio con `python3 train.py`, abre `python3 chat_grafico.py`. Para guardar turnos automáticamente en JSONL, utiliza `python3 chat_grafico.py --guardar-historial` o `python3 main.py --guardar-historial`. El guardado está desactivado por defecto. El panel gráfico necesita Tkinter y un entorno de escritorio; las pruebas CI solo verifican sintaxis, no la interacción visual. El botón «Ver historial» muestra los últimos 30 registros.
