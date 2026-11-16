@@ -31,11 +31,15 @@ def _torch_disponible(python):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("chat", "entrenar", "generar", "herramientas"))
+    ap.add_argument("accion", choices=("chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "conocimiento":
+        return _ejecutar([sys.executable, str(RAIZ / "core" / "conocimiento.py"), *resto])
+    if args.accion == "aprender":
+        return _ejecutar([sys.executable, str(RAIZ / "aprendizaje_internet.py"), *resto])
     if args.accion == "herramientas":
         return _ejecutar([sys.executable, str(RAIZ / "herramientas_locales.py"), *resto])
     if args.accion == "chat":
