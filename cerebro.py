@@ -29,13 +29,45 @@ def _torch_disponible(python):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
+def ejecutar_todo():
+    """Chat y aprendizaje diario en paralelo; se detienen al cerrar el chat."""
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        print("Falta NumPy: python3 -m pip install -r requirements.txt", file=sys.stderr)
+        return 1
+    try:
+        from core.local_search import indexar
+        print(f"Índice local preparado: {indexar()} documentos.", flush=True)
+    except Exception as exc:
+        print(f"Aviso: no se pudo actualizar el índice local: {exc}", file=sys.stderr)
+    print("Cerebro completo: chat local, memoria y aprendizaje diario.", flush=True)
+    print("Internet solo aporta textos; ninguna IA de terceros.", flush=True)
+    aprendizaje = subprocess.Popen([sys.executable, str(RAIZ / "aprendizaje_internet.py"),
+                                    "--cada-dia", "--entrenar"], cwd=str(RAIZ))
+    try:
+        return _ejecutar([sys.executable, str(RAIZ / "main.py")])
+    finally:
+        if aprendizaje.poll() is None:
+            aprendizaje.terminate()
+            try:
+                aprendizaje.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                aprendizaje.kill()
+                aprendizaje.wait()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender"))
+    ap.add_argument("accion", choices=("chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "todo":
+        if resto:
+            ap.error("La acción todo no admite argumentos adicionales")
+        return ejecutar_todo()
     if args.accion == "conocimiento":
         return _ejecutar([sys.executable, str(RAIZ / "core" / "conocimiento.py"), *resto])
     if args.accion == "aprender":
