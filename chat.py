@@ -33,6 +33,9 @@ AYUDA = """Comandos:
   /experimentos             muestra metricas registradas
   /resumir texto            resumen extractivo local
   /palabras-clave texto     palabras frecuentes del texto
+  /estadisticas texto      cuenta palabras, frases y lineas
+  /comparar A || B          compara dos textos
+  /fichas concepto: dato   crea fichas de estudio
   /hora                     fecha y hora del sistema
   /archivos                 lista los archivos del espacio de trabajo
   /leer nombre.txt          lee un archivo del espacio de trabajo
@@ -227,6 +230,21 @@ class Conversacion:
                         else ", ".join(palabras_clave(resto))), False
             except ValueError as exc:
                 return f"No pude procesar el texto: {exc}", False
+        if cmd in ("/estadisticas", "/comparar", "/fichas"):
+            from core.herramientas_texto import estadisticas, comparar_textos, fichas_estudio
+            try:
+                if cmd == "/estadisticas":
+                    return str(estadisticas(resto)), False
+                if cmd == "/comparar":
+                    if " || " not in resto:
+                        return "Uso: /comparar primer texto || segundo texto", False
+                    primero, segundo = resto.split(" || ", 1)
+                    return str(comparar_textos(primero, segundo)), False
+                fichas = fichas_estudio(resto.replace(" ; ", "\n"))
+                return (str(fichas) if fichas
+                        else "Uso: /fichas concepto: definición ; otro: definición"), False
+            except ValueError as exc:
+                return f"No pude procesarlo: {exc}", False
         if cmd == "/experimentos":
             from pathlib import Path
             from core.laboratorio_local import historial
