@@ -68,7 +68,7 @@ def ventana():
 
 def main():
     ap = argparse.ArgumentParser(description="Panel local de Cerebro")
-    ap.add_argument("--accion", choices=("calcular", "biblioteca", "codigo", "metricas"))
+    ap.add_argument("--accion", choices=("calcular", "biblioteca", "codigo", "metricas", "resumir", "palabras-clave", "estadisticas", "comparar", "fichas"))
     ap.add_argument("--texto", default="")
     args = ap.parse_args()
     if args.accion:
