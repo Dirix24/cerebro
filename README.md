@@ -207,3 +207,7 @@ El entrenamiento reutiliza `entrenamiento_guiado.py`: compara la validación ant
 ### Monitor neuronal (primera etapa)
 
 Ejecuta `python3 monitor_neuronal.py --ckpt checkpoints/best.npz` para consultar estadísticas **reales** de los tensores numéricos del checkpoint propio NumPy: forma, media, desviación y magnitud máxima. Es una herramienta de lectura, no modifica pesos. No muestra aún activaciones en tiempo real ni mapas de atención; eso requiere instrumentación del modelo. Los checkpoints PyTorch `.pt` no son compatibles con este monitor.
+
+### Aprendizaje desde internet durante siete días
+
+`python3 aprendizaje_internet.py --dias 7 --paginas 3` recopila una vez al día hasta 3 artículos aleatorios de Wikipedia en español, guarda el corpus y la procedencia localmente y termina al transcurrir siete días naturales. El proceso debe seguir ejecutándose y requiere conexión a internet. **Por defecto no modifica pesos neuronales**. Para entrenar también cada día, utiliza expresamente `python3 aprendizaje_internet.py --dias 7 --paginas 3 --entrenar --pasos 20`; exige validación fija y dispone de copia de seguridad y reversión de checkpoints. Se recomienda revisar el corpus antes de activar el entrenamiento, porque el contenido público puede contener errores. El programa no es un servicio en segundo plano y, si se reinicia, el contador de días vuelve a comenzar; el estado diario evita duplicar recopilaciones en la misma fecha.
