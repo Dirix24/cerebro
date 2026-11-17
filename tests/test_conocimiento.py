@@ -13,6 +13,15 @@ class TestConocimiento(unittest.TestCase):
             resultados = buscar("Luna satélite", ruta=db)
             self.assertEqual(resultados[0]["fuente"], "fuente-a")
 
+    def test_no_devuelve_articulos_ajenos_a_la_consulta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "datos.sqlite"
+            guardar("¿Qué es Piotr Juszczak?", "Deportista polaco.", "wiki-a", db)
+            guardar("¿Qué es Eupithecia muralla?", "Polilla de Ecuador.", "wiki-b", db)
+            self.assertEqual(buscar("Luna", ruta=db), [])
+            guardar("¿Qué es la Luna?", "Satélite natural.", "wiki-luna", db)
+            self.assertEqual(buscar("Luna", ruta=db)[0]["fuente"], "wiki-luna")
+
     def test_respuesta_exacta_y_conflictos(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "datos.sqlite"
