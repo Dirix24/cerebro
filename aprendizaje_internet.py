@@ -81,7 +81,9 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     if estado.get("ultimo_dia") == hoy:
         print("Hoy ya se recopiló información; no se repite.")
         if entrenar and estado.get("entrenamiento_pendiente"):
-            entrenar_pendiente(pasos, perfil, estado_ckpt)
+            completado = entrenar_pendiente(pasos, perfil, estado_ckpt)
+            if completado is False:
+                return
             estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
             estado_actual["entrenamiento_pendiente"] = False
             ESTADO.write_text(json.dumps(estado_actual, ensure_ascii=False), encoding="utf-8")
@@ -119,7 +121,9 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     except (OSError, ValueError, ImportError) as exc:
         print(f"Aviso: no se pudo actualizar el índice: {exc}", file=sys.stderr)
     if entrenar:
-        entrenar_pendiente(pasos, perfil, estado_ckpt)
+        completado = entrenar_pendiente(pasos, perfil, estado_ckpt)
+        if completado is False:
+            return
         estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
         estado_actual["entrenamiento_pendiente"] = False
         ESTADO.write_text(json.dumps(estado_actual, ensure_ascii=False), encoding="utf-8")
@@ -129,6 +133,10 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
     """Entrena con respaldo y validación fija; revierte si empeora."""
     import config
     from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
+    from core.recursos_portatil import bateria_baja
+    if bateria_baja():
+        print("Batería baja: entrenamiento aplazado hasta disponer de energía.", flush=True)
+        return False
     from core.evolucion_adaptativa import leer_historial, pasos_adaptativos, registrar
     historial_ruta = CARPETA / "evolucion.json"
     pasos_efectivos = pasos_adaptativos(pasos, leer_historial(historial_ruta))
@@ -174,6 +182,7 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
                 f"Entrenamiento revertido: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb")
         print(f"Validación aceptada: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb.")
         registrar(historial_ruta, "aceptado", pasos_efectivos, f"best: {previo} -> {nuevo} bpb")
+        return True
     except BaseException as exc:
         restaurar(copias)
         if isinstance(exc, Exception):
