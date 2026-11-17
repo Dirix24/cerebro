@@ -17,10 +17,10 @@ class TestAprendizajeInternet(unittest.TestCase):
             carpeta = Path(tmp)
             with patch.multiple(ai, CARPETA=carpeta, ESTADO=carpeta / "estado.json",
                                 CORPUS=carpeta / "corpus_diario.txt",
-                                FUENTES=carpeta / "fuentes.jsonl"), \\
-                 patch.object(ai, "obtener_paginas", return_value=[pagina]) as obtener, \\
-                 patch("core.conocimiento.guardar", return_value=[]), \\
-                 patch("core.local_search.indexar", return_value=1), \\
+                                FUENTES=carpeta / "fuentes.jsonl"), \
+                 patch.object(ai, "obtener_paginas", return_value=[pagina]) as obtener, \
+                 patch("core.conocimiento.guardar", return_value=[]), \
+                 patch("core.local_search.indexar", return_value=1), \
                  patch.object(ai, "entrenar_pendiente") as entrenar:
                 ai.ciclo(3, 20, False, 1000000, "diminuto", carpeta / "last.npz")
                 estado = json.loads(ai.ESTADO.read_text())
@@ -42,7 +42,7 @@ class TestAprendizajeInternet(unittest.TestCase):
                 "vistos": [42], "entrenamiento_pendiente": True}))
             with patch.multiple(ai, CARPETA=carpeta, ESTADO=carpeta / "estado.json",
                                 CORPUS=carpeta / "corpus_diario.txt",
-                                FUENTES=carpeta / "fuentes.jsonl"), \\
+                                FUENTES=carpeta / "fuentes.jsonl"), \
                  patch.object(ai, "entrenar_pendiente", side_effect=RuntimeError("fallo")):
                 with self.assertRaises(RuntimeError):
                     ai.ciclo(3, 20, True, 1000000, "diminuto", carpeta / "last.npz")
