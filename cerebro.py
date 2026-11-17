@@ -48,12 +48,39 @@ def iniciar_automatico():
     return ejecutar_todo()
 
 
+def preparar_modelo_inicial():
+    """El primer arranque no debe fallar si faltan pesos."""
+    import config
+    if Path(config.CKPT_MEJOR).is_file() or Path(config.CKPT_ULTIMO).is_file():
+        return 0
+    print("No hay pesos entrenados; preparando modelo inicial local...", flush=True)
+    return _ejecutar([sys.executable, str(RAIZ / "train.py"), "--perfil", "pequeno", "--pasos", "200"])
+
+
+def mostrar_diagnostico():
+    """Estado observable sin cargar ni entrenar el modelo."""
+    import json
+    import config
+    datos = {
+        "modelo_entrenado": Path(config.CKPT_MEJOR).is_file() or Path(config.CKPT_ULTIMO).is_file(),
+        "indice_local": (RAIZ / "data" / "corpus_fts.sqlite3").is_file(),
+        "historial_evolucion": (RAIZ / "data" / "aprendizaje_internet" / "evolucion.json").is_file(),
+        "fuentes_wikipedia": (RAIZ / "data" / "aprendizaje_internet" / "fuentes.jsonl").is_file(),
+        "nucleos_logicos": os.cpu_count(),
+    }
+    print(json.dumps(datos, indent=2, ensure_ascii=False))
+    return 0
+
+
 def ejecutar_todo():
     """Chat y aprendizaje diario en paralelo; se detienen al cerrar el chat."""
     try:
         import numpy  # noqa: F401
     except ImportError:
         print("Falta NumPy: python3 -m pip install -r requirements.txt", file=sys.stderr)
+        return 1
+    if preparar_modelo_inicial() != 0:
+        print("No se pudo preparar el modelo inicial; revisa los datos de entrenamiento.", file=sys.stderr)
         return 1
     try:
         from core.local_search import indexar
@@ -85,11 +112,15 @@ def ejecutar_todo():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("iniciar", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
+    ap.add_argument("accion", choices=("iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "diagnostico":
+        if resto:
+            ap.error("La acción diagnostico no admite argumentos adicionales")
+        return mostrar_diagnostico()
     if args.accion == "iniciar":
         if resto:
             ap.error("La acción iniciar no admite argumentos adicionales")
