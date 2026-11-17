@@ -92,9 +92,20 @@ def buscar(consulta, limite=3, ruta=BASE):
         filas = con.execute("SELECT pregunta,respuesta,fuente FROM hechos ORDER BY id DESC LIMIT 2000").fetchall()
     if not filas:
         return []
-    orden = buscar_similares(consulta, [p + " " + r[:250] for p, r, _ in filas], limite)
-    return [{"pregunta": filas[i][0], "respuesta": filas[i][1],
-             "fuente": filas[i][2], "similitud": round(score, 4)}
+    # Priorizar términos significativos de la pregunta/título; no devolver
+    # artículos irrelevantes solo por coincidencias de trigramas genéricos.
+    vacias = {"que", "es", "el", "la", "los", "las", "un", "una", "de", "del",
+              "en", "sobre", "me", "dime", "informacion", "acerca", "por", "favor"}
+    terminos = set(_clave(consulta).split()) - vacias
+    if not terminos:
+        return []
+    candidatos = [fila for fila in filas
+                  if terminos.intersection(set(_clave(fila[0]).split()) - vacias)]
+    if not candidatos:
+        return []
+    orden = buscar_similares(consulta, [p + " " + r[:250] for p, r, _ in candidatos], limite)
+    return [{"pregunta": candidatos[i][0], "respuesta": candidatos[i][1],
+             "fuente": candidatos[i][2], "similitud": round(score, 4)}
             for i, score in orden]
 
 
