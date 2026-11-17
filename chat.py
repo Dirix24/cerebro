@@ -20,6 +20,9 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
+  /repasar                  muestra una pregunta pendiente
+  /calificar bien|mal       registra el resultado del repaso
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
   /recordar clave = valor   guarda un dato
@@ -70,6 +73,7 @@ class Conversacion:
                         penalizacion=config.GEN_PENALIZACION_REPETICION)
         import numpy as np
         self.rng = np.random.default_rng(seed)
+        self.pregunta_repaso = None
 
     # -- entrada principal ------------------------------------------------------------
 
@@ -166,6 +170,31 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd in ("/aprender-ficha", "/repasar", "/calificar"):
+            from pathlib import Path
+            from core.repaso_espaciado import anadir, pendientes, calificar
+            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            try:
+                if cmd == "/aprender-ficha":
+                    if " || " not in resto:
+                        return "Uso: /aprender-ficha pregunta || respuesta", False
+                    pregunta, respuesta = resto.split(" || ", 1)
+                    anadir(ruta, pregunta, respuesta)
+                    return "Tarjeta guardada para repasos posteriores.", False
+                if cmd == "/repasar":
+                    tarjetas = pendientes(ruta, limite=1)
+                    if not tarjetas:
+                        self.pregunta_repaso = None
+                        return "No hay preguntas pendientes hoy.", False
+                    self.pregunta_repaso = tarjetas[0]["pregunta"]
+                    return "Pregunta: " + self.pregunta_repaso + "\\nDespués escribe /calificar bien o /calificar mal.", False
+                if resto not in ("bien", "mal") or not self.pregunta_repaso:
+                    return "Primero usa /repasar y después /calificar bien|mal.", False
+                tarjeta = calificar(ruta, self.pregunta_repaso, resto == "bien")
+                self.pregunta_repaso = None
+                return f"Registrado. Próximo repaso: {tarjeta[\'fecha\']}. Respuesta esperada: {tarjeta[\'respuesta\']}", False
+            except (ValueError, OSError) as exc:
+                return f"No pude actualizar el repaso: {exc}", False
         if cmd in ("/salir", "/exit", "/quit"):
             return "¡Hasta pronto!", True
         if cmd in ("/ayuda", "/help"):
