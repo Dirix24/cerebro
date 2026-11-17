@@ -23,6 +23,7 @@ AYUDA = """Comandos:
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
+  /progreso                 registra la precisión y su evolución
   /calificar bien|mal       registra el resultado del repaso
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
@@ -187,6 +188,25 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/progreso":
+            from pathlib import Path
+            from core.medicion_progreso import medir
+            raiz = Path(config._RAIZ) / "data"
+            estado_rng = self.rng.bit_generator.state
+            turnos = list(self.memoria.short_term_context)
+            try:
+                resumen = medir(raiz / "repaso_espaciado.json", self.responder_modelo,
+                                raiz / "historial_evaluaciones.jsonl")
+            finally:
+                self.rng.bit_generator.state = estado_rng
+                self.memoria.short_term_context = turnos
+            if resumen["precision"] is None:
+                return "No hay fichas aprobadas para medir progreso.", False
+            variacion = resumen["variacion"]
+            cambio = "sin medición comparable anterior" if variacion is None else f"variación {variacion:+.1%}"
+            return (f"Evaluación: {resumen[\'aciertos\']}/{resumen[\'evaluadas\']} "
+                    f"({resumen[\'precision\']:.1%}); {cambio}. "
+                    "La coincidencia exacta no mide inteligencia general."), False
         if cmd == "/autoevaluar":
             from pathlib import Path
             from core.autoevaluacion import ejecutar
