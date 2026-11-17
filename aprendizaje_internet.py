@@ -178,8 +178,12 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
         # pero no garantiza que todos los conocimientos se hayan conservado.
         if not aceptar_checkpoint(previo, nuevo) or not aceptar_checkpoint(referencia_ultimo, ultimo_nuevo):
             restaurar(copias)
-            raise RuntimeError(
-                f"Entrenamiento revertido: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb")
+            detalle = (f"best {previo} -> {nuevo}; "
+                       f"last {referencia_ultimo} -> {ultimo_nuevo} bpb")
+            registrar(historial_ruta, "revertido", pasos_efectivos, detalle)
+            print(f"Entrenamiento descartado por validación: {detalle}. "
+                  "Se restauraron los checkpoints anteriores.", flush=True)
+            return True
         print(f"Validación aceptada: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb.")
         registrar(historial_ruta, "aceptado", pasos_efectivos, f"best: {previo} -> {nuevo} bpb")
         return True
