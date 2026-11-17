@@ -116,11 +116,33 @@ def ejecutar_todo():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
+    ap.add_argument("accion", choices=("instalar", "desinstalar", "motores", "iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
+    ap.add_argument("--avanzado", action="store_true", help="Incluir PyTorch al instalar (descarga grande)")
+    ap.add_argument("--confirmar", action="store_true", help="Confirmar desinstalación de entornos")
+    ap.add_argument("--borrar-datos", action="store_true", help="Solicitar también borrar datos locales")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "motores":
+        from core.motores import disponibles
+        import json
+        print(json.dumps(disponibles(), ensure_ascii=False, indent=2))
+        return 0
+    if args.accion == "instalar":
+        from core.instalacion import instalar
+        return instalar(RAIZ, avanzado=args.avanzado)
+    if args.accion == "desinstalar":
+        from core.instalacion import desinstalar
+        if args.borrar_datos and not args.confirmar:
+            ap.error("--borrar-datos requiere --confirmar")
+        confirmacion_datos = ""
+        if args.borrar_datos:
+            confirmacion_datos = input("Para borrar recuerdos, datos y checkpoints escribe BORRAR MIS DATOS: ")
+        resultado = desinstalar(RAIZ, confirmar=args.confirmar,
+                               borrar_datos=args.borrar_datos, confirmacion_datos=confirmacion_datos)
+        print(resultado)
+        return 0
     if args.accion == "diagnostico":
         if resto:
             ap.error("La acción diagnostico no admite argumentos adicionales")
