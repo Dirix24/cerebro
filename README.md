@@ -41,6 +41,7 @@ La instalación no crea un servicio del sistema. El proceso de aprendizaje diari
 | `python3 cerebro.py diagnostico` | Consulta estado de checkpoints, índice y batería |
 | `python3 cerebro.py motores` | Enumera motores y módulos, con disponibilidad de bibliotecas |
 | `python3 cerebro.py laboratorio` | Genera un panel HTML local de progreso, checkpoints y simulaciones |
+| `python3 cerebro.py automejora` | Analiza progreso y errores; genera propuestas seguras de mejora |
 | `python3 cerebro.py aprender` | Ejecuta recopilación de textos una vez |
 | `python3 cerebro.py aprender --cada-dia --entrenar` | Recopilación y entrenamiento diario experimental |
 | `python3 cerebro.py conocimiento buscar "Luna"` | Busca conocimiento local y fuentes |
@@ -216,3 +217,18 @@ Prueba del laboratorio:
 ```bash
 python3 -m pytest -q tests/test_laboratorio_visual.py
 ```
+
+
+## 🔁 Automejora guiada por evidencias
+
+```bash
+python3 cerebro.py automejora
+```
+
+El comando analiza el historial de evaluaciones, las correcciones pendientes y los resultados de entrenamiento. Genera **`data/informe_automejora.json`** con prioridades y propuestas de mejora. No requiere otro asistente ni servicio externo.
+
+**Qué puede hacer automáticamente:** recopilar datos mediante el ciclo existente, adaptar moderadamente el número de pasos, entrenar el motor NumPy bajo sus controles de recursos, validar métricas y revertir checkpoints cuando falla la validación. Estas capacidades siguen siendo experimentales.
+
+**Qué NO hace:** reescribir su código fuente, instalar programas por iniciativa propia, controlar libremente el ordenador, aceptar correcciones no verificadas, cambiar arquitectura sin pruebas ni garantizar que cada entrenamiento lo vuelva más inteligente. Las propuestas del informe requieren revisión; el comando `automejora` **no entrena ni modifica pesos**.
+
+Pruebas específicas: `python3 -m pytest -q tests/test_automejora.py`.
