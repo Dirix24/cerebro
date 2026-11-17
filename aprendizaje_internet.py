@@ -111,7 +111,13 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     for pagina in nuevos:
         pregunta = "¿Qué es " + " ".join(pagina["titulo"].split()) + "?"
         alertas += len(guardar_conocimiento(pregunta, pagina["texto"], pagina["url"]))
-    print(f"Guardados {len(nuevos)} artículos y sus fuentes; alertas de contradicción: {alertas}.")
+    print(f"Guardados {len(nuevos)} artículos y sus fuentes; alertas de contradicción: {alertas}.", flush=True)
+    # Actualizar el índice también cuando el chat ya está abierto.
+    try:
+        from core.local_search import indexar
+        print(f"Índice de búsqueda actualizado: {indexar()} documentos.", flush=True)
+    except (OSError, ValueError, ImportError) as exc:
+        print(f"Aviso: no se pudo actualizar el índice: {exc}", file=sys.stderr)
     if entrenar:
         entrenar_pendiente(pasos, perfil, estado_ckpt)
         estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
