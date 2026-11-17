@@ -133,9 +133,10 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
     """Entrena con respaldo y validación fija; revierte si empeora."""
     import config
     from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
-    from core.recursos_portatil import bateria_baja
-    if bateria_baja():
-        print("Batería baja: entrenamiento aplazado hasta disponer de energía.", flush=True)
+    from core.recursos_portatil import motivos_pausa
+    motivos = motivos_pausa()
+    if motivos:
+        print("Entrenamiento aplazado: " + ", ".join(motivos), flush=True)
         return False
     from core.evolucion_adaptativa import leer_historial, pasos_adaptativos, registrar
     historial_ruta = CARPETA / "evolucion.json"
