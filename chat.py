@@ -196,14 +196,14 @@ class Conversacion:
             if not resto:
                 return "Uso: /motor-para tu pregunta", False
             decision = explicar_seleccion(resto)
-            return f"Motor: {decision[\'motor\']}. Motivo: {decision[\'razon\']}.", False
+            return f"Motor: {decision['motor']}. Motivo: {decision['razon']}.", False
         if cmd in ("/registrar-error", "/errores-pendientes"):
             from pathlib import Path
             from core.errores_aprendizaje import registrar, pendientes
             ruta = Path(config._RAIZ) / "data" / "errores_aprendizaje.jsonl"
             if cmd == "/errores-pendientes":
                 errores = pendientes(ruta)
-                return ("\\n".join(f"{e[\'pregunta\']} => {e[\'correccion\']}" for e in errores)
+                return ("\n".join(f"{e['pregunta']} => {e['correccion']}" for e in errores)
                         if errores else "No hay errores pendientes."), False
             if " || " not in resto:
                 return "Uso: /registrar-error pregunta || respuesta correcta", False
@@ -229,8 +229,8 @@ class Conversacion:
                 return "No hay fichas aprobadas para medir progreso.", False
             variacion = resumen["variacion"]
             cambio = "sin medición comparable anterior" if variacion is None else f"variación {variacion:+.1%}"
-            return (f"Evaluación: {resumen[\'aciertos\']}/{resumen[\'evaluadas\']} "
-                    f"({resumen[\'precision\']:.1%}); {cambio}. "
+            return (f"Evaluación: {resumen['aciertos']}/{resumen['evaluadas']} "
+                    f"({resumen['precision']:.1%}); {cambio}. "
                     "La coincidencia exacta no mide inteligencia general."), False
         if cmd == "/autoevaluar":
             from pathlib import Path
