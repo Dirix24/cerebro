@@ -1,213 +1,193 @@
-# Cerebro 🧠
+# 🧠 Cerebro — IA local, memoria y aprendizaje experimental
 
-**Inteligencia artificial local y desarrollada desde cero.** Cerebro utiliza un Transformer propio entrenado con datos del proyecto. No utiliza Ollama, ChatGPT, servicios de inferencia ni modelos preentrenados de terceros. El motor original está implementado en NumPy; existe además un Transformer propio opcional implementado con PyTorch (biblioteca de cálculo, **no** un modelo externo).
+> **Diseñado y desarrollado con asistencia de inteligencia artificial (IA).** Cerebro es un proyecto experimental impulsado por su creador, con colaboración de IA en el diseño de la arquitectura, programación, documentación y pruebas. Esta declaración describe el proceso de desarrollo, **no** significa que Cerebro sea una IA general ni que se haya diseñado a sí mismo.
 
-> **Estado:** proyecto experimental. El modelo original es pequeño; disponer de Internet, memoria y perfiles grandes no equivale a una IA con conocimiento general. Las nuevas funciones automáticas aún necesitan pruebas de extremo a extremo en el equipo de destino.
+**Cerebro** es un proyecto de inteligencia artificial local en Python: combina un Transformer propio NumPy, motores Transformer opcionales basados en PyTorch, búsqueda de información, memoria, herramientas deterministas y entrenamiento experimental. **No utiliza modelos preentrenados de terceros, Ollama ni APIs de IA para generar respuestas.** Wikipedia se utiliza como fuente de textos, no como motor de IA.
 
-## Inicio rápido: un solo comando
+**Estado:** versión **experimental**, desarrollada en una rama de integración. Algunas pruebas automáticas han pasado, pero el arranque integral, la desinstalación en el equipo de destino, la calidad de las respuestas y el entrenamiento de larga duración **todavía requieren verificación**. No se debe confundir «módulo integrado en el repositorio» con «motor entrenado y disponible automáticamente dentro del chat».
 
-Requisitos: Python 3, NumPy instalado y conexión a Internet **solo** si quieres recopilar artículos. Desde la carpeta del proyecto:
+## 🚀 Instalación y primer arranque
+
+Requisitos: Linux (orientado a MX Linux / Debian), Python 3 y acceso a Internet para descargar dependencias o artículos. Desde la carpeta del repositorio:
 
 ```bash
-python3 -m pip install -r requirements.txt
-python3 cerebro.py todo
+# Instala las dependencias básicas en un entorno local aislado
+python3 cerebro.py instalar
+
+# Inicia el chat, prepara el modelo inicial si hace falta,
+# indexa documentos y arranca el ciclo de aprendizaje mientras el chat esté abierto
+python3 cerebro.py iniciar
 ```
 
-**`python3 cerebro.py todo` activa en una sesión:**
-1. Reconstruye el índice de búsqueda local SQLite FTS5.
-2. Abre el chat original de Cerebro, con sus herramientas y memoria.
-3. Inicia en segundo plano el recopilador diario de Wikipedia en español y su entrenamiento NumPy, con evaluación y recuperación de checkpoints.
+Para añadir también la biblioteca PyTorch, **sin instalar otra aplicación de IA**:
 
-**Para detenerlo:** escribe `/salir` en el chat. El lanzador intenta detener el proceso de aprendizaje. **No es un servicio permanente:** no arranca con el sistema operativo y la terminal debe seguir abierta. El primer ciclo puede empezar inmediatamente. El entrenamiento consume CPU y puede afectar a la fluidez del chat; el chat ya abierto no recarga automáticamente los pesos nuevos. **Haz copia de `checkpoints/` antes de activar el aprendizaje automático.** No ejecutes varias instancias de `todo` a la vez.
+```bash
+python3 cerebro.py instalar --avanzado
+```
 
-La memoria de conocimientos se guarda localmente. El chat consulta automáticamente **solo preguntas exactas** y muestra la fuente; si existen respuestas distintas para esa pregunta, se abstiene y deja responder al modelo. Para buscar coincidencias aproximadas utiliza `/conocimiento palabras`. El motor PyTorch avanzado **no** se activa ni se entrena con `todo`, para evitar descargas pesadas y consumo de recursos inesperado.
+PyTorch es una biblioteca de cálculo; **no es otro asistente ni un modelo descargado**. Puede ocupar bastante espacio y tardar en instalarse. El chat normal sigue utilizando el motor NumPy: los motores PyTorch se entrenan y generan por sus comandos específicos, **no** se alternan automáticamente dentro del chat.
 
-## Comandos disponibles
+La instalación no crea un servicio del sistema. El proceso de aprendizaje diario funciona mientras el lanzador permanece abierto. Cierra el chat con `/salir` para detener la sesión.
+
+## 🧩 Todos los comandos de la aplicación
+
+| Comando | Qué hace |
+|---|---|
+| `python3 cerebro.py instalar` | Instala dependencias básicas de Cerebro |
+| `python3 cerebro.py instalar --avanzado` | Instala también PyTorch opcional |
+| `python3 cerebro.py iniciar` | Arranque integrado con chat y aprendizaje |
+| `python3 cerebro.py todo` | Inicia chat, índice y aprendizaje usando dependencias ya disponibles |
+| `python3 cerebro.py chat` | Abre solo el chat NumPy |
+| `python3 cerebro.py diagnostico` | Consulta estado de checkpoints, índice y batería |
+| `python3 cerebro.py motores` | Enumera motores y módulos, con disponibilidad de bibliotecas |
+| `python3 cerebro.py aprender` | Ejecuta recopilación de textos una vez |
+| `python3 cerebro.py aprender --cada-dia --entrenar` | Recopilación y entrenamiento diario experimental |
+| `python3 cerebro.py conocimiento buscar "Luna"` | Busca conocimiento local y fuentes |
+| `python3 cerebro.py entrenar --pasos 100` | Entrena el motor NumPy |
+| `python3 cerebro.py entrenar --motor avanzado --corpus data/corpus.txt --perfil diminuto --pasos 100` | Entrena Transformer PyTorch propio |
+| `python3 cerebro.py generar --motor avanzado "Hola"` | Genera con pesos PyTorch existentes |
+| `python3 cerebro.py desinstalar --confirmar` | Elimina entornos de dependencias de Cerebro y **conserva los datos y el código** |
+| `python3 cerebro.py desinstalar --confirmar --borrar-datos` | Solicita una frase adicional antes de borrar datos locales reconocidos |
+
+### 🧹 Desinstalación con un comando
+
+```bash
+python3 cerebro.py desinstalar --confirmar
+```
+
+**Importante:** elimina los entornos locales `.venv` y `.cerebro-env`, pero **no borra el repositorio ni los archivos personales**. Si se añade `--borrar-datos`, solicita escribir exactamente `BORRAR MIS DATOS` antes de eliminar las carpetas de datos y checkpoints conocidas. **No elimina paquetes del sistema, instalaciones externas, copias de seguridad ni el propio código fuente.** Para quitar absolutamente toda la carpeta del proyecto, el usuario debe hacerlo aparte, tras revisar qué contiene. No existe una desinstalación automática programada para ninguna fecha.
+
+## 💬 Comandos dentro del chat
+
+Escribe `/ayuda` para consultar la ayuda incorporada.
 
 | Comando | Función |
 |---|---|
-| `python3 cerebro.py todo` | Chat + índice local + aprendizaje diario |
-| `python3 cerebro.py chat` | Solo chat NumPy, sin aprendizaje en segundo plano |
-| `python3 cerebro.py aprender --cada-dia --entrenar` | Solo aprendizaje diario |
-| `python3 cerebro.py aprender` | Descargar textos una vez, sin entrenar |
-| `python3 cerebro.py conocimiento buscar "Luna"` | Consultar la base local con fuentes |
-| `python3 cerebro.py conocimiento guardar "¿Qué es la Luna?" "Un satélite" --fuente "manual"` | Guardar conocimiento |
-| `python3 cerebro.py entrenar --pasos 100` | Entrenar motor NumPy |
-| `python3 cerebro.py entrenar --motor avanzado --corpus data/corpus.txt --perfil diminuto --pasos 100` | Entrenar Transformer PyTorch propio |
-| `python3 cerebro.py generar --motor avanzado "Hola"` | Generar con un checkpoint PyTorch existente |
-| `python3 tests/tests_final.py` | Pruebas originales |
+| `/estado` | Arquitectura, parámetros y memoria del modelo |
+| `/memoria` | Consulta memoria persistente |
+| `/recordar clave = valor` | Guarda un dato indicado explícitamente |
+| `/olvidar clave` | Elimina un dato de la memoria |
+| `/buscar-corpus Luna` | Busca documentos en el índice local |
+| `/conocimiento Luna` | Busca conocimientos con fuentes |
+| `/biblioteca Luna` | Busca en biblioteca local |
+| `/calc 12 * (3 + 4)` | Calculadora segura |
+| `/calcular-local 2+3*4` | Cálculo local |
+| `/analizar-codigo def f(): return 1` | Análisis estático de Python |
+| `/resumir texto` | Resumen extractivo, no generativo |
+| `/palabras-clave texto` | Extrae palabras frecuentes |
+| `/estadisticas texto` | Estadísticas de texto |
+| `/comparar A || B` | Comparación de textos |
+| `/fichas concepto: definición` | Crea fichas a partir de definiciones |
+| `/preguntas texto` | Genera preguntas literales de repaso |
+| `/duplicados A || B` | Detecta textos parecidos |
+| `/aprender-ficha pregunta || respuesta` | Guarda ficha aprobada para repaso |
+| `/repasar` | Presenta una ficha pendiente |
+| `/calificar bien` / `/calificar mal` | Programa el próximo repaso |
+| `/autoevaluar` | Compara respuestas del modelo con fichas aprobadas |
+| `/progreso` | Registra precisión exacta y variación histórica |
+| `/motor-para ¿Qué es Marte?` | Explica el motor que seleccionaría el orquestador |
+| `/registrar-error pregunta || respuesta correcta` | Guarda corrección **pendiente de revisión** |
+| `/errores-pendientes` | Lista correcciones pendientes |
+| `/aprobar-ejemplo pregunta || respuesta` | Guarda un ejemplo aprobado |
+| `/ejemplos-aprobados` | Consulta ejemplos aprobados |
+| `/experimentos` | Consulta registros de experimentos |
+| `/historial` | Consulta turnos guardados |
+| `/guardar-turno usuario Hola` | Guarda explícitamente un turno |
+| `/hora` | Consulta hora local |
+| `/archivos` | Lista archivos permitidos del espacio de trabajo |
+| `/leer nombre.txt` | Lee archivo permitido |
+| `/escribir nombre.txt texto` | Escribe archivo permitido |
+| `/temp 0.7` | Ajusta temperatura de generación |
+| `/limpiar` | Limpia conversación a corto plazo |
+| `/salir` | Cierra el chat |
 
-En Windows, sustituye `python3` por `python` si corresponde.
+Los comandos con `||` utilizan ese separador literalmente. Las herramientas de escritura no se ejecutan a partir de texto libre: requieren un comando explícito y los permisos correspondientes.
 
-## ¿Qué tecnología incluye?
+## 🧠 Motores y tecnologías
 
-- **Motor neuronal NumPy:** Transformer causal, atención multi-cabeza, BPE por bytes, retropropagación manual, AdamW, gradientes acumulados, validación y checkpoints `.npz`.
-- **Motor PyTorch opcional:** Transformer clásico o avanzado con RoPE, RMSNorm, SwiGLU y atención SDPA. Sus checkpoints `.pt` son independientes e incompatibles con el motor NumPy. PyTorch se instala automáticamente en `.cerebro-env` la primera vez que lo necesites (requiere Internet para descargar la biblioteca).
-- **Aprendizaje diario experimental:** recopila hasta 3 artículos de Wikipedia por ciclo, conserva las URLs, evita IDs duplicados y limita el corpus a 20 MB por defecto. Utiliza Internet como **fuente de texto**, nunca como IA externa.
-- **Protección del aprendizaje NumPy:** intenta continuar desde `last.npz`, hace respaldos temporales de `last.npz` y `best.npz`, evalúa `best.npz` contra `data/validacion.txt` y restaura ambos checkpoints ante errores o un empeoramiento superior al 2% en bits por byte, evaluando tanto `best.npz` como `last.npz` sobre la misma validación fija. Esto **no garantiza ausencia de olvido**.
-- **Conocimiento local:** SQLite con preguntas, respuestas y fuentes, búsqueda estadística TF-IDF de palabras/trigramas, y alertas heurísticas de contradicción. Las alertas pueden tener falsos positivos.
-- **Herramientas:** búsqueda local FTS5, análisis estático de Python, calculadora, archivos limitados a `data/workspace`, memoria persistente y voz opcional (síntesis/grabación; **no** reconocimiento de voz).
+| Componente | Tecnología | Estado |
+|---|---|---|
+| Generador neuronal principal | Transformer causal propio en **NumPy**, tokenizador, atención, entrenamiento y checkpoints `.npz` | Integrado en chat |
+| Motor neuronal clásico | Transformer propio con **PyTorch** y checkpoints `.pt` | Opcional, acceso mediante CLI |
+| Motor neuronal avanzado | RoPE, RMSNorm, SwiGLU y atención SDPA mediante PyTorch | Opcional, acceso mediante CLI |
+| Memoria persistente | Almacenamiento local y recuperación | Integrado |
+| Recuperación de documentos | SQLite **FTS5** y búsqueda léxica | Integrado |
+| Conocimiento con procedencia | Respuestas guardadas y URLs de fuentes | Integrado |
+| Razonamiento determinista | Calculadora, análisis de código y utilidades | Integrado para tareas concretas |
+| Repaso espaciado | Fichas aprobadas y calendario de revisión | Integrado |
+| Autoevaluación | Coincidencia normalizada de respuestas y métricas históricas | Integrado; métrica limitada |
+| Control de aprendizaje | Validación fija, respaldo, restauración y control de recursos | Experimental |
 
-## Modelos y entrenamiento
+**Más motores no equivale automáticamente a más inteligencia.** El orquestador actual es **determinista**: identifica ciertos tipos de peticiones y elige rutas existentes. No es un sistema de razonamiento general ni un comité de modelos neuronales votando respuestas.
+
+## 🌱 Cómo evoluciona Cerebro
+
+1. **Adquiere textos:** puede consultar artículos de Wikipedia en español, con límites de cantidad y almacenamiento.
+2. **Guarda procedencia:** conserva URLs y registra conocimiento local, evitando duplicados conocidos.
+3. **Recupera información:** busca fuentes antes de recurrir a generación en ciertos tipos de preguntas.
+4. **Recuerda y repasa:** utiliza memoria local, fichas aprobadas y repaso espaciado.
+5. **Aprende de correcciones:** `/registrar-error` almacena una corrección **sin asumir que sea verdadera ni modificar pesos automáticamente**.
+6. **Mide progreso:** `/autoevaluar` y `/progreso` comparan respuestas con fichas aprobadas. La comparación es estricta y **no mide razonamiento profundo**.
+7. **Entrena con límites:** el ciclo incremental ajusta pasos y evita iniciar nuevos entrenamientos con batería baja, poca RAM disponible o temperatura elevada, si hay sensores.
+8. **Protege checkpoints:** guarda respaldos y rechaza nuevos pesos si las métricas de validación son inválidas o empeoran más del umbral permitido.
+
+**Limitaciones:** la validación fija mide pérdida en textos, no garantiza que Cerebro haya aprendido hechos correctos. Las respuestas generadas no se consideran automáticamente conocimientos aprobados. Los pesos nuevos se cargan al reiniciar el chat; la sesión abierta no se actualiza automáticamente.
+
+## 🧪 Pruebas y verificación
 
 ```bash
-# Motor NumPy: retomar entrenamiento existente
-python3 train.py --resume --pasos 100
-
-# Motor PyTorch avanzado: entrenar red propia
-python3 cerebro.py entrenar --motor avanzado --corpus data/corpus.txt --perfil diminuto --pasos 100
-
-# Probar chat original
-python3 cerebro.py chat
-
-# Evaluación local
-python3 evaluate.py
-```
-
-Perfiles NumPy/PyTorch disponibles en `config.py`: `diminuto`, `pequeno`, `mediano`, `v2`, `grande`, `experto`, `gigante`, `maximo`, `cerebro_250m`, `cerebro_500m` y `cerebro_1b`. Los perfiles grandes son **configuraciones experimentales, no modelos ya entrenados**; requieren mucha memoria, datos y tiempo. No cambies el corpus al reanudar un checkpoint PyTorch: el motor comprueba su SHA-256.
-
-## Seguridad, privacidad y límites
-
-- Sin modelos preentrenados, Ollama ni APIs de IA de terceros.
-- Las peticiones a Wikipedia sí envían tráfico de red a Wikimedia. Revisa las condiciones de reutilización y atribución del contenido.
-- La base personal `data/conocimiento.sqlite3` y los textos descargados se excluyen de Git.
-- La protección de checkpoints es experimental: no garantiza conservar todos los conocimientos, ni recuperarse de un apagón durante cualquier escritura. Mantén copias externas.
-- El chat original puede utilizar un checkpoint anterior mientras el aprendizaje actualiza archivos en disco; reinicia el chat para cargar pesos aceptados.
-- No se ha verificado aquí el funcionamiento integral del modo `todo` ni la calidad del entrenamiento autónomo.
-
-## Pruebas antes de integrar en main
-
-```bash
+python3 -m pip install -r requirements.txt pytest
+python3 -m compileall -q .
+python3 -m pytest -q tests
 python3 tests/tests_final.py
-python3 -m unittest tests.test_conocimiento tests.test_aprendizaje_internet
-python3 cerebro.py chat --una-vez "hola"
+python3 cerebro.py diagnostico
+python3 cerebro.py motores
 ```
 
-Comprueba también manualmente `python3 cerebro.py todo` en tu sistema: indexación, chat, descarga, entrenamiento, interrupción, recuperación y cierre de procesos. **No fusionar solo porque el código esté subido**; revisar los resultados y los posibles conflictos del PR.
+GitHub Actions ejecuta comprobaciones de sintaxis y pruebas automatizadas en la rama de integración. **Una ejecución anterior** de la suite principal terminó con **68 pruebas superadas y 2 omitidas**, pero ese resultado **no valida los cambios posteriores** ni sustituye pruebas en MX Linux. El entrenamiento PyTorch, la instalación, el primer arranque y la desinstalación real requieren verificación separada. Consulta la pestaña **Actions** del repositorio para el resultado más reciente.
 
-## Estructura del proyecto
+## 🔒 Privacidad, recursos y seguridad
 
-| Archivo | Responsabilidad |
+- Los datos personales, el corpus y los checkpoints permanecen localmente salvo las peticiones explícitas a Wikipedia.
+- La descarga de Wikipedia necesita Internet y está sujeta a las condiciones de Wikimedia y atribución de fuentes.
+- El entrenamiento puede consumir CPU, RAM y batería. Los controles de temperatura, memoria y batería **no sustituyen** la vigilancia del sistema y no interrumpen todos los procesos ya iniciados.
+- La desinstalación no elimina información personal por defecto.
+- Antes de entrenamientos importantes, guarda una copia externa de `checkpoints/` y `data/`.
+- Las funciones de voz existentes son limitadas; no se promete reconocimiento de voz ni conversación hablada completa.
+- Los perfiles grandes son configuraciones disponibles, **no pesos ya entrenados**.
+
+## 🗂️ Archivos importantes
+
+| Ruta | Contenido |
 |---|---|
-| `cerebro.py` | Lanzador único y modo `todo` |
-| `main.py`, `chat.py` | Chat original |
-| `train.py`, `trainer_engine.py` | Entrenamiento y evaluación NumPy |
-| `cerebro_torch.py`, `core/advanced_torch.py` | Transformer propio opcional |
-| `aprendizaje_internet.py` | Recopilación y entrenamiento diario |
-| `core/seguridad_aprendizaje.py` | Respaldo, restauración y evaluación fija |
-| `core/conocimiento.py` | Base de conocimientos y fuentes |
-| `core/local_search.py`, `core/semantic_memory.py` | Recuperación local |
-| `data/corpus.txt`, `data/validacion.txt` | Entrenamiento y validación |
-| `checkpoints/` | Pesos del modelo |
+| `cerebro.py` | Instalación, inicio, diagnóstico, motores y desinstalación |
+| `chat.py`, `main.py` | Chat y comandos |
+| `agent/orquestador.py` | Selección y explicación de rutas |
+| `core/motores.py` | Inventario de motores |
+| `core/instalacion.py` | Instalación y limpieza controlada |
+| `core/errores_aprendizaje.py` | Registro de correcciones pendientes |
+| `core/medicion_progreso.py` | Historial de evaluaciones |
+| `core/puerta_checkpoint.py` | Regla de aceptación de checkpoints |
+| `core/repaso_espaciado.py` | Fichas y calendario de repaso |
+| `core/autoevaluacion.py` | Comparación de respuestas |
+| `aprendizaje_internet.py` | Adquisición y entrenamiento diario |
+| `train.py`, `cerebro_torch.py` | Entrenamiento NumPy y PyTorch |
+| `core/local_search.py`, `core/conocimiento.py` | Búsqueda y fuentes |
+| `data/`, `checkpoints/` | Datos y pesos locales |
 
-Más detalles técnicos: [CEREBRO_MOTORES.md](CEREBRO_MOTORES.md) y [MEJORAS_LOCALES.md](MEJORAS_LOCALES.md).
+Más información: [Motores de Cerebro](CEREBRO_MOTORES.md) · [Mejoras locales](MEJORAS_LOCALES.md).
 
-## Contribuciones
+## 🛣️ Próximos objetivos
 
-Desarrolla primero en una rama, ejecuta pruebas y revisa los cambios antes de fusionar con `main`. El objetivo es mejorar **una IA propia y auditable**, sin depender de modelos de terceros.
+- Integrar de verdad la selección del motor PyTorch dentro del chat sin perder compatibilidad con NumPy.
+- Añadir evaluaciones de conocimiento, razonamiento y regresión con conjuntos separados del entrenamiento.
+- Mejorar la recuperación de fuentes, la abstención ante dudas y la gestión de contradicciones.
+- Comprobar arranque, instalación, desinstalación y reanudación en MX Linux.
+- Medir memoria, temperatura, consumo y tiempos reales del portátil antes de activar perfiles mayores.
+- Desarrollar mejoras incrementales solo cuando las pruebas y la validación justifiquen el cambio.
 
-## Correcciones para la siguiente fusión
+## 🤝 Créditos y desarrollo asistido por IA
 
-- El aprendizaje evalúa **best y last** en el mismo conjunto fijo, y revierte ambos ante regresiones superiores al 2%.
-- Al cerrar `todo` se envía una señal al recopilador, que detiene el entrenamiento hijo antes de restaurar checkpoints si se interrumpe.
-- El chat muestra respuestas almacenadas con fuente para coincidencias exactas y no elige arbitrariamente entre fuentes contradictorias.
-- GitHub Actions ejecuta pruebas al abrir un PR hacia `main` y al actualizar `main`. La ejecución completa de CI debe comprobarse antes de fusionar.
+**Cerebro es un proyecto diseñado y desarrollado con asistencia de inteligencia artificial.** Su creador define los objetivos y las decisiones de uso; una IA ha colaborado en propuestas técnicas, implementación, documentación y diseño de pruebas. El código debe revisarse y probarse: **haber sido generado o revisado por IA no demuestra su corrección**.
 
-**Precaución:** la recuperación de checkpoints y el cierre de procesos no equivalen a una garantía frente a cortes de luz o fallos de disco. El aprendizaje automático sigue siendo experimental.
-
-## Entrenamiento neuronal guiado (experimental)
-
-Se incorpora un pequeño currículo **original** en `data/corpus/entrenamiento_guiado.txt` con ejemplos de cálculo, lógica, lenguaje y reconocimiento de incertidumbre. No utiliza modelos preentrenados ni APIs de IA.
-
-Para continuar entrenando las neuronas NumPy ya existentes:
-
-```bash
-python3 entrenamiento_guiado.py --pasos 100 --lr 0.0003
-```
-
-Este comando **no se ejecuta automáticamente**. Requiere `checkpoints/last.npz` y `data/validacion.txt`. Realiza una copia temporal de `last.npz` y `best.npz`, reanuda los pesos, evalúa ambos en la misma validación fija y restaura los checkpoints si hay un error o la pérdida empeora más del 2 %. No garantiza que el modelo aprenda razonamiento general ni evita todos los tipos de olvido. Guarda una copia externa de tus checkpoints importantes antes de entrenar.
-
-Para probar el código sin iniciar entrenamiento:
-
-```bash
-python3 -m pytest -q tests/test_entrenamiento_guiado.py
-```
-
-## Capacidades locales adicionales (integración experimental)
-
-Estas herramientas son **prototipos funcionales**, no sustituyen un modelo conversacional entrenado:
-
-- `core/razonamiento_local.py`: aritmética con AST restringido y un silogismo simple.
-- `core/biblioteca_local.py`: lectura y búsqueda de TXT/Markdown dentro de una carpeta.
-- `core/planificador_local.py`: planes con aprobación explícita; no ejecuta acciones.
-- `core/analizador_codigo_local.py`: inspección AST de Python sin ejecutar código.
-- `core/investigador_local.py`: normalización y deduplicación de fuentes HTTPS; la descarga existente sigue en `aprendizaje_internet.py`.
-- `core/laboratorio_local.py`: registro JSONL de métricas y experimentos.
-- `panel_cerebro.py`: interfaz Tkinter para cálculo, búsqueda, análisis de código e historial; no es todavía un chat gráfico.
-
-Ejemplos:
-
-```bash
-python3 panel_cerebro.py
-python3 panel_cerebro.py --accion calcular --texto "12 / 4 + 2"
-python3 panel_cerebro.py --accion biblioteca --texto "Luna"
-python3 -m pytest -q tests/test_capacidades_locales.py
-```
-
-El currículo de entrenamiento y el respaldo de checkpoints se desarrollan en la rama previa `integracion-entrenamiento-neuronal`. **Pendiente de desarrollar:** lectura de PDF, razonamiento avanzado, aprendizaje curricular automático, comparación experimental de modelos y conexión de todas las herramientas con el chat principal. Ninguna herramienta nueva toma el control del ordenador de forma autónoma.
-
-### Voz avanzada: pospuesta
-
-La nueva implementación de voz queda **fuera de esta integración** y se reserva para una versión futura. Las funciones de audio anteriores del proyecto no se modifican.
-
-### Nuevos comandos del chat
-
-`/biblioteca Luna`, `/calcular-local 2+3*4`, `/analizar-codigo def f(): return 1` y `/experimentos` permiten acceder a varias herramientas desde el chat original. No requieren modelos externos.
-
-### Utilidades nuevas de estudio
-
-`/resumir texto` selecciona frases del texto original y `/palabras-clave texto` extrae términos frecuentes. También están disponibles en `panel_cerebro.py`. Son funciones deterministas y no generan conocimientos nuevos; el resumen puede omitir detalles importantes.
-
-### Herramientas educativas adicionales
-
-- `/estadisticas Hola mundo.` cuenta palabras, frases, caracteres y líneas.
-- `/comparar hola mundo || hola luna` muestra similitud y cambios de palabras.
-- `/fichas Luna: satélite natural ; Marte: planeta` crea tarjetas de estudio a partir de definiciones explícitas.
-
-Las tres opciones también están en el panel Tkinter. Son algoritmos locales, no aprendizaje neuronal. La voz avanzada sigue aplazada.
-
-### Repaso y limpieza de textos
-
-- `/preguntas La Luna es un satélite. Marte es un planeta.` genera preguntas literales con respuestas basadas en frases explícitas.
-- `/duplicados La Luna es blanca || la luna es blanca` compara textos y señala similitudes por palabras.
-
-Ambas funciones también están disponibles en `panel_cerebro.py` mediante interfaz gráfica o `--accion`. No utilizan modelos externos ni modifican los datos.
-
-### Fase 1: historial local explícito
-
-`/guardar-turno usuario Hola` y `/guardar-turno cerebro Hola` guardan entradas JSONL en `data/historial_cerebro.jsonl`. `/historial` consulta las últimas 20. Por ahora el guardado es **manual**, no automático; no debe confundirse con memoria neuronal ni entrenamiento. Los límites de tamaño y las pruebas se encuentran en `core/historial_local.py` y `tests/test_historial_local.py`.
-
-### Chat gráfico local (fase 1)
-
-Después de entrenar el modelo propio con `python3 train.py`, abre `python3 chat_grafico.py`. Para guardar turnos automáticamente en JSONL, utiliza `python3 chat_grafico.py --guardar-historial` o `python3 main.py --guardar-historial`. El guardado está desactivado por defecto. El panel gráfico necesita Tkinter y un entorno de escritorio; las pruebas CI solo verifican sintaxis, no la interacción visual. El botón «Ver historial» muestra los últimos 30 registros.
-
-### Ejemplos de aprendizaje aprobados
-
-`/aprobar-ejemplo ¿Qué es la Luna? || Un satélite natural.` guarda un ejemplo de pregunta/respuesta con aprobación explícita en `data/ejemplos_aprobados.jsonl`. `/ejemplos-aprobados` muestra los últimos 20. **No entrena ni modifica los pesos automáticamente**: es un banco local para una futura fase de entrenamiento supervisado. No se usa ninguna API externa.
-
-### Entrenamiento con ejemplos aprobados (opt-in)
-
-1. Aprueba ejemplos desde el chat con `/aprobar-ejemplo pregunta || respuesta`.
-2. Comprueba cuántos ejemplos se exportarían sin modificar archivos: `python3 entrenar_ejemplos_aprobados.py`.
-3. Exporta al corpus local con `python3 entrenar_ejemplos_aprobados.py --aplicar`.
-4. **Solo si quieres entrenar y tienes checkpoints propios y validación fija**, ejecuta `python3 entrenar_ejemplos_aprobados.py --aplicar --entrenar --pasos 30`.
-
-El entrenamiento reutiliza `entrenamiento_guiado.py`: compara la validación antes/después y restaura checkpoints si detecta regresión superior al 2 %. El corpus exportado permanece disponible; no se hace entrenamiento automático al aprobar ejemplos. Las pruebas unitarias no prueban mejoras de calidad del modelo.
-
-### Monitor neuronal (primera etapa)
-
-Ejecuta `python3 monitor_neuronal.py --ckpt checkpoints/best.npz` para consultar estadísticas **reales** de los tensores numéricos del checkpoint propio NumPy: forma, media, desviación y magnitud máxima. Es una herramienta de lectura, no modifica pesos. No muestra aún activaciones en tiempo real ni mapas de atención; eso requiere instrumentación del modelo. Los checkpoints PyTorch `.pt` no son compatibles con este monitor.
-
-### Aprendizaje desde internet durante siete días
-
-`python3 aprendizaje_internet.py --dias 7 --paginas 3` recopila una vez al día hasta 3 artículos aleatorios de Wikipedia en español, guarda el corpus y la procedencia localmente y termina al transcurrir siete días naturales. El proceso debe seguir ejecutándose y requiere conexión a internet. **Por defecto no modifica pesos neuronales**. Para entrenar también cada día, utiliza expresamente `python3 aprendizaje_internet.py --dias 7 --paginas 3 --entrenar --pasos 20`; exige validación fija y dispone de copia de seguridad y reversión de checkpoints. Se recomienda revisar el corpus antes de activar el entrenamiento, porque el contenido público puede contener errores. El programa no es un servicio en segundo plano y, si se reinicia, el contador de días vuelve a comenzar; el estado diario evita duplicar recopilaciones en la misma fecha.
+El objetivo es construir una IA local, transparente y ampliable, que mejore con datos y evaluaciones verificables, sin vender capacidades futuras como si ya existieran.
