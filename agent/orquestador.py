@@ -14,3 +14,16 @@ def seleccionar(texto):
     if re.match(r"(?i)^\s*[¿]?\s*(?:qué|que|quién|quien)\s+(?:es|fue|son)\s+.{3,}", texto):
         return "conocimiento"
     return "modelo"
+
+
+def explicar_seleccion(texto):
+    """Describe la decisión de enrutamiento sin ejecutar herramientas."""
+    ruta = seleccionar(texto)
+    razones = {
+        "comando": "Orden explícita: requiere la ejecución del comando solicitado",
+        "busqueda_local": "Petición de consultar el corpus local",
+        "conocimiento": "Pregunta factual: buscar primero una fuente local",
+        "modelo": "No se identificó herramienta determinista ni fuente específica",
+    }
+    return {"motor": ruta, "razon": razones[ruta],
+            "requiere_confirmacion_para_escritura": ruta == "comando"}
