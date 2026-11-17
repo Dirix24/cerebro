@@ -100,6 +100,22 @@ class Conversacion:
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
+        # Orquestador: usar fuentes locales verificables antes de generar texto.
+        from agent.orquestador import seleccionar
+        ruta = seleccionar(entrada)
+        if ruta == "busqueda_local":
+            from core.local_search import buscar
+            consulta = re.sub(r"(?i)^\\s*[¿]?\\s*(?:busca(?:r)?|consulta(?:r)?)\\s+(?:en\\s+)?(?:el\\s+)?(?:corpus|biblioteca)\\s*[: ]+", "", entrada).strip()
+            resultados = buscar(consulta) if consulta else []
+            if resultados:
+                return "\\n\\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
+            return "No encontré información en el corpus local.", False
+        if ruta == "conocimiento":
+            from core.conocimiento import buscar as buscar_conocimiento
+            resultados = buscar_conocimiento(entrada, limite=1)
+            if resultados:
+                dato = resultados[0]
+                return dato["respuesta"][:1000] + "\\nFuente: " + dato["fuente"], False
         # No inventar conocimiento: respuesta automática solo ante pregunta exacta.
         try:
             from core.conocimiento import respuesta_exacta
