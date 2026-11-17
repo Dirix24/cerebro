@@ -24,6 +24,8 @@ AYUDA = """Comandos:
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
   /progreso                 registra la precisión y su evolución
+  /registrar-error pregunta || respuesta  registra corrección para revisión
+  /errores-pendientes       consulta correcciones pendientes
   /calificar bien|mal       registra el resultado del repaso
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
@@ -188,6 +190,22 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd in ("/registrar-error", "/errores-pendientes"):
+            from pathlib import Path
+            from core.errores_aprendizaje import registrar, pendientes
+            ruta = Path(config._RAIZ) / "data" / "errores_aprendizaje.jsonl"
+            if cmd == "/errores-pendientes":
+                errores = pendientes(ruta)
+                return ("\\n".join(f"{e[\'pregunta\']} => {e[\'correccion\']}" for e in errores)
+                        if errores else "No hay errores pendientes."), False
+            if " || " not in resto:
+                return "Uso: /registrar-error pregunta || respuesta correcta", False
+            pregunta, respuesta = resto.split(" || ", 1)
+            try:
+                registrar(ruta, pregunta, respuesta)
+                return "Corrección registrada para revisión. No se entrena automáticamente.", False
+            except (ValueError, OSError) as exc:
+                return f"No pude registrar el error: {exc}", False
         if cmd == "/progreso":
             from pathlib import Path
             from core.medicion_progreso import medir
