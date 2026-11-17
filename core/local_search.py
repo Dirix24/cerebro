@@ -15,6 +15,10 @@ def fuentes():
     base = Path(config.CORPUS_FILE)
     if base.is_file() and not base.is_symlink():
         yield base
+    # Los artículos de Wikipedia también forman parte del corpus consultable.
+    internet = Path(config._RAIZ) / "data" / "aprendizaje_internet" / "corpus_diario.txt"
+    if internet.is_file() and not internet.is_symlink():
+        yield internet
     carpeta = Path(config.CORPUS_DIR)
     if carpeta.is_dir() and not carpeta.is_symlink():
         for ruta in sorted(carpeta.glob("*.txt")):
