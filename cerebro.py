@@ -119,7 +119,7 @@ def ejecutar_todo():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("instalar", "desinstalar", "motores", "iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
+    ap.add_argument("accion", choices=("laboratorio", "instalar", "desinstalar", "motores", "iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
@@ -127,6 +127,8 @@ def main(argv=None):
     ap.add_argument("--confirmar", action="store_true", help="Confirmar desinstalación de entornos")
     ap.add_argument("--borrar-datos", action="store_true", help="Solicitar también borrar datos locales")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "laboratorio":
+        return _ejecutar([sys.executable, str(RAIZ / "laboratorio_visual.py"), *resto])
     if args.accion == "motores":
         from core.motores import disponibles
         import json
