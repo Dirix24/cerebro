@@ -133,6 +133,7 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
     """Entrena con respaldo y validación fija; revierte si empeora."""
     import config
     from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
+    from core.puerta_checkpoint import aceptar_checkpoint
     from core.recursos_portatil import motivos_pausa
     motivos = motivos_pausa()
     if motivos:
@@ -175,9 +176,7 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
         ultimo_nuevo = evaluar_fijo(Path(config.CKPT_ULTIMO), validacion)
         # La mejora en un conjunto de validación fijo es condición necesaria,
         # pero no garantiza que todos los conocimientos se hayan conservado.
-        if ((previo is not None and (nuevo is None or nuevo > previo * 1.02))
-                or (referencia_ultimo is not None and
-                    (ultimo_nuevo is None or ultimo_nuevo > referencia_ultimo * 1.02))):
+        if not aceptar_checkpoint(previo, nuevo) or not aceptar_checkpoint(referencia_ultimo, ultimo_nuevo):
             restaurar(copias)
             raise RuntimeError(
                 f"Entrenamiento revertido: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb")
