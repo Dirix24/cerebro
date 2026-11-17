@@ -30,6 +30,24 @@ def _torch_disponible(python):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
+def iniciar_automatico():
+    """Prepara el entorno local una vez y activa los servicios compatibles."""
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        entorno = RAIZ / ".venv"
+        python = entorno / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if not python.is_file():
+            print("Creando entorno aislado de Cerebro...", flush=True)
+            venv.EnvBuilder(with_pip=True).create(str(entorno))
+        print("Instalando dependencias del motor local...", flush=True)
+        codigo = _ejecutar([str(python), "-m", "pip", "install", "-r", str(RAIZ / "requirements.txt")])
+        if codigo:
+            return codigo
+        return _ejecutar([str(python), str(RAIZ / "cerebro.py"), "todo"])
+    return ejecutar_todo()
+
+
 def ejecutar_todo():
     """Chat y aprendizaje diario en paralelo; se detienen al cerrar el chat."""
     try:
@@ -67,11 +85,15 @@ def ejecutar_todo():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
+    ap.add_argument("accion", choices=("iniciar", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "iniciar":
+        if resto:
+            ap.error("La acción iniciar no admite argumentos adicionales")
+        return iniciar_automatico()
     if args.accion == "todo":
         if resto:
             ap.error("La acción todo no admite argumentos adicionales")
