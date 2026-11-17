@@ -129,6 +129,10 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
     """Entrena con respaldo y validación fija; revierte si empeora."""
     import config
     from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
+    from core.evolucion_adaptativa import leer_historial, pasos_adaptativos, registrar
+    historial_ruta = CARPETA / "evolucion.json"
+    pasos_efectivos = pasos_adaptativos(pasos, leer_historial(historial_ruta))
+    print(f"Evolución adaptativa: {pasos_efectivos} pasos (base: {pasos}).", flush=True)
     if not CORPUS.exists() or not CORPUS.stat().st_size:
         print("No hay textos para entrenar.")
         return
@@ -145,7 +149,7 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
         referencia_ultimo = ultimo_previo if ultimo_previo is not None else previo
         cmd = [sys.executable, str(RAIZ / "cerebro.py"), "entrenar",
                "--corpus", str(CORPUS), "--perfil", perfil,
-               "--pasos", str(pasos), "--batch", "2"]
+               "--pasos", str(pasos_efectivos), "--batch", "2"]
         if estado_ckpt.exists():
             cmd.append("--resume")
             print("Reanudando pesos y optimizador guardados.", flush=True)
@@ -169,8 +173,14 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
             raise RuntimeError(
                 f"Entrenamiento revertido: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb")
         print(f"Validación aceptada: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb.")
-    except BaseException:
+        registrar(historial_ruta, "aceptado", pasos_efectivos, f"best: {previo} -> {nuevo} bpb")
+    except BaseException as exc:
         restaurar(copias)
+        if isinstance(exc, Exception):
+            try:
+                registrar(historial_ruta, "revertido", pasos_efectivos, str(exc))
+            except OSError:
+                pass
         raise
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)
