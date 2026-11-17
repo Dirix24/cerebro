@@ -108,14 +108,14 @@ class Conversacion:
             consulta = re.sub(r"(?i)^\\s*[¿]?\\s*(?:busca(?:r)?|consulta(?:r)?)\\s+(?:en\\s+)?(?:el\\s+)?(?:corpus|biblioteca)\\s*[: ]+", "", entrada).strip()
             resultados = buscar(consulta) if consulta else []
             if resultados:
-                return "\\n\\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
+                return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
             return "No encontré información en el corpus local.", False
         if ruta == "conocimiento":
             from core.conocimiento import buscar as buscar_conocimiento
             resultados = buscar_conocimiento(entrada, limite=1)
             if resultados:
                 dato = resultados[0]
-                return dato["respuesta"][:1000] + "\\nFuente: " + dato["fuente"], False
+                return dato["respuesta"][:1000] + "\nFuente: " + dato["fuente"], False
         # No inventar conocimiento: respuesta automática solo ante pregunta exacta.
         try:
             from core.conocimiento import respuesta_exacta
@@ -191,13 +191,19 @@ class Conversacion:
             from pathlib import Path
             from core.autoevaluacion import ejecutar
             ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
-            resultados = ejecutar(ruta, self.responder_modelo, limite=5)
+            estado_rng = self.rng.bit_generator.state
+            turnos = list(self.memoria.short_term_context)
+            try:
+                resultados = ejecutar(ruta, self.responder_modelo, limite=5)
+            finally:
+                self.rng.bit_generator.state = estado_rng
+                self.memoria.short_term_context = turnos
             if not resultados:
                 return "No hay fichas aprobadas. Usa /aprender-ficha pregunta || respuesta.", False
             aciertos = sum(r["correcto"] for r in resultados)
             return (f"Autoevaluación estricta: {aciertos}/{len(resultados)} coincidencias exactas. "
-                    "No se usa para entrenar ni modifica fichas.\\n" +
-                    "\\n".join(("OK" if r["correcto"] else "FALLO") + ": " + r["pregunta"]
+                    "No se usa para entrenar ni modifica fichas.\n" +
+                    "\n".join(("OK" if r["correcto"] else "FALLO") + ": " + r["pregunta"]
                               for r in resultados)), False
         if cmd in ("/aprender-ficha", "/repasar", "/calificar"):
             from pathlib import Path
