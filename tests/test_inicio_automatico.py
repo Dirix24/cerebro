@@ -10,6 +10,11 @@ class TestInicioAutomatico(unittest.TestCase):
             self.assertEqual(cerebro.main(["iniciar"]), 0)
             iniciar.assert_called_once_with()
 
+    def test_diagnostico_sin_entrenar(self):
+        with patch.object(cerebro, "mostrar_diagnostico", return_value=0) as diagnostico:
+            self.assertEqual(cerebro.main(["diagnostico"]), 0)
+            diagnostico.assert_called_once_with()
+
     def test_iniciar_rechaza_argumentos_inesperados(self):
         with self.assertRaises(SystemExit):
             cerebro.main(["iniciar", "--algo-desconocido"])
