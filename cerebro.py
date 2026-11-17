@@ -61,7 +61,11 @@ def mostrar_diagnostico():
     """Estado observable sin cargar ni entrenar el modelo."""
     import json
     import config
+    from core.recursos_portatil import bateria_baja
+    from core.repaso_espaciado import pendientes
     datos = {
+        "entrenamiento_pausado_por_bateria": bateria_baja(),
+        "repasos_pendientes": len(pendientes(RAIZ / "data" / "repaso_espaciado.json", limite=10000)),
         "modelo_entrenado": Path(config.CKPT_MEJOR).is_file() or Path(config.CKPT_ULTIMO).is_file(),
         "indice_local": (RAIZ / "data" / "corpus_fts.sqlite3").is_file(),
         "historial_evolucion": (RAIZ / "data" / "aprendizaje_internet" / "evolucion.json").is_file(),
