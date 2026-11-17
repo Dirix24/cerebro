@@ -187,12 +187,12 @@ class Conversacion:
                         self.pregunta_repaso = None
                         return "No hay preguntas pendientes hoy.", False
                     self.pregunta_repaso = tarjetas[0]["pregunta"]
-                    return "Pregunta: " + self.pregunta_repaso + "\\nDespués escribe /calificar bien o /calificar mal.", False
+                    return "Pregunta: " + self.pregunta_repaso + "\nDespués escribe /calificar bien o /calificar mal.", False
                 if resto not in ("bien", "mal") or not self.pregunta_repaso:
                     return "Primero usa /repasar y después /calificar bien|mal.", False
                 tarjeta = calificar(ruta, self.pregunta_repaso, resto == "bien")
                 self.pregunta_repaso = None
-                return f"Registrado. Próximo repaso: {tarjeta[\'fecha\']}. Respuesta esperada: {tarjeta[\'respuesta\']}", False
+                return f"Registrado. Próximo repaso: {tarjeta['fecha']}. Respuesta esperada: {tarjeta['respuesta']}", False
             except (ValueError, OSError) as exc:
                 return f"No pude actualizar el repaso: {exc}", False
         if cmd in ("/salir", "/exit", "/quit"):
