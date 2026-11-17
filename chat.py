@@ -203,8 +203,11 @@ class Conversacion:
             from core.local_search import buscar
             resultados = buscar(resto)
             if not resultados:
-                return ("No hay resultados locales. Crea el índice con "
-                        "python3 -m core.local_search --indexar"), False
+                from core.local_search import DB
+                if not DB.is_file():
+                    return ("No existe el índice local. Créalo con "
+                            "python3 -m core.local_search --indexar"), False
+                return "No encontré coincidencias en el corpus indexado.", False
             return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
         if cmd == "/biblioteca":
             if not resto:
