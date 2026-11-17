@@ -45,6 +45,9 @@ def iniciar_automatico():
         if codigo:
             return codigo
         return _ejecutar([str(python), str(RAIZ / "cerebro.py"), "todo"])
+    entorno = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if entorno.is_file() and Path(sys.executable).resolve() != entorno.resolve():
+        return _ejecutar([str(entorno), str(RAIZ / "cerebro.py"), "todo"])
     return ejecutar_todo()
 
 
@@ -169,14 +172,14 @@ def main(argv=None):
         if args.accion == "generar":
             ap.error("Para generar con el motor original usa la acción chat")
         return _ejecutar([sys.executable, str(RAIZ / "train.py"), *resto])
-    python = _python_entorno()
+    python = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     if not _torch_disponible(python):
         if args.sin_instalar:
             ap.error("PyTorch no está preparado. Ejecuta sin --sin-instalar para instalarlo automáticamente")
         print("Preparando el motor neuronal avanzado en .cerebro-env (solo la primera vez).", flush=True)
         print("La descarga inicial requiere Internet; no se descargan modelos preentrenados.", flush=True)
         if not python.is_file():
-            venv.EnvBuilder(with_pip=True).create(str(ENTORNO))
+            venv.EnvBuilder(with_pip=True).create(str(RAIZ / ".venv"))
         codigo = _ejecutar([str(python), "-m", "pip", "install", "-r",
                             str(RAIZ / "requirements-avanzado.txt")])
         if codigo:
