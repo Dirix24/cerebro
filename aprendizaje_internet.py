@@ -81,9 +81,12 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
     if estado.get("ultimo_dia") == hoy:
         print("Hoy ya se recopiló información; no se repite.")
         if entrenar and estado.get("entrenamiento_pendiente"):
-            entrenar_pendiente(pasos, perfil, estado_ckpt)
-            estado["entrenamiento_pendiente"] = False
-            ESTADO.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
+            completado = entrenar_pendiente(pasos, perfil, estado_ckpt)
+            if completado is False:
+                return
+            estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
+            estado_actual["entrenamiento_pendiente"] = False
+            ESTADO.write_text(json.dumps(estado_actual, ensure_ascii=False), encoding="utf-8")
         return
     vistos = set(estado.get("vistos", []))
     nuevos = [p for p in obtener_paginas(paginas) if p["id"] not in vistos]
@@ -103,16 +106,24 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
                                ensure_ascii=False) + "\n")
     vistos.update(p["id"] for p in nuevos)
     # Guardar el día antes del entrenamiento evita duplicar textos si falla.
-    ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos), "entrenamiento_pendiente": bool(entrenar)},
+    ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos), "entrenamiento_pendiente": True},
                                  ensure_ascii=False), encoding="utf-8")
     from core.conocimiento import guardar as guardar_conocimiento
     alertas = 0
     for pagina in nuevos:
         pregunta = "¿Qué es " + " ".join(pagina["titulo"].split()) + "?"
         alertas += len(guardar_conocimiento(pregunta, pagina["texto"], pagina["url"]))
-    print(f"Guardados {len(nuevos)} artículos y sus fuentes; alertas de contradicción: {alertas}.")
+    print(f"Guardados {len(nuevos)} artículos y sus fuentes; alertas de contradicción: {alertas}.", flush=True)
+    # Actualizar el índice también cuando el chat ya está abierto.
+    try:
+        from core.local_search import indexar
+        print(f"Índice de búsqueda actualizado: {indexar()} documentos.", flush=True)
+    except (OSError, ValueError, ImportError) as exc:
+        print(f"Aviso: no se pudo actualizar el índice: {exc}", file=sys.stderr)
     if entrenar:
-        entrenar_pendiente(pasos, perfil, estado_ckpt)
+        completado = entrenar_pendiente(pasos, perfil, estado_ckpt)
+        if completado is False:
+            return
         estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
         estado_actual["entrenamiento_pendiente"] = False
         ESTADO.write_text(json.dumps(estado_actual, ensure_ascii=False), encoding="utf-8")
@@ -122,6 +133,16 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
     """Entrena con respaldo y validación fija; revierte si empeora."""
     import config
     from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
+    from core.puerta_checkpoint import aceptar_checkpoint
+    from core.recursos_portatil import motivos_pausa
+    motivos = motivos_pausa()
+    if motivos:
+        print("Entrenamiento aplazado: " + ", ".join(motivos), flush=True)
+        return False
+    from core.evolucion_adaptativa import leer_historial, pasos_adaptativos, registrar
+    historial_ruta = CARPETA / "evolucion.json"
+    pasos_efectivos = pasos_adaptativos(pasos, leer_historial(historial_ruta))
+    print(f"Evolución adaptativa: {pasos_efectivos} pasos (base: {pasos}).", flush=True)
     if not CORPUS.exists() or not CORPUS.stat().st_size:
         print("No hay textos para entrenar.")
         return
@@ -138,7 +159,7 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
         referencia_ultimo = ultimo_previo if ultimo_previo is not None else previo
         cmd = [sys.executable, str(RAIZ / "cerebro.py"), "entrenar",
                "--corpus", str(CORPUS), "--perfil", perfil,
-               "--pasos", str(pasos), "--batch", "2"]
+               "--pasos", str(pasos_efectivos), "--batch", "2"]
         if estado_ckpt.exists():
             cmd.append("--resume")
             print("Reanudando pesos y optimizador guardados.", flush=True)
@@ -155,15 +176,20 @@ def entrenar_pendiente(pasos, perfil, estado_ckpt):
         ultimo_nuevo = evaluar_fijo(Path(config.CKPT_ULTIMO), validacion)
         # La mejora en un conjunto de validación fijo es condición necesaria,
         # pero no garantiza que todos los conocimientos se hayan conservado.
-        if ((previo is not None and (nuevo is None or nuevo > previo * 1.02))
-                or (referencia_ultimo is not None and
-                    (ultimo_nuevo is None or ultimo_nuevo > referencia_ultimo * 1.02))):
+        if not aceptar_checkpoint(previo, nuevo) or not aceptar_checkpoint(referencia_ultimo, ultimo_nuevo):
             restaurar(copias)
             raise RuntimeError(
                 f"Entrenamiento revertido: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb")
         print(f"Validación aceptada: best {previo} -> {nuevo}; last {referencia_ultimo} -> {ultimo_nuevo} bpb.")
-    except BaseException:
+        registrar(historial_ruta, "aceptado", pasos_efectivos, f"best: {previo} -> {nuevo} bpb")
+        return True
+    except BaseException as exc:
         restaurar(copias)
+        if isinstance(exc, Exception):
+            try:
+                registrar(historial_ruta, "revertido", pasos_efectivos, str(exc))
+            except OSError:
+                pass
         raise
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)

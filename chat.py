@@ -20,6 +20,14 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
+  /repasar                  muestra una pregunta pendiente
+  /autoevaluar              evalúa el modelo con fichas aprobadas
+  /progreso                 registra la precisión y su evolución
+  /registrar-error pregunta || respuesta  registra corrección para revisión
+  /errores-pendientes       consulta correcciones pendientes
+  /motor-para pregunta      explica qué motor usaría Cerebro
+  /calificar bien|mal       registra el resultado del repaso
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
   /recordar clave = valor   guarda un dato
@@ -70,6 +78,7 @@ class Conversacion:
                         penalizacion=config.GEN_PENALIZACION_REPETICION)
         import numpy as np
         self.rng = np.random.default_rng(seed)
+        self.pregunta_repaso = None
 
     # -- entrada principal ------------------------------------------------------------
 
@@ -95,6 +104,22 @@ class Conversacion:
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
+        # Orquestador: usar fuentes locales verificables antes de generar texto.
+        from agent.orquestador import seleccionar
+        ruta = seleccionar(entrada)
+        if ruta == "busqueda_local":
+            from core.local_search import buscar
+            consulta = re.sub(r"(?i)^\\s*[¿]?\\s*(?:busca(?:r)?|consulta(?:r)?)\\s+(?:en\\s+)?(?:el\\s+)?(?:corpus|biblioteca)\\s*[: ]+", "", entrada).strip()
+            resultados = buscar(consulta) if consulta else []
+            if resultados:
+                return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
+            return "No encontré información en el corpus local.", False
+        if ruta == "conocimiento":
+            from core.conocimiento import buscar as buscar_conocimiento
+            resultados = buscar_conocimiento(entrada, limite=1)
+            if resultados:
+                dato = resultados[0]
+                return dato["respuesta"][:1000] + "\nFuente: " + dato["fuente"], False
         # No inventar conocimiento: respuesta automática solo ante pregunta exacta.
         try:
             from core.conocimiento import respuesta_exacta
@@ -166,6 +191,90 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/motor-para":
+            from agent.orquestador import explicar_seleccion
+            if not resto:
+                return "Uso: /motor-para tu pregunta", False
+            decision = explicar_seleccion(resto)
+            return f"Motor: {decision[\'motor\']}. Motivo: {decision[\'razon\']}.", False
+        if cmd in ("/registrar-error", "/errores-pendientes"):
+            from pathlib import Path
+            from core.errores_aprendizaje import registrar, pendientes
+            ruta = Path(config._RAIZ) / "data" / "errores_aprendizaje.jsonl"
+            if cmd == "/errores-pendientes":
+                errores = pendientes(ruta)
+                return ("\\n".join(f"{e[\'pregunta\']} => {e[\'correccion\']}" for e in errores)
+                        if errores else "No hay errores pendientes."), False
+            if " || " not in resto:
+                return "Uso: /registrar-error pregunta || respuesta correcta", False
+            pregunta, respuesta = resto.split(" || ", 1)
+            try:
+                registrar(ruta, pregunta, respuesta)
+                return "Corrección registrada para revisión. No se entrena automáticamente.", False
+            except (ValueError, OSError) as exc:
+                return f"No pude registrar el error: {exc}", False
+        if cmd == "/progreso":
+            from pathlib import Path
+            from core.medicion_progreso import medir
+            raiz = Path(config._RAIZ) / "data"
+            estado_rng = self.rng.bit_generator.state
+            turnos = list(self.memoria.short_term_context)
+            try:
+                resumen = medir(raiz / "repaso_espaciado.json", self.responder_modelo,
+                                raiz / "historial_evaluaciones.jsonl")
+            finally:
+                self.rng.bit_generator.state = estado_rng
+                self.memoria.short_term_context = turnos
+            if resumen["precision"] is None:
+                return "No hay fichas aprobadas para medir progreso.", False
+            variacion = resumen["variacion"]
+            cambio = "sin medición comparable anterior" if variacion is None else f"variación {variacion:+.1%}"
+            return (f"Evaluación: {resumen[\'aciertos\']}/{resumen[\'evaluadas\']} "
+                    f"({resumen[\'precision\']:.1%}); {cambio}. "
+                    "La coincidencia exacta no mide inteligencia general."), False
+        if cmd == "/autoevaluar":
+            from pathlib import Path
+            from core.autoevaluacion import ejecutar
+            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            estado_rng = self.rng.bit_generator.state
+            turnos = list(self.memoria.short_term_context)
+            try:
+                resultados = ejecutar(ruta, self.responder_modelo, limite=5)
+            finally:
+                self.rng.bit_generator.state = estado_rng
+                self.memoria.short_term_context = turnos
+            if not resultados:
+                return "No hay fichas aprobadas. Usa /aprender-ficha pregunta || respuesta.", False
+            aciertos = sum(r["correcto"] for r in resultados)
+            return (f"Autoevaluación estricta: {aciertos}/{len(resultados)} coincidencias exactas. "
+                    "No se usa para entrenar ni modifica fichas.\n" +
+                    "\n".join(("OK" if r["correcto"] else "FALLO") + ": " + r["pregunta"]
+                              for r in resultados)), False
+        if cmd in ("/aprender-ficha", "/repasar", "/calificar"):
+            from pathlib import Path
+            from core.repaso_espaciado import anadir, pendientes, calificar
+            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            try:
+                if cmd == "/aprender-ficha":
+                    if " || " not in resto:
+                        return "Uso: /aprender-ficha pregunta || respuesta", False
+                    pregunta, respuesta = resto.split(" || ", 1)
+                    anadir(ruta, pregunta, respuesta)
+                    return "Tarjeta guardada para repasos posteriores.", False
+                if cmd == "/repasar":
+                    tarjetas = pendientes(ruta, limite=1)
+                    if not tarjetas:
+                        self.pregunta_repaso = None
+                        return "No hay preguntas pendientes hoy.", False
+                    self.pregunta_repaso = tarjetas[0]["pregunta"]
+                    return "Pregunta: " + self.pregunta_repaso + "\nDespués escribe /calificar bien o /calificar mal.", False
+                if resto not in ("bien", "mal") or not self.pregunta_repaso:
+                    return "Primero usa /repasar y después /calificar bien|mal.", False
+                tarjeta = calificar(ruta, self.pregunta_repaso, resto == "bien")
+                self.pregunta_repaso = None
+                return f"Registrado. Próximo repaso: {tarjeta['fecha']}. Respuesta esperada: {tarjeta['respuesta']}", False
+            except (ValueError, OSError) as exc:
+                return f"No pude actualizar el repaso: {exc}", False
         if cmd in ("/salir", "/exit", "/quit"):
             return "¡Hasta pronto!", True
         if cmd in ("/ayuda", "/help"):
@@ -203,8 +312,11 @@ class Conversacion:
             from core.local_search import buscar
             resultados = buscar(resto)
             if not resultados:
-                return ("No hay resultados locales. Crea el índice con "
-                        "python3 -m core.local_search --indexar"), False
+                from core.local_search import DB
+                if not DB.is_file():
+                    return ("No existe el índice local. Créalo con "
+                            "python3 -m core.local_search --indexar"), False
+                return "No encontré coincidencias en el corpus indexado.", False
             return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
         if cmd == "/biblioteca":
             if not resto:

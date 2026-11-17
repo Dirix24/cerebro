@@ -35,7 +35,7 @@ def _a_expresion(texto):
 def detectar_intencion(mensaje):
     """Devuelve un plan [{"tool":..., "arguments":...}] o None si el mensaje
     debe responderlo el modelo de lenguaje."""
-    texto = mensaje.strip()
+    texto = mensaje.strip().lstrip("¿¡").strip()
     if _HORA.search(texto):
         return [{"tool": "clock", "arguments": {}}]
 
