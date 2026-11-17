@@ -22,6 +22,7 @@ AYUDA = """Comandos:
   /ayuda                    esta ayuda
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
   /repasar                  muestra una pregunta pendiente
+  /autoevaluar              evalúa el modelo con fichas aprobadas
   /calificar bien|mal       registra el resultado del repaso
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
@@ -170,6 +171,18 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/autoevaluar":
+            from pathlib import Path
+            from core.autoevaluacion import ejecutar
+            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            resultados = ejecutar(ruta, self.responder_modelo, limite=5)
+            if not resultados:
+                return "No hay fichas aprobadas. Usa /aprender-ficha pregunta || respuesta.", False
+            aciertos = sum(r["correcto"] for r in resultados)
+            return (f"Autoevaluación estricta: {aciertos}/{len(resultados)} coincidencias exactas. "
+                    "No se usa para entrenar ni modifica fichas.\\n" +
+                    "\\n".join(("OK" if r["correcto"] else "FALLO") + ": " + r["pregunta"]
+                              for r in resultados)), False
         if cmd in ("/aprender-ficha", "/repasar", "/calificar"):
             from pathlib import Path
             from core.repaso_espaciado import anadir, pendientes, calificar
