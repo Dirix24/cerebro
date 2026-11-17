@@ -82,8 +82,9 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
         print("Hoy ya se recopiló información; no se repite.")
         if entrenar and estado.get("entrenamiento_pendiente"):
             entrenar_pendiente(pasos, perfil, estado_ckpt)
-            estado["entrenamiento_pendiente"] = False
-            ESTADO.write_text(json.dumps(estado, ensure_ascii=False), encoding="utf-8")
+            estado_actual = json.loads(ESTADO.read_text(encoding="utf-8"))
+            estado_actual["entrenamiento_pendiente"] = False
+            ESTADO.write_text(json.dumps(estado_actual, ensure_ascii=False), encoding="utf-8")
         return
     vistos = set(estado.get("vistos", []))
     nuevos = [p for p in obtener_paginas(paginas) if p["id"] not in vistos]
@@ -103,7 +104,7 @@ def ciclo(paginas, pasos, entrenar, max_bytes, perfil, estado_ckpt):
                                ensure_ascii=False) + "\n")
     vistos.update(p["id"] for p in nuevos)
     # Guardar el día antes del entrenamiento evita duplicar textos si falla.
-    ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos), "entrenamiento_pendiente": bool(entrenar)},
+    ESTADO.write_text(json.dumps({"ultimo_dia": hoy, "vistos": sorted(vistos), "entrenamiento_pendiente": True},
                                  ensure_ascii=False), encoding="utf-8")
     from core.conocimiento import guardar as guardar_conocimiento
     alertas = 0
