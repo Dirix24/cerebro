@@ -40,6 +40,7 @@ La instalación no crea un servicio del sistema. El proceso de aprendizaje diari
 | `python3 cerebro.py chat` | Abre solo el chat NumPy |
 | `python3 cerebro.py diagnostico` | Consulta estado de checkpoints, índice y batería |
 | `python3 cerebro.py motores` | Enumera motores y módulos, con disponibilidad de bibliotecas |
+| `python3 cerebro.py laboratorio` | Genera un panel HTML local de progreso, checkpoints y simulaciones |
 | `python3 cerebro.py aprender` | Ejecuta recopilación de textos una vez |
 | `python3 cerebro.py aprender --cada-dia --entrenar` | Recopilación y entrenamiento diario experimental |
 | `python3 cerebro.py conocimiento buscar "Luna"` | Busca conocimiento local y fuentes |
@@ -191,3 +192,27 @@ Más información: [Motores de Cerebro](CEREBRO_MOTORES.md) · [Mejoras locales]
 **Cerebro es un proyecto diseñado y desarrollado con asistencia de inteligencia artificial.** Su creador define los objetivos y las decisiones de uso; una IA ha colaborado en propuestas técnicas, implementación, documentación y diseño de pruebas. El código debe revisarse y probarse: **haber sido generado o revisado por IA no demuestra su corrección**.
 
 El objetivo es construir una IA local, transparente y ampliable, que mejore con datos y evaluaciones verificables, sin vender capacidades futuras como si ya existieran.
+
+
+## 🖥️ Laboratorio visual: progreso, versiones y simulaciones
+
+```bash
+python3 cerebro.py laboratorio
+```
+
+El comando genera el archivo **`data/laboratorio_cerebro.html`**. Ábrelo con tu navegador de archivos o navegador web. Es un archivo HTML local y estático, sin servidor ni servicios externos.
+
+El panel permite ver:
+- **Progreso registrado:** historial de precisión de `/progreso`, cuando existan evaluaciones.
+- **Versiones de pesos:** presencia, tamaño y fecha de modificación de los checkpoints `best.npz` y `last.npz`. No representa un historial completo de versiones.
+- **Experimentos:** últimos registros de `learning/evolution/experimentos.jsonl`.
+- **Red neuronal animada:** representación conceptual en movimiento, **no** activaciones neuronales reales.
+- **Simulación de tareas del ordenador:** muestra pasos hipotéticos para organizar archivos sin leerlos ni cambiarlos.
+
+Para actualizar los datos, vuelve a ejecutar el comando y recarga el HTML. **No hay monitorización en tiempo real**, ni control remoto del ordenador. Cerebro tiene herramientas de lectura y escritura restringidas, pero **no** debe recibir control autónomo del sistema sin límites, permisos explícitos, simulación y registro de acciones. El aprendizaje neuronal sigue requiriendo validación independiente.
+
+Prueba del laboratorio:
+
+```bash
+python3 -m pytest -q tests/test_laboratorio_visual.py
+```
