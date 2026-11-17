@@ -26,6 +26,7 @@ AYUDA = """Comandos:
   /progreso                 registra la precisión y su evolución
   /registrar-error pregunta || respuesta  registra corrección para revisión
   /errores-pendientes       consulta correcciones pendientes
+  /motor-para pregunta      explica qué motor usaría Cerebro
   /calificar bien|mal       registra el resultado del repaso
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
@@ -190,6 +191,12 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/motor-para":
+            from agent.orquestador import explicar_seleccion
+            if not resto:
+                return "Uso: /motor-para tu pregunta", False
+            decision = explicar_seleccion(resto)
+            return f"Motor: {decision[\'motor\']}. Motivo: {decision[\'razon\']}.", False
         if cmd in ("/registrar-error", "/errores-pendientes"):
             from pathlib import Path
             from core.errores_aprendizaje import registrar, pendientes
