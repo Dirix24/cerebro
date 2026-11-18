@@ -125,6 +125,36 @@ class Conversacion:
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
 
+        # Peticiones cotidianas: consultar herramientas sin memorizar comandos.
+        from agent.lenguaje_natural import interpretar
+        solicitud = interpretar(entrada)
+        if solicitud:
+            accion = solicitud["accion"]
+            if solicitud["requiere_confirmacion"]:
+                respuestas = {
+                    "camara": "Puedo capturar una imagen, pero necesito tu autorización explícita. "
+                              "La captura puntual está disponible en camara_local.py --confirmar; "
+                              "todavía no identifico objetos con un modelo entrenado.",
+                    "github_escritura": "Puedo consultar GitHub, pero todavía no modifico repositorios "
+                                       "automáticamente. No haré cambios sin revisar una propuesta contigo.",
+                    "recordatorio_nuevo": "Claro. Dime la fecha y la hora con zona horaria "
+                                          "(por ejemplo, 2027-01-20T10:00:00+01:00) "
+                                          "y el texto que quieres recordar.",
+                }
+                return respuestas[accion], False
+            if accion == "usb":
+                return self._comando("/usb")
+            if accion == "recordatorios":
+                return self._comando("/recordatorios")
+            if accion.startswith("github_"):
+                import re
+                m = re.search(r"(?<![\w.-])([\w.-]+/[\w.-]+)(?![\w.-])", entrada)
+                if not m:
+                    return "¿Qué repositorio de GitHub quieres consultar? "
+                           "Dime propietario/nombre, por ejemplo Dirix24/cerebro.", False
+                return self._comando(("/github-errores " if accion == "github_errores"
+                                      else "/github-estado ") + m.group(1))
+
         plan = detectar_intencion(entrada)
         if plan:
             return self._responder_con_agente(plan), False
