@@ -316,6 +316,20 @@ El servidor escucha **solo en 127.0.0.1** y no requiere internet ni modelos exte
 
 Las partículas y los movimientos de los nodos son efectos gráficos; **los cambios de estado del chat y la incorporación de recuerdos son eventos reales**. No equivale a observar neuronas biológicas ni pesos individuales del modelo.
 
+### Estación neuronal integrada en la terminal (sin navegador)
+
+**Dentro del chat** (`python3 main.py`), escribe «Cerebro, abre la estación neuronal» o `/estacion-terminal`. Se abre una pantalla a color dentro de la **misma terminal**, sin navegador ni servidor. Pulsa **q** para volver a hablar con Cerebro. Si todavía no tienes checkpoint de IA, también puedes abrirla de manera independiente:
+
+```bash
+python3 main.py --estacion-terminal
+# o:
+python3 -m core.estacion_terminal
+```
+
+**Controles:** flechas para seleccionar recuerdos; `+` y `-` para acercar y alejar; espacio para pausar el movimiento; `q` para salir. Los recuerdos y eventos se actualizan periódicamente desde el disco o la memoria del chat. El núcleo cambia de color según el **último evento registrado**. Los puntos y conexiones son una **visualización de recuerdos y coincidencias de palabras**, no las neuronas ni sinapsis físicas del modelo. La animación es decorativa.
+
+Utiliza la biblioteca estándar `curses` (habitualmente incluida en Linux/macOS; en Windows puede requerir `windows-curses`). Necesita una terminal interactiva de al menos 52×15. Los recuerdos privados pueden verse en pantalla: úsala en un entorno de confianza.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
