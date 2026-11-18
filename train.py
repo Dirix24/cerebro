@@ -46,6 +46,8 @@ def main():
                     help="perfil de modelo (también puede usarse CEREBRO_PERFIL)")
     ap.add_argument("--tamano", choices=sorted(config.TAMANOS_NUCLEO) + ["auto"], default=None,
                     help="único ajuste de capacidad NumPy: mini, normal, grande, potente, extra, maximo, experimental")
+    ap.add_argument("--plan-entrenamiento", action="store_true", help="calcular presupuesto RAM sin entrenar")
+    ap.add_argument("--permitir-riesgo-memoria", action="store_true", help="aceptar entrenar aunque la estimación supere el presupuesto RAM")
     ap.add_argument("--listar-tamanos", action="store_true", help="mostrar perfiles y memoria estimada sin entrenar")
     ap.add_argument("--preparar-ssd", action="store_true", help="inicializar una sola vez CEREBRO_HOME")
     ap.add_argument("--detectar-equipo", action="store_true", help="mostrar CPU, RAM y espacio del SSD sin entrenar")
@@ -83,12 +85,28 @@ def main():
         from core.entorno_portatil import recomendar_tamano
         args.tamano = recomendar_tamano()
         print(f"[i] Tamaño elegido por RAM: {args.tamano} (estimación, no garantía).")
+    if args.plan_entrenamiento:
+        import json
+        from core.plan_entrenamiento import plan_entrenamiento
+        elegido = args.tamano or "mini"
+        if elegido == "auto":
+            from core.entorno_portatil import recomendar_tamano
+            elegido = recomendar_tamano()
+        print(json.dumps(plan_entrenamiento(elegido), ensure_ascii=False, indent=2))
+        return
     if args.tamano and args.perfil:
         ap.error("Usa --tamano o --perfil, no ambos.")
 
     from core.entorno_portatil import verificar_almacenamiento
     verificar_almacenamiento()
 
+    if args.tamano and not args.resume:
+        from core.plan_entrenamiento import plan_entrenamiento
+        plan = plan_entrenamiento(args.tamano)
+        if plan["cabe_en_presupuesto"] is False and not args.permitir_riesgo_memoria:
+            ap.error("El tamaño elegido supera el presupuesto conservador de RAM. "
+                     "Usa --plan-entrenamiento para revisarlo, reduce --tamano "
+                     "o acepta expresamente con --permitir-riesgo-memoria.")
     ce = ConfigEntrenamiento()
     if args.lr is not None:
         ce.lr = args.lr
