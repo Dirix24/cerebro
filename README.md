@@ -302,6 +302,20 @@ Incluye núcleo central animado, recuerdos alrededor, conexiones y pulsos decora
 
 **Privacidad:** el HTML incluye recuerdos privados en texto para poder explorarlos sin red. No lo compartas ni lo subas a repositorios públicos. Para actualizarlo, mueve o elimina el archivo anterior y vuelve a solicitarlo.
 
+### Estación neuronal en vivo (procesos reales)
+
+Con Cerebro en funcionamiento, abre **otra terminal** en el proyecto y ejecuta:
+
+```bash
+python3 estacion_neuronal_live.py
+```
+
+Visita `http://127.0.0.1:8765/`. La estación actualiza cada 1,5 segundos el mapa de recuerdos y los eventos registrados por el chat: amarillo al recibir mensajes (analizando), azul cuando se guarda memoria (aprendido), naranja al iniciar búsqueda local (investigando), verde tras respuesta generativa (consolidado). El visor dispone también de violeta (asociando), cian (observando) y rojo (error), que se usarán cuando los procesos correspondientes emitan eventos reales. Los eventos **no contienen el texto de las conversaciones**; solo estado, etiqueta fija y fecha. Los recuerdos sí aparecen en el visor y pueden ser privados.
+
+El servidor escucha **solo en 127.0.0.1** y no requiere internet ni modelos externos. **Advertencia de privacidad:** cualquier proceso local capaz de acceder al puerto puede consultar los recuerdos mientras el servidor esté abierto; úsalo solo en un equipo de confianza y ciérralo al terminar (Ctrl+C). No expongas ni reenvíes el puerto a la red.
+
+Las partículas y los movimientos de los nodos son efectos gráficos; **los cambios de estado del chat y la incorporación de recuerdos son eventos reales**. No equivale a observar neuronas biológicas ni pesos individuales del modelo.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
