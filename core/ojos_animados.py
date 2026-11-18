@@ -91,7 +91,7 @@ def fotograma(expresion="atento", instante=1.0):
     elif expresion == "esperando" and 3.0 <= fase < 3.25:
         izquierdo = derecho = "—"  # Parpadeo en reposo.
     # Movimiento de mirada, sin cámara: solo animación periódica.
-    if expresion in ("curioso", "observando", "saludando") and int(instante * 1.3) % 2:
+    if expresion in ("curioso", "observando", "saludando") and int(instante * 1.3) % 2 and not (expresion == "saludando" and 1.2 <= fase < 1.45):
         izquierdo, derecho = derecho, izquierdo
     return izquierdo, derecho, etiqueta
 
