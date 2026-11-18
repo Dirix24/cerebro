@@ -112,7 +112,7 @@ class Conversacion:
             from core.actividad_neuronal import registrar as _registrar_actividad
             _registrar_actividad("analizando", "mensaje")
         except OSError:
-            pass
+            _registrar_actividad = lambda *_args: None
         if entrada.startswith("/"):
             return self._comando(entrada)
 
