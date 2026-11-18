@@ -247,8 +247,13 @@ class Conversacion:
             resultados = buscar(concepto)
             if resultados:
                 texto, origen = resultados[0]
-                return f"Encontré en el corpus local:\n[{origen}] {texto}", False
-            return "No encontré una definición en mis fuentes locales. Puedes añadir una ficha con /aprender-ficha.", False
+                respuesta = f"Encontré en el corpus local:\n[{origen}] {texto}"
+            else:
+                respuesta = "No encontré una definición en mis fuentes locales. Puedes añadir una ficha con /aprender-ficha."
+            self.memoria.agregar_contexto("usuario", entrada)
+            self.memoria.agregar_contexto("ia", respuesta)
+            _registrar_actividad("consolidado", "respuesta")
+            return respuesta, False
         resultado = self.responder_modelo(entrada)
         _registrar_actividad("consolidado", "respuesta")
         return resultado, False
