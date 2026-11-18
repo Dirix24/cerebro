@@ -503,3 +503,25 @@ En preguntas como `¿Qué es la robótica?`, Cerebro primero consulta su bibliot
 **Privacidad:** solo se envía el nombre del concepto, no el historial, recuerdos o archivos. No introduzcas información privada en una pregunta de definición si no quieres que su concepto se consulte en Wikipedia. La consulta automática solo se activa para definiciones sin respuesta local; otras preguntas siguen funcionando localmente. Si la conexión falla o Wikipedia devuelve HTTP 403, Cerebro informa de que no encontró una fuente fiable. No se utilizan APIs de IA externa ni se reentrenan pesos automáticamente.
 
 Pruebas: `python3 -m pytest -q tests/test_respuestas_claras_internet.py`. Estas funciones se encuentran en una PR pendiente de fusión, no necesariamente en `main`.
+
+
+## 🔄 Exploración autónoma local e Internet (experimental)
+
+Este modo **requiere activación explícita**. Puedes dejarlo funcionando en una terminal; cada ciclo indexa documentos de texto de tu carpeta personal, identifica relaciones por términos compartidos y consulta hasta dos artículos aleatorios de Wikipedia. No utiliza modelos de IA de terceros ni envía tus archivos a Internet.
+
+```bash
+# Una pasada de lectura y aprendizaje (sin entrenamiento de pesos):
+python3 exploracion_autonoma.py --autorizar-hogar
+
+# Repetir cada seis horas; entrenar NumPy con el ciclo seguro existente cuando corresponda:
+python3 exploracion_autonoma.py --autorizar-hogar --cada-horas 6 --entrenar
+
+# Leer solo textos locales, sin consultar Wikipedia:
+python3 exploracion_autonoma.py --autorizar-hogar --solo-local
+```
+
+**Alcance y límites:** «hogar» significa tu carpeta personal (normalmente `/home/usuario`), **no** todo el disco, otros usuarios ni dispositivos externos. Solo lee archivos `.txt`, `.md` y `.rst`; omite carpetas ocultas, enlaces simbólicos, rutas de credenciales y otras carpetas sensibles. Límite por ciclo: 300 archivos, 64 KiB por archivo y 3 MiB en total. **No garantiza detectar todos los secretos**: revisa el contenido de tus carpetas antes de autorizarlo. Los textos se guardan en una base SQLite local `data/exploracion_local.sqlite3`, que puede contener datos personales y no debes subir a GitHub.
+
+**Importante:** el índice local autónomo está separado de la búsqueda conversacional; por ahora **no alimenta automáticamente al chat ni al entrenador neuronal**. La comparación es léxica, no verifica contradicciones ni aprende relaciones semánticas. La parte web usa el ciclo diario ya existente: si ya recopiló artículos hoy, no repetirá la descarga. `--entrenar` solicita el entrenamiento existente con control de recursos, validación y restauración de checkpoints; no promete que entrene en cada pasada. El proceso funciona mientras la terminal esté abierta y se detiene con Ctrl+C. No hay servicio persistente instalado.
+
+Prueba sin conexión: `python3 -m pytest -q tests/test_exploracion_autonoma.py`.
