@@ -55,6 +55,9 @@ PERFILES = {
     # V2: más capacidad y contexto, manteniendo NumPy puro.
     "v2":      dict(vocab_objetivo=768, block_size=192, dim=96, n_heads=4,
                      n_layers=4, dim_ffn=384, dropout=0.08),
+    # Crecimiento opcional: mayor capacidad, sin modificar pesos/checkpoints existentes.
+    "v2_plus": dict(vocab_objetivo=1536, block_size=256, dim=192, n_heads=6,
+                    n_layers=6, dim_ffn=768, dropout=0.10),
 
 }
 
