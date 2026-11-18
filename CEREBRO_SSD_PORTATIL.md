@@ -9,6 +9,7 @@ Linux/macOS:
 
 ```bash
 export CEREBRO_HOME="/ruta/real/del/SSD/Cerebro"
+python train.py --preparar-ssd  # solo la primera vez, con el SSD conectado
 python train.py --detectar-equipo
 python train.py --listar-tamanos
 python train.py --tamano auto --pasos 100
@@ -42,3 +43,15 @@ determina qué modelos se pueden entrenar; el espacio libre del SSD determina
 cuántos modelos y datos caben. Para migrar entre ordenadores, instala Python,
 NumPy y las dependencias del proyecto en cada uno y utiliza el mismo
 `CEREBRO_HOME`. Expulsa el SSD de forma segura tras cerrar Cerebro.
+
+## Protección contra desconexiones
+
+Antes de usar el SSD por primera vez, define `CEREBRO_HOME` y ejecuta
+`python train.py --preparar-ssd`. Se crea un marcador `.cerebro_ssd` y
+las carpetas de datos. Cuando `CEREBRO_HOME` está definido, `train.py`
+y `main.py` rechazan arrancar si no encuentran ese marcador, evitando
+crear una nueva carpeta en el disco interno al faltar la unidad.
+
+**Precaución:** comprueba la ruta y el volumen montado antes de preparar;
+el marcador no puede detectar todos los casos de sustitución o montaje de
+otra unidad. No desconectes el SSD mientras Cerebro esté ejecutándose.
