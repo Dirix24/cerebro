@@ -15,6 +15,9 @@ import sys
 import time
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
+import ssl
+import socket
 
 RAIZ = Path(__file__).resolve().parent
 CARPETA = RAIZ / "data" / "aprendizaje_internet"
@@ -44,6 +47,46 @@ def detener_entrenamiento(signum, frame):
             hijo.wait()
     raise SystemExit(128 + signum)
 
+
+
+
+def explicar_error_red(exc):
+    """Diagnóstico sin desactivar TLS ni atribuir el fallo al modelo."""
+    if isinstance(exc, HTTPError):
+        if exc.code == 403:
+            return "HTTP 403: el servidor rechaza la solicitud; comprueba el acceso a la API desde tu red."
+        if exc.code == 429:
+            return "HTTP 429: demasiadas solicitudes; espera antes de volver a intentarlo."
+        return f"HTTP {exc.code}: respuesta de error del servidor remoto."
+    causa = exc.reason if isinstance(exc, URLError) else exc
+    if isinstance(causa, ssl.SSLError):
+        return f"Error de certificado o TLS: {causa}"
+    if isinstance(causa, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+        return "La conexión fue interrumpida por el servidor o la red (TLS/conexión reiniciada)."
+    if isinstance(causa, (TimeoutError, socket.timeout)):
+        return "Tiempo de espera agotado; comprueba conexión, DNS o cortafuegos."
+    if isinstance(causa, socket.gaierror):
+        return "No se pudo resolver el dominio (DNS)."
+    return f"Error de conexión: {causa}"
+
+
+def comprobar_red():
+    """Comprueba la API realmente utilizada por el aprendizaje, sin recopilar datos."""
+    req = Request(API + "?" + urlencode({"action": "query", "meta": "siteinfo", "format": "json"}),
+                  headers={"User-Agent": "CerebroLocal/0.2 (uso personal; contacto: GitHub Dirix24/cerebro)",
+                           "Accept": "application/json"})
+    try:
+        with urlopen(req, timeout=12) as respuesta:
+            datos = json.load(respuesta)
+        if "query" in datos:
+            print("API de Wikipedia accesible. El aprendizaje puede intentar descargar artículos.")
+            return 0
+        print("La API respondió, pero no devolvió el formato esperado.")
+        return 1
+    except (HTTPError, URLError, OSError, ValueError) as exc:
+        print("API de Wikipedia no disponible: " + explicar_error_red(exc), file=sys.stderr)
+        print("El chat, la memoria y la inferencia local siguen funcionando sin Internet.", file=sys.stderr)
+        return 1
 
 
 def obtener_paginas(cantidad):
@@ -203,6 +246,8 @@ def main():
     signal.signal(signal.SIGTERM, detener_entrenamiento)
     signal.signal(signal.SIGINT, detener_entrenamiento)
     ap = argparse.ArgumentParser(description="Recopilación y entrenamiento local diario")
+    ap.add_argument("--comprobar-red", action="store_true",
+                    help="comprobar acceso HTTPS a la API de Wikipedia sin descargar artículos")
     ap.add_argument("--dias", type=int, default=None,
                     help="ejecutar como máximo N días naturales y detenerse")
     ap.add_argument("--cada-dia", action="store_true",
@@ -214,6 +259,8 @@ def main():
     ap.add_argument("--max-mb", type=int, default=20)
     ap.add_argument("--perfil", default="diminuto")
     args = ap.parse_args()
+    if args.comprobar_red:
+        return comprobar_red()
     if not (1 <= args.paginas <= 5 and 1 <= args.pasos <= 1000 and 1 <= args.max_mb <= 100):
         ap.error("Límites: 1-5 páginas, 1-1000 pasos, 1-100 MB")
     if args.dias is not None and not 1 <= args.dias <= 30:
@@ -233,6 +280,11 @@ def main():
         try:
             ciclo(args.paginas, args.pasos, args.entrenar,
                   args.max_mb * 1024 * 1024, args.perfil, estado_ckpt)
+        except (HTTPError, URLError, ConnectionError, TimeoutError, ssl.SSLError) as exc:
+            print("No se pudo actualizar desde Wikipedia: " + explicar_error_red(exc), file=sys.stderr)
+            print("Los datos y checkpoints locales no se modifican por este fallo de red.", file=sys.stderr)
+            if not args.cada_dia:
+                raise SystemExit(1)
         except Exception as exc:
             print(f"Error de actualización: {exc}", file=sys.stderr)
             if not args.cada_dia:
@@ -244,4 +296,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
