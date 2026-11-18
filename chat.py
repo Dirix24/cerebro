@@ -96,7 +96,7 @@ class Conversacion:
             from pathlib import Path
             from core.repaso_espaciado import cargar, calificar
             from core.autoevaluacion import evaluar_respuesta
-            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ruta = Path(config.CEREBRO_HOME) / "data" / "repaso_espaciado.json"
             ficha = next((t for t in cargar(ruta)
                           if t["pregunta"] == self.pregunta_repaso), None)
             if ficha is None:
@@ -223,7 +223,7 @@ class Conversacion:
         if cmd in ("/registrar-error", "/errores-pendientes"):
             from pathlib import Path
             from core.errores_aprendizaje import registrar, pendientes
-            ruta = Path(config._RAIZ) / "data" / "errores_aprendizaje.jsonl"
+            ruta = Path(config.CEREBRO_HOME) / "data" / "errores_aprendizaje.jsonl"
             if cmd == "/errores-pendientes":
                 errores = pendientes(ruta)
                 return ("\n".join(f"{e['pregunta']} => {e['correccion']}" for e in errores)
@@ -239,7 +239,7 @@ class Conversacion:
         if cmd == "/progreso":
             from pathlib import Path
             from core.medicion_progreso import medir
-            raiz = Path(config._RAIZ) / "data"
+            raiz = Path(config.CEREBRO_HOME) / "data"
             estado_rng = self.rng.bit_generator.state
             turnos = list(self.memoria.short_term_context)
             try:
@@ -258,7 +258,7 @@ class Conversacion:
         if cmd == "/autoevaluar":
             from pathlib import Path
             from core.autoevaluacion import ejecutar
-            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ruta = Path(config.CEREBRO_HOME) / "data" / "repaso_espaciado.json"
             estado_rng = self.rng.bit_generator.state
             turnos = list(self.memoria.short_term_context)
             try:
@@ -276,7 +276,7 @@ class Conversacion:
         if cmd in ("/aprender-ficha", "/repasar", "/calificar"):
             from pathlib import Path
             from core.repaso_espaciado import anadir, pendientes, calificar
-            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ruta = Path(config.CEREBRO_HOME) / "data" / "repaso_espaciado.json"
             try:
                 if cmd == "/aprender-ficha":
                     if " || " not in resto:
@@ -348,7 +348,7 @@ class Conversacion:
                 return "Uso: /biblioteca texto", False
             from pathlib import Path
             from core.biblioteca_local import buscar_en_biblioteca
-            raiz = Path(__file__).resolve().parent / "data"
+            raiz = Path(config.CEREBRO_HOME) / "data"
             resultados = buscar_en_biblioteca(resto, raiz)
             return ("\n\n".join(f"[{r['archivo']}] {r['fragmento']}" for r in resultados)
                     if resultados else "No encontré documentos relacionados."), False
@@ -404,7 +404,7 @@ class Conversacion:
         if cmd in ("/aprobar-ejemplo", "/ejemplos-aprobados"):
             from pathlib import Path
             from core.ejemplos_aprobados import aprobar, listar
-            ruta = Path(__file__).resolve().parent / "data" / "ejemplos_aprobados.jsonl"
+            ruta = Path(config.CEREBRO_HOME) / "data" / "ejemplos_aprobados.jsonl"
             if cmd == "/ejemplos-aprobados":
                 ejemplos = listar(ruta)
                 return ("\n".join(f"P: {e['pregunta']}\nR: {e['respuesta']}"
@@ -421,7 +421,7 @@ class Conversacion:
         if cmd == "/historial":
             from pathlib import Path
             from core.historial_local import consultar
-            ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            ruta = Path(config.CEREBRO_HOME) / "data" / "historial_cerebro.jsonl"
             turnos = consultar(ruta, limite=20)
             return ("\n".join(f"{t['rol']}: {t['texto']}" for t in turnos)
                     if turnos else "No hay turnos guardados."), False
@@ -432,7 +432,7 @@ class Conversacion:
             if len(partes_turno) != 2:
                 return "Uso: /guardar-turno usuario|cerebro texto", False
             try:
-                ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+                ruta = Path(config.CEREBRO_HOME) / "data" / "historial_cerebro.jsonl"
                 guardar(ruta, partes_turno[0], partes_turno[1])
                 return "Turno guardado localmente.", False
             except (ValueError, OSError) as exc:
