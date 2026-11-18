@@ -6,8 +6,6 @@ def disponibles():
     return [
         {"nombre": "neuronal_numpy", "tipo": "generacion", "integrado": True,
          "disponible": importlib.util.find_spec("numpy") is not None},
-        {"nombre": "neuronal_gguf_llamacpp", "tipo": "generacion_opcional",
-         "integrado": True, "disponible": importlib.util.find_spec("llama_cpp") is not None},
         {"nombre": "neuronal_torch_clasico", "tipo": "generacion_opcional",
          "integrado": True, "disponible": importlib.util.find_spec("torch") is not None},
         {"nombre": "neuronal_torch_avanzado", "tipo": "generacion_opcional",
