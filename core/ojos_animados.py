@@ -77,6 +77,19 @@ def fotograma(expresion="atento", instante=1.0):
     izquierdo, derecho, etiqueta = EXPRESIONES[expresion]
     if expresion not in ("feliz", "dormido", "descansando", "consolidando", "error") and instante % 4.2 < .14:
         izquierdo = derecho = "—"
+    # Microgestos suaves de ojos robóticos: destello, guiño y exploración.
+    # Los intervalos son breves; sin boca, sensores ni procesamiento externo.
+    fase = instante % 8.0
+    if expresion == "saludando" and 1.2 <= fase < 1.45:
+        izquierdo = "—"  # Guiño corto.
+    elif expresion == "aprendiendo" and 2.0 <= fase < 2.25:
+        izquierdo = derecho = "✧"  # Destello del aprendizaje.
+    elif expresion == "analizando" and int(instante * 2) % 2:
+        izquierdo, derecho = derecho, izquierdo  # Mirada de análisis.
+    elif expresion == "investigando" and int(instante * 1.5) % 2:
+        izquierdo, derecho = "◉", "◎"
+    elif expresion == "esperando" and 3.0 <= fase < 3.25:
+        izquierdo = derecho = "—"  # Parpadeo en reposo.
     # Movimiento de mirada, sin cámara: solo animación periódica.
     if expresion in ("curioso", "observando", "saludando") and int(instante * 1.3) % 2:
         izquierdo, derecho = derecho, izquierdo
