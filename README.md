@@ -148,6 +148,67 @@ python3 cerebro.py motores
 
 GitHub Actions ejecuta comprobaciones de sintaxis y pruebas automatizadas en la rama de integración. **Una ejecución anterior** de la suite principal terminó con **68 pruebas superadas y 2 omitidas**, pero ese resultado **no valida los cambios posteriores** ni sustituye pruebas en MX Linux. El entrenamiento PyTorch, la instalación, el primer arranque y la desinstalación real requieren verificación separada. Consulta la pestaña **Actions** del repositorio para el resultado más reciente.
 
+
+## 🧠 Cerebro V2: entrenamiento, motores y SSD portátil
+
+Estos comandos están implementados en la rama de integración `fix/nucleo-validacion-2026`. Los tamaños mayores son **arquitecturas disponibles, no modelos ya entrenados**. La ruta de entrenamiento NumPy utiliza CPU; la presencia de una GPU no activa aceleración automáticamente.
+
+### Entrenamiento del núcleo NumPy
+
+```bash
+python3 train.py --listar-tamanos
+python3 train.py --detectar-equipo
+python3 train.py --tamano mini --plan-entrenamiento
+python3 train.py --tamano auto --pasos 1000
+python3 train.py --tamano mini --pasos 300 --batch 2 --semilla 1234
+python3 train.py --resume --pasos 300
+python3 -m pytest -q tests
+```
+
+- `--tamano` acepta `mini`, `normal`, `grande`, `potente`, `extra`, `maximo`, `experimental` y `auto`. El tamaño `auto` es una estimación basada en RAM.
+- `--plan-entrenamiento` calcula una **estimación** del presupuesto de memoria; no entrena. Si se elige un tamaño que supera el presupuesto, el entrenamiento exige una aceptación explícita con `--permitir-riesgo-memoria`. No se recomienda usar esa opción sin verificar la RAM.
+- `--resume` conserva la arquitectura del checkpoint y continúa desde pesos anteriores; **no** agranda automáticamente sus capas.
+- El entrenamiento separa documentos de validación y guarda `checkpoints/last.npz`; solo reemplaza `best.npz` si la validación lo justifica, salvo que se use `--forzar`. La métrica de pérdida no demuestra inteligencia general.
+- No hay un número universal de pasos que signifique «entrenamiento completo»: depende de corpus, hardware, pérdida de validación y calidad de respuestas.
+
+**Entrenamiento en GitHub Actions:** el flujo [Cerebro - entrenamiento local de prueba](.github/workflows/entrenamiento-cerebro.yml) conserva las pruebas PyTorch de dos pasos y añade un trabajo NumPy **manual** (30, 100 o 300 pasos, perfil mini) que guarda los checkpoints como artefactos descargables durante 14 días. Desde **Actions**, selecciona el flujo, **Run workflow**, la rama de integración y los pasos deseados. Los pesos del runner **no se instalan automáticamente en el SSD**; hay que descargarlos, revisarlos y copiarlos al directorio de checkpoints. No se promete que el entrenamiento termine dentro del límite de tiempo del runner.
+
+### Preparar y usar el SSD externo
+
+Configura `CEREBRO_HOME` **antes de iniciar Python**, apuntando a la unidad externa realmente montada:
+
+```bash
+export CEREBRO_HOME="/ruta/real/del/SSD/Cerebro"
+python3 train.py --preparar-ssd
+python3 train.py --detectar-equipo
+python3 main.py --huesped estado
+python3 main.py --huesped vincular --confirmar
+python3 main.py --huesped desvincular
+```
+
+En Windows, define `CEREBRO_HOME` en el entorno de PowerShell antes de ejecutar los comandos. **Comprueba la unidad montada**: crear el marcador de SSD no demuestra que la ruta pertenezca a un disco externo. La vinculación de huésped compara datos generales del equipo, no proporciona autenticación criptográfica.
+
+### Comandos V2 dentro del chat
+
+Inicia `python3 main.py` cuando tengas un checkpoint NumPy compatible. Los comandos siguientes requieren el chat abierto:
+
+| Comando | Función y límites |
+|---|---|
+| `/motores` | Inventario de capacidades y dependencias; no activa cámara, voz ni Internet |
+| `/motor-especializado Quiero programar Python` | Propone motor para la petición, sin ejecutarla |
+| `/motor-para ¿Qué es Marte?` | Explica el enrutamiento básico |
+| `/criterio /crear-proyecto demo cli` | Revisa permisos y riesgos sin actuar |
+| `/materias` | Lista materias disponibles |
+| `/estudiar ciberseguridad` | Muestra guía educativa defensiva |
+| `/crear-proyecto demo cli` | Crea un proyecto local en el workspace con permiso WRITE |
+| `/crear-proyecto utilidades biblioteca` | Crea una biblioteca Python local |
+| `/laboratorio demo/main.py` | Inspecciona un archivo del workspace, sin ejecutarlo; requiere READ |
+| `/crear-pdf informe Texto del informe` | Genera PDF sencillo; requiere WRITE y `reportlab` |
+| `/analizar-codigo def f(): return 1` | Análisis estático de código |
+| `/progreso` | Evalúa fichas aprobadas con una métrica limitada |
+
+Para PDF instala `python3 -m pip install reportlab` en el entorno de Cerebro. Los documentos y proyectos se escriben en el workspace configurado. La inspección del laboratorio es **estática**, no equivale a un antivirus ni a una auditoría completa. La cámara, el reconocimiento visual, el micrófono y la conversación hablada son **integraciones futuras** y no se activan por este registro.
+
 ## 🔒 Privacidad, recursos y seguridad
 
 - Los datos personales, el corpus y los checkpoints permanecen localmente salvo las peticiones explícitas a Wikipedia.
