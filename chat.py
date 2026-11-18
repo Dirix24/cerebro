@@ -137,7 +137,7 @@ class Conversacion:
 
         # La visualización se puede solicitar hablando, sin memorizar comandos.
         import re as _viz
-        if _viz.search(r"\\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\\b",
+        if _viz.search(r"\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\b",
                        entrada.lower()):
             return self._comando("/estacion-neuronal")
 
@@ -159,7 +159,7 @@ class Conversacion:
 
         # La identidad pública del creador se consulta sin acceder a memorias privadas.
         import re as _re
-        if _re.search(r"\\b(quien te creo|quien fue tu creador|quien es tu creador)\\b",
+        if _re.search(r"\b(quien te creo|quien fue tu creador|quien es tu creador)\b",
                       entrada.lower().replace("é", "e")):
             from core.legado_identidad import leer_origen
             origen = leer_origen()
