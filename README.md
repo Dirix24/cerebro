@@ -330,6 +330,16 @@ python3 -m core.estacion_terminal
 
 Utiliza la biblioteca estándar `curses` (habitualmente incluida en Linux/macOS; en Windows requiere `pip install windows-curses` si Python no incluye `curses`). Necesita una terminal interactiva de al menos 52×15. Los recuerdos privados pueden verse en pantalla: úsala en un entorno de confianza.
 
+**Diagnóstico y recuperación sin iniciar el modelo:**
+
+```bash
+python3 main.py --diagnostico-memoria
+python3 main.py --archivados
+python3 main.py --restaurar-recuerdo "CLAVE" --confirmar
+```
+
+El diagnóstico muestra cantidades y tamaños, sin valores privados. El listado muestra **claves** de recuerdos archivados, que pueden ser sensibles. Restaurar exige confirmación explícita, no sobrescribe una clave existente y requiere que el respaldo siga disponible. La recuperación examina los últimos 2 MB del archivo de respaldo; no es un sistema de copia de seguridad completo.
+
 ### Consolidación segura de recuerdos (sin perder lo aprendido)
 
 Cuando la memoria de largo plazo supera **500 entradas**, Cerebro busca únicamente duplicados equivalentes: la misma clave normalizada, el mismo valor y la misma categoría. Conserva la versión con mayor importancia y guarda las variantes redundantes en `memory_store.json.duplicados.jsonl` junto al archivo de memoria, **antes** de retirarlas del índice activo. No descarta conocimientos únicos ni toca checkpoints, pesos del modelo o datos de entrenamiento.
