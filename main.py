@@ -38,11 +38,27 @@ def main():
     ap.add_argument("--semilla", type=int, default=None)
     ap.add_argument("--ckpt", default=None)
     ap.add_argument("--debug", action="store_true")
+    ap.add_argument("--huesped", choices=["estado", "vincular", "desvincular"], default=None,
+                    help="modo simbiótico: consultar o gestionar el equipo autorizado")
+    ap.add_argument("--confirmar", action="store_true", help="autorizar expresamente la vinculación del equipo")
     ap.add_argument("--guardar-historial", action="store_true", help="guardar turnos localmente")
     args = ap.parse_args()
 
     from core.entorno_portatil import verificar_almacenamiento
     verificar_almacenamiento()
+    if args.huesped:
+        import json
+        from core.modo_simbiotico import estado_huesped, vincular_huesped, desvincular_huesped
+        if args.huesped == "vincular":
+            if not args.confirmar:
+                ap.error("Para vincular este equipo añade --confirmar.")
+            resultado = vincular_huesped(confirmado=True)
+        elif args.huesped == "desvincular":
+            resultado = {"desvinculado": desvincular_huesped()}
+        else:
+            resultado = estado_huesped()
+        print(json.dumps(resultado, ensure_ascii=False, indent=2))
+        return
     modelo, meta, ruta = cargar_modelo(args.ckpt)
     if modelo is None:
         sys.exit("[!] No hay ningún modelo entrenado.\n"
