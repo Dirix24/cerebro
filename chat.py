@@ -23,6 +23,7 @@ AYUDA = """Comandos:
   /recordar-tarea FECHA_ISO texto  guarda recordatorio con zona horaria
   /recordatorios            muestra tareas guardadas y vencidas
   /github-estado dueño/repo consulta repositorio público, solo lectura
+  /github-errores dueño/repo lista incidencias públicas abiertas
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
@@ -251,6 +252,15 @@ class Conversacion:
                                   ensure_ascii=False, indent=2), False
             except (OSError, ValueError) as exc:
                 return f"Recordatorios: {exc}", False
+        if cmd == "/github-errores":
+            import json
+            from core.github_local import incidencias_publicas
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps(incidencias_publicas(resto), ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, KeyError) as exc:
+                return f"GitHub: {exc}", False
         if cmd == "/github-estado":
             import json
             from core.github_local import estado_publico
