@@ -34,6 +34,7 @@ def cargar_modelo(ruta=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Cerebro - chat local")
+    ap.add_argument("--estacion-terminal", action="store_true", help="abrir estación neuronal en terminal sin modelo")
     ap.add_argument("--una-vez", default=None, metavar="MENSAJE")
     ap.add_argument("--semilla", type=int, default=None)
     ap.add_argument("--ckpt", default=None)
@@ -43,6 +44,11 @@ def main():
     ap.add_argument("--confirmar", action="store_true", help="autorizar expresamente la vinculación del equipo")
     ap.add_argument("--guardar-historial", action="store_true", help="guardar turnos localmente")
     args = ap.parse_args()
+
+    if args.estacion_terminal:
+        from core.estacion_terminal import abrir
+        abrir()
+        return
 
     from core.entorno_portatil import verificar_almacenamiento
     verificar_almacenamiento()
@@ -92,6 +98,20 @@ def main():
         except (KeyboardInterrupt, EOFError):
             print("\nCerebro: Saliendo...")
             break
+        import unicodedata
+        normal = "".join(c for c in unicodedata.normalize("NFD", entrada.lower())
+                         if unicodedata.category(c) != "Mn")
+        if (entrada.strip().lower() == "/estacion-terminal" or
+                any(frase in normal for frase in ("abre la estacion neuronal",
+                                                  "muestra la estacion neuronal",
+                                                  "quiero ver tus neuronas"))):
+            try:
+                from core.estacion_terminal import abrir
+                abrir(memoria_fn=lambda: conv.memoria.long_term_memory)
+                print("Cerebro: Has vuelto al chat.")
+            except (RuntimeError, OSError) as exc:
+                print(f"Cerebro: No pude abrir la estación: {exc}")
+            continue
         respuesta, salir = conv.procesar(entrada)
         if respuesta:
             print(f"Cerebro: {respuesta}")
