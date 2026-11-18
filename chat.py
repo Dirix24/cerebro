@@ -167,11 +167,15 @@ class Conversacion:
             if len(ids) <= B - max_nuevos or not turnos:
                 break
             turnos = turnos[2:] if len(turnos) >= 2 else []   # descarta el turno más viejo
-        return ids[-(B - max_nuevos):]
+        # Preserva al menos el prefijo de generación y evita slicing [-0:]
+        # (que devolvería el prompt entero y desbordaría el contexto).
+        espacio = max(1, B - max_nuevos)
+        return ids[-espacio:]
 
     def responder_modelo(self, mensaje):
         g = self.gen
-        max_nuevos = max(8, min(g["max_nuevos"], self.modelo.cfg.block_size - 40))
+        # Nunca solicitar más tokens que los que caben en la ventana.
+        max_nuevos = max(1, min(g["max_nuevos"], self.modelo.cfg.block_size - 1))
         ids = self._armar_prompt_ids(mensaje, max_nuevos)
         nuevos, _ = self.modelo.generar_ids(
             ids, max_nuevos=max_nuevos, temperatura=g["temperatura"], top_k=g["top_k"],
