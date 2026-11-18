@@ -38,3 +38,25 @@ puede variar al cambiar la duración prevista.
 - Presupuesto automático de RAM y tiempo antes de elegir perfil.
 - Evaluación independiente de generalización, con control de paráfrasis.
 - Pruebas integrales de checkpoint con horizonte fijo y dropout.
+
+## Perfiles NumPy de mayor capacidad
+
+Se han añadido dos escalones opcionales, sin cambiar el perfil predeterminado:
+
+| Perfil | Parámetros teóricos con vocabulario objetivo | Capas | Dimensión | Contexto |
+| --- | ---: | ---: | ---: | ---: |
+| `v2_6m` | 6.910.464 | 8 | 256 | 256 |
+| `v2_16m` | 15.920.896 | 8 | 384 | 384 |
+
+```bash
+CEREBRO_PERFIL=v2_6m python train.py
+# Para equipos con suficiente memoria y paciencia:
+CEREBRO_PERFIL=v2_16m python train.py
+```
+
+Las cifras son teóricas para vocabularios completos; el tokenizador puede
+aprender menos tokens. El entrenamiento AdamW reserva momentos adicionales
+para los parámetros y el contexto consume memoria cuadrática por cabeza.
+Estos perfiles **no están preentrenados** y no aumentan automáticamente la
+calidad: requieren datos y evaluación. Los checkpoints pequeños no pueden
+cargarse directamente como arquitectura mayor sin migración de pesos.
