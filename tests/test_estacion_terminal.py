@@ -28,3 +28,23 @@ def test_estacion_requiere_tty(monkeypatch):
 def test_paleta_todos_los_estados():
     from core.actividad_neuronal import ESTADOS
     assert ESTADOS == set(estacion_terminal.PALETA)
+
+
+def test_caracteres_de_control_no_llegan_a_curses():
+    class Pantalla:
+        def __init__(self):
+            self.texto = ""
+        def getmaxyx(self):
+            return (25, 80)
+        def addnstr(self, y, x, texto, n, estilo):
+            self.texto = texto
+    pantalla = Pantalla()
+    estacion_terminal._escribir(pantalla, 1, 1, "hola\\x1b[31m\\nsecreto")
+    assert "\\x1b" not in pantalla.texto
+    assert "\\n" not in pantalla.texto
+
+
+def test_estacion_sin_archivo_de_memoria(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "ausente.json"))
+    assert estacion_terminal.cargar_recuerdos() == {}
