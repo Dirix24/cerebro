@@ -27,7 +27,7 @@ AYUDA = """Comandos:
   /registrar-error pregunta || respuesta  registra corrección para revisión
   /errores-pendientes       consulta correcciones pendientes
   /motor-para pregunta      explica qué motor usaría Cerebro
-  /calificar bien|mal       registra el resultado del repaso
+  /calificar bien|mal       califica manualmente un repaso (opcional)
   /estado                   información del modelo y de la memoria
   /memoria                  muestra lo que hay en la memoria de largo plazo
   /recordar clave = valor   guarda un dato
@@ -89,6 +89,25 @@ class Conversacion:
             return "", False
         if entrada.startswith("/"):
             return self._comando(entrada)
+
+        # Durante un repaso, la respuesta se comprueba contra la ficha aprobada.
+        # No se envía al modelo generativo ni al detector de intenciones.
+        if self.pregunta_repaso is not None:
+            from pathlib import Path
+            from core.repaso_espaciado import cargar, calificar
+            from core.autoevaluacion import evaluar_respuesta
+            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ficha = next((t for t in cargar(ruta)
+                          if t["pregunta"] == self.pregunta_repaso), None)
+            if ficha is None:
+                self.pregunta_repaso = None
+                return "La ficha del repaso ya no existe.", False
+            correcto = evaluar_respuesta(entrada, ficha["respuesta"])
+            tarjeta = calificar(ruta, self.pregunta_repaso, correcto)
+            self.pregunta_repaso = None
+            resultado = "Correcto" if correcto else "Incorrecto"
+            return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
+                    f"Próximo repaso: {tarjeta['fecha']}."), False
 
         plan = detectar_intencion(entrada)
         if plan:
@@ -267,7 +286,9 @@ class Conversacion:
                         self.pregunta_repaso = None
                         return "No hay preguntas pendientes hoy.", False
                     self.pregunta_repaso = tarjetas[0]["pregunta"]
-                    return "Pregunta: " + self.pregunta_repaso + "\nDespués escribe /calificar bien o /calificar mal.", False
+                    return ("Pregunta: " + self.pregunta_repaso +
+                            "\nEscribe tu respuesta para comprobarla automáticamente, "
+                            "o /calificar bien|mal para calificar manualmente."), False
                 if resto not in ("bien", "mal") or not self.pregunta_repaso:
                     return "Primero usa /repasar y después /calificar bien|mal.", False
                 tarjeta = calificar(ruta, self.pregunta_repaso, resto == "bien")
