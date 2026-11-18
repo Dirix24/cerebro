@@ -109,6 +109,69 @@ def obtener_paginas(cantidad):
     return salida
 
 
+
+def obtener_tema(titulo):
+    """Consulta una página enciclopédica por título; nunca inventa el contenido."""
+    titulo = " ".join(titulo.split())
+    if not 2 <= len(titulo) <= 120 or any(ord(ch) < 32 for ch in titulo):
+        raise ValueError("El tema debe contener entre 2 y 120 caracteres válidos.")
+    params = {"action": "query", "titles": titulo, "prop": "extracts|info",
+              "explaintext": "1", "exintro": "1", "inprop": "url",
+              "redirects": "1", "format": "json", "formatversion": "2"}
+    req = Request(API + "?" + urlencode(params),
+                  headers={"User-Agent": "CerebroLocal/0.2 (uso personal; contacto: GitHub Dirix24/cerebro)",
+                           "Accept": "application/json"})
+    with urlopen(req, timeout=25) as respuesta:
+        datos = json.load(respuesta)
+    for pagina in datos.get("query", {}).get("pages", []):
+        texto = " ".join(pagina.get("extract", "").split())
+        if (isinstance(pagina.get("pageid"), int) and
+                pagina.get("fullurl", "").startswith("https://es.wikipedia.org/") and
+                100 <= len(texto) <= 12000):
+            return {"id": pagina["pageid"], "titulo": pagina["title"],
+                    "url": pagina["fullurl"], "texto": texto}
+    return None
+
+
+def aprender_tema(titulo, max_bytes):
+    """Guarda una ficha con procedencia, corpus e índice sin tocar checkpoints."""
+    pagina = obtener_tema(titulo)
+    if pagina is None:
+        print("Wikipedia no devolvió un artículo adecuado para ese tema.")
+        return 1
+    CARPETA.mkdir(parents=True, exist_ok=True)
+    vistos = set()
+    if FUENTES.is_file():
+        for linea in FUENTES.read_text(encoding="utf-8").splitlines():
+            try:
+                item = json.loads(linea)
+                if isinstance(item.get("id"), int):
+                    vistos.add(item["id"])
+            except (ValueError, TypeError, AttributeError):
+                continue
+    if pagina["id"] in vistos:
+        print(f"El artículo «{pagina['titulo']}» ya está guardado.")
+        return 0
+    bloque = documento(pagina)
+    anterior = CORPUS.stat().st_size if CORPUS.exists() else 0
+    if anterior + len(bloque.encode("utf-8")) > max_bytes:
+        print("Límite de almacenamiento alcanzado; no se guarda el artículo.")
+        return 1
+    # Guardar primero la ficha consultable y después añadir el texto al corpus.
+    from core.conocimiento import guardar
+    guardar(f"¿Qué es {pagina['titulo']}?", pagina["texto"], pagina["url"])
+    with CORPUS.open("a", encoding="utf-8") as archivo:
+        archivo.write(bloque)
+    with FUENTES.open("a", encoding="utf-8") as archivo:
+        archivo.write(json.dumps({k: pagina[k] for k in ("id", "titulo", "url")},
+                                 ensure_ascii=False) + "\n")
+    from core.local_search import indexar
+    total = indexar()
+    print(f"Aprendido: {pagina['titulo']} | Fuente: {pagina['url']}")
+    print(f"Índice local actualizado: {total} documentos. No se modificaron los modelos.")
+    return 0
+
+
 def documento(pagina):
     # El motor original solo calcula pérdida sobre líneas 'cerebro:'.
     # Transformar artículos a pares evita un entrenamiento sin objetivos.
@@ -246,6 +309,8 @@ def main():
     signal.signal(signal.SIGTERM, detener_entrenamiento)
     signal.signal(signal.SIGINT, detener_entrenamiento)
     ap = argparse.ArgumentParser(description="Recopilación y entrenamiento local diario")
+    ap.add_argument("--tema", metavar="TITULO",
+                    help="aprender un artículo concreto de Wikipedia sin entrenar el modelo")
     ap.add_argument("--comprobar-red", action="store_true",
                     help="comprobar acceso HTTPS a la API de Wikipedia sin descargar artículos")
     ap.add_argument("--dias", type=int, default=None,
@@ -261,6 +326,12 @@ def main():
     args = ap.parse_args()
     if args.comprobar_red:
         return comprobar_red()
+    if args.tema is not None:
+        try:
+            return aprender_tema(args.tema, args.max_mb * 1024 * 1024)
+        except (HTTPError, URLError, ConnectionError, TimeoutError, ssl.SSLError) as exc:
+            print("No se pudo aprender el tema: " + explicar_error_red(exc), file=sys.stderr)
+            return 1
     if not (1 <= args.paginas <= 5 and 1 <= args.pasos <= 1000 and 1 <= args.max_mb <= 100):
         ap.error("Límites: 1-5 páginas, 1-1000 pasos, 1-100 MB")
     if args.dias is not None and not 1 <= args.dias <= 30:
