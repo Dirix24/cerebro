@@ -4,7 +4,7 @@
 python3 main.py --ojos
 ```
 
-Rostro animado dentro de la terminal, sin navegador y sin modelo entrenado. Parpadea automáticamente y ofrece expresiones **normal, feliz, curioso, pensando, sorprendido y dormido**. Usa las flechas izquierda/derecha o teclas 1-6 para cambiar; `q` para salir. Requiere terminal interactiva con curses (en Windows puede requerir `pip install windows-curses`).
+**Solo ojos, sin boca**: dos pantallas oculares en la terminal, sin navegador ni modelo entrenado. Incluye 18 expresiones visuales (atento, feliz, curioso, pensando, sorprendido, dormido, analizando, aprendiendo, investigando, asociando, observando, consolidando, error, concentrado, dudando, esperando, saludando y descansando). Parpadea y alterna la mirada. Usa flechas izquierda/derecha para recorrer expresiones, 1-9 para las primeras nueve, `a` para alternar entre modo manual y automático, `q` para salir. El modo automático está **apagado al inicio** y refleja únicamente eventos recientes de la telemetría local; no interpreta sentimientos, no lee mensajes privados ni usa cámara. Requiere terminal interactiva con curses (en Windows puede requerir `pip install windows-curses`).
 
 **Privacidad:** los ojos son solo una animación. No abren ni solicitan acceso a ninguna cámara, micrófono o red. Si en el futuro se conecta la visión a las expresiones, deberá ser opcional y requerir autorización explícita; la herramienta existente `camara_local.py --confirmar` sigue siendo una captura independiente y puntual.
 
