@@ -16,8 +16,10 @@ def medir(ruta_fichas, responder, ruta_historial, limite=20):
     resultados = ejecutar(ruta_fichas, responder, limite=limite)
     if not resultados:
         return {"evaluadas": 0, "aciertos": 0, "precision": None, "variacion": None}
-    preguntas = [t["pregunta"] for t in cargar(ruta_fichas)[:max(0, min(20, limite))]]
-    conjunto = hashlib.sha256(json.dumps(preguntas, ensure_ascii=False).encode("utf-8")).hexdigest()
+    # El conjunto cambia también si se corrige una respuesta aprobada.
+    fichas = cargar(ruta_fichas)[:max(0, min(20, limite))]
+    pares = [(t["pregunta"], t["respuesta"]) for t in fichas]
+    conjunto = hashlib.sha256(json.dumps(pares, ensure_ascii=False).encode("utf-8")).hexdigest()
     ruta = Path(ruta_historial)
     if ruta.is_symlink():
         raise ValueError("No se admiten enlaces simbólicos")
