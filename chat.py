@@ -213,13 +213,21 @@ class Conversacion:
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
         # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
-        from core.respuestas_con_fuentes import concepto_definicion, responder_definicion
+        from core.respuestas_con_fuentes import (
+            concepto_definicion, responder_definicion, respuesta_clara,
+            consultar_internet_si_falta,
+        )
         if concepto_definicion(entrada):
             _registrar_actividad("investigando", "consulta")
             dato = responder_definicion(entrada)
-            respuesta = (dato[0] + "\nFuente: " + dato[1] if dato else
-                         "No encontré una definición en mis fuentes locales. "
-                         "Puedes añadir una ficha con /aprender-ficha.")
+            if not dato:
+                # Solo se consulta el tema público de una definición, nunca
+                # recuerdos, archivos locales ni el historial del usuario.
+                dato = consultar_internet_si_falta(entrada)
+            respuesta = (respuesta_clara(dato[0]) + "\nFuente: " + dato[1] if dato else
+                         "No encontré una definición fiable en mis fuentes locales "
+                         "ni pude obtenerla de Wikipedia. Puedes añadir una ficha "
+                         "con /aprender-ficha.")
             self.memoria.agregar_contexto("usuario", entrada)
             self.memoria.agregar_contexto("ia", respuesta)
             _registrar_actividad("consolidado", "respuesta")
