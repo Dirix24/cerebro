@@ -38,6 +38,7 @@ AYUDA = """Comandos:
   /biblioteca texto         busca en documentos locales
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
+  /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
   /experimentos             muestra metricas registradas
   /resumir texto            resumen extractivo local
   /palabras-clave texto     palabras frecuentes del texto
@@ -214,6 +215,23 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/crear-proyecto":
+            from core.proyectos_locales import crear_proyecto
+            from core.entorno_portatil import verificar_almacenamiento
+            partes_proyecto = resto.split()
+            if not 1 <= len(partes_proyecto) <= 2:
+                return "Uso: /crear-proyecto nombre [cli|biblioteca]", False
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "No puedo crear proyectos: falta permiso WRITE.", False
+            try:
+                verificar_almacenamiento()
+                creado = crear_proyecto(partes_proyecto[0],
+                                       partes_proyecto[1] if len(partes_proyecto) == 2 else "cli")
+                return ("Proyecto creado: " + creado["ruta"] +
+                        "\\nArchivos: " + ", ".join(creado["archivos"]) +
+                        "\\nNo se ha ejecutado código."), False
+            except (ValueError, OSError, RuntimeError) as exc:
+                return f"No pude crear el proyecto: {exc}", False
         if cmd == "/motor-para":
             from agent.orquestador import explicar_seleccion
             if not resto:
