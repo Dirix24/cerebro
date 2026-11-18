@@ -159,7 +159,7 @@ class Conversacion:
 
         # La identidad pública del creador se consulta sin acceder a memorias privadas.
         import re as _re
-        if _re.search(r"\b(quien te creo|quien fue tu creador|quien es tu creador)\b",
+        if _re.search(r"\b(quien\s*te\s*creo|quien fue tu creador|quien es tu creador)\b",
                       entrada.lower().replace("é", "e")):
             from core.legado_identidad import leer_origen
             origen = leer_origen()
@@ -211,6 +211,19 @@ class Conversacion:
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
             _registrar_actividad("aprendido", "memoria")
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
+
+        # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
+        from core.respuestas_con_fuentes import concepto_definicion, responder_definicion
+        if concepto_definicion(entrada):
+            _registrar_actividad("investigando", "consulta")
+            dato = responder_definicion(entrada)
+            respuesta = (dato[0] + "\\nFuente: " + dato[1] if dato else
+                         "No encontré una definición en mis fuentes locales. "
+                         "Puedes añadir una ficha con /aprender-ficha.")
+            self.memoria.agregar_contexto("usuario", entrada)
+            self.memoria.agregar_contexto("ia", respuesta)
+            _registrar_actividad("consolidado", "respuesta")
+            return respuesta, False
 
         # Orquestador: usar fuentes locales verificables antes de generar texto.
         from agent.orquestador import seleccionar, extraer_consulta_local
