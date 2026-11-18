@@ -6,6 +6,7 @@ No muestra las neuronas ni los pesos internos del modelo.
 import curses
 import json
 import math
+import re
 import time
 from pathlib import Path
 
@@ -25,9 +26,9 @@ SIMBOLOS = {"analizando": "?", "aprendido": "o", "investigando": "*",
 
 def cargar_recuerdos():
     ruta = Path(config.MEMORY_FILE)
-    if not ruta.is_file() or ruta.stat().st_size > 5_000_000:
-        return {}
     try:
+        if not ruta.is_file() or ruta.stat().st_size > 5_000_000:
+            return {}
         memoria = json.loads(ruta.read_text(encoding="utf-8")).get("long_term", {})
         return memoria if isinstance(memoria, dict) else {}
     except (OSError, ValueError):
@@ -38,7 +39,8 @@ def _escribir(pantalla, y, x, texto, estilo=0):
     alto, ancho = pantalla.getmaxyx()
     if 0 <= y < alto and 0 <= x < ancho - 1:
         try:
-            pantalla.addnstr(y, x, str(texto), ancho - x - 1, estilo)
+            seguro = re.sub(r"[\\x00-\\x1f\\x7f-\\x9f]", " ", str(texto)).replace("\\n", " ")
+            pantalla.addnstr(y, x, seguro, ancho - x - 1, estilo)
         except curses.error:
             pass
 
@@ -52,11 +54,14 @@ def _linea(pantalla, x1, y1, x2, y2, estilo=0):
 
 
 def _pantalla(pantalla, memoria_fn, eventos_fn):
-    curses.curs_set(0)
+    try:
+        curses.curs_set(0)
+    except curses.error:
+        pass
     pantalla.nodelay(True)
     pantalla.timeout(120)
     estilos = {estado: curses.A_BOLD for estado in PALETA}
-    if curses.has_colors():
+    if curses.has_colors() and getattr(curses, "COLOR_PAIRS", 0) >= len(PALETA) + 1:
         curses.start_color()
         try:
             curses.use_default_colors()
@@ -64,8 +69,11 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
         except curses.error:
             fondo = curses.COLOR_BLACK
         for i, estado in enumerate(PALETA, 1):
-            curses.init_pair(i, PALETA[estado], fondo)
-            estilos[estado] = curses.color_pair(i) | curses.A_BOLD
+            try:
+                curses.init_pair(i, PALETA[estado], fondo)
+                estilos[estado] = curses.color_pair(i) | curses.A_BOLD
+            except curses.error:
+                pass
     seleccionado, desplazamiento, zoom, congelado, tick = 0, 0, 1.0, False, 0
     memoria, eventos = {}, []
     nodos, enlaces = [], []
@@ -73,9 +81,12 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
     while True:
         ahora = time.monotonic()
         if ahora - ultima > .7:
-            memoria = memoria_fn()
-            nodos, enlaces = grafo(memoria, limite=120)
-            eventos = eventos_fn()
+            try:
+                memoria = memoria_fn()
+                nodos, enlaces = grafo(memoria, limite=120)
+                eventos = eventos_fn()
+            except (OSError, ValueError, TypeError, KeyError):
+                nodos, enlaces, eventos = [], [], []
             ultima = ahora
             if nodos:
                 seleccionado %= len(nodos)
@@ -88,7 +99,8 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
             _escribir(pantalla, 1, 2, "Flechas: explorar  +/-: zoom  ESPACIO: pausa  q: volver")
             _escribir(pantalla, 2, 2, f"Recuerdos: {len(nodos)}   Enlaces: {len(enlaces)}   Eventos: {len(eventos)}")
             mapa_ancho = max(25, ancho * 2 // 3)
-            centro_x, centro_y = mapa_ancho // 2, (alto + 3) // 2
+            mapa_alto = alto - 7
+            centro_x, centro_y = mapa_ancho // 2, 3 + mapa_alto // 2
             posiciones = []
             for i, nodo in enumerate(nodos):
                 angulo = i * 2.399963 + desplazamiento * .04
@@ -96,12 +108,17 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
                 x = round(centro_x + math.cos(angulo) * radio)
                 y = round(centro_y + math.sin(angulo) * radio * .55)
                 posiciones.append((x, y))
-            for a, b in enlaces:
+            for a, b in enlaces[:400]:
                 if a < len(posiciones) and b < len(posiciones):
-                    _linea(pantalla, *posiciones[a], *posiciones[b], curses.A_DIM)
+                    x1, y1 = posiciones[a]
+                    x2, y2 = posiciones[b]
+                    if 1 <= x1 < mapa_ancho and 3 <= y1 < alto-5 and 1 <= x2 < mapa_ancho and 3 <= y2 < alto-5:
+                        _linea(pantalla, x1, y1, x2, y2, curses.A_DIM)
             for i, nodo in enumerate(nodos):
                 x, y = posiciones[i]
                 estilo = estilos["aprendido"] | (curses.A_REVERSE if i == seleccionado else 0)
+                if not (1 <= x < mapa_ancho and 3 <= y < alto-5):
+                    continue
                 _escribir(pantalla, y, x, "@" if i == seleccionado else "o", estilo)
                 if i == seleccionado:
                     _escribir(pantalla, y + 1, max(1, x - 5), nodo["etiqueta"][:14], estilo)
@@ -117,7 +134,8 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
                 texto = n["texto"]
                 largo = max(8, ancho-panel_x-3)
                 for j in range(0, min(len(texto), largo * 7), largo):
-                    _escribir(pantalla, 7 + j // largo, panel_x, texto[j:j+largo])
+                    if 7 + j // largo < alto - 6:
+                        _escribir(pantalla, 7 + j // largo, panel_x, texto[j:j+largo])
             _escribir(pantalla, alto - 5, 2, "ESTADOS:", curses.A_BOLD)
             leyenda = "  ".join(f"{SIMBOLOS[k]} {k}" for k in PALETA)
             _escribir(pantalla, alto - 4, 2, leyenda[:ancho-4])
@@ -149,7 +167,10 @@ def abrir(memoria_fn=None, eventos_fn=None):
     import sys
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise RuntimeError("La estación requiere una terminal interactiva")
-    curses.wrapper(_pantalla, memoria_fn or cargar_recuerdos, eventos_fn or ultimos)
+    try:
+        curses.wrapper(_pantalla, memoria_fn or cargar_recuerdos, eventos_fn or ultimos)
+    except (curses.error, ValueError) as exc:
+        raise RuntimeError("No se pudo iniciar la pantalla de terminal") from exc
 
 
 if __name__ == "__main__":
