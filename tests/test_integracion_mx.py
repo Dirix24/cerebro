@@ -37,6 +37,14 @@ class IntegracionTest(unittest.TestCase):
         imports_locales = [n for n in ast.walk(procesar) if isinstance(n, ast.Import)]
         self.assertFalse(any(alias.name == "re" for n in imports_locales for alias in n.names))
 
+    def test_definiciones_guardan_contexto(self):
+        source = (ROOT / "chat.py").read_text(encoding="utf-8")
+        inicio = source.index("# Preguntas de definición:")
+        fin = source.index("resultado = self.responder_modelo(entrada)", inicio)
+        ruta = source[inicio:fin]
+        self.assertIn('self.memoria.agregar_contexto("usuario", entrada)', ruta)
+        self.assertIn('self.memoria.agregar_contexto("ia", respuesta)', ruta)
+
     def test_preguntas_definicion_sin_generacion_aleatoria(self):
         source = (ROOT / "chat.py").read_text(encoding="utf-8")
         self.assertLess(source.index("pregunta = re.match("),
