@@ -29,6 +29,22 @@ class IntegracionTest(unittest.TestCase):
         from core.actividad_neuronal import ultimos
         self.assertEqual(ultimos(0), [])
 
+    def test_procesar_no_sombrea_modulo_re(self):
+        """El import re interno no debe inutilizar preguntas definitorias."""
+        tree = ast.parse((ROOT / "chat.py").read_text(encoding="utf-8"))
+        clase = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Conversacion")
+        procesar = next(n for n in clase.body if isinstance(n, ast.FunctionDef) and n.name == "procesar")
+        imports_locales = [n for n in ast.walk(procesar) if isinstance(n, ast.Import)]
+        self.assertFalse(any(alias.name == "re" for n in imports_locales for alias in n.names))
+
+    def test_definiciones_guardan_contexto(self):
+        source = (ROOT / "chat.py").read_text(encoding="utf-8")
+        inicio = source.index("# Preguntas de definición:")
+        fin = source.index("resultado = self.responder_modelo(entrada)", inicio)
+        ruta = source[inicio:fin]
+        self.assertIn('self.memoria.agregar_contexto("usuario", entrada)', ruta)
+        self.assertIn('self.memoria.agregar_contexto("ia", respuesta)', ruta)
+
     def test_preguntas_definicion_sin_generacion_aleatoria(self):
         source = (ROOT / "chat.py").read_text(encoding="utf-8")
         self.assertLess(source.index("pregunta = re.match("),
