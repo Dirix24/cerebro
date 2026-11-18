@@ -56,7 +56,7 @@ class AdvancedMemoryManager:
             try:
                 consolidar(self.long_term_memory, self.filepath)
                 self.persistir()
-            except (OSError, ValueError, TypeError):
+            except Exception:
                 self.long_term_memory = anterior
                 raise
         else:
