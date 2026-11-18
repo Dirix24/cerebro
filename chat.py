@@ -239,6 +239,17 @@ class Conversacion:
                 return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
         except (OSError, ValueError):
             pass
+        # Preguntas de definición: evitar inventar una respuesta factual.
+        # Solo devolver textos de fuentes locales si hay resultados pertinentes.
+        pregunta = re.match(r"^\s*¿?\s*(?:qué|que)\s+es\s+(?:(?:un|una|el|la)\s+)?(.+?)\s*\??$", entrada, re.IGNORECASE)
+        if pregunta:
+            concepto = pregunta.group(1).rstrip(" ?")
+            from core.local_search import buscar
+            resultados = buscar(concepto)
+            if resultados:
+                texto, origen = resultados[0]
+                return f"Encontré en el corpus local:\n[{origen}] {texto}", False
+            return "No encontré una definición en mis fuentes locales. Puedes añadir una ficha con /aprender-ficha.", False
         resultado = self.responder_modelo(entrada)
         _registrar_actividad("consolidado", "respuesta")
         return resultado, False

@@ -32,6 +32,12 @@ def registrar(estado, detalle=""):
 
 
 def ultimos(limite=120):
+    try:
+        limite = int(limite)
+    except (TypeError, ValueError, OverflowError):
+        return []
+    if limite <= 0:
+        return []
     ruta = ruta_eventos()
     try:
         if not ruta.is_file():
@@ -43,7 +49,7 @@ def ultimos(limite=120):
             f.seek(max(0, tam - 262144))
             if tam > 262144:
                 f.readline()
-            lineas = f.readlines()[-max(1, min(120, int(limite))):]
+            lineas = f.readlines()[-min(120, limite):]
     except (OSError, ValueError, TypeError):
         return []
     eventos = []
