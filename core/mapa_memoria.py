@@ -10,20 +10,28 @@ COLORES = {"analizando": "#eab308", "aprendido": "#3b82f6",
 
 
 def grafo(memoria, limite=35):
-    entradas = list(memoria.items())[:limite]
+    """Grafo acotado; evita trabajo cuadrático y enlaces masivos."""
+    if not isinstance(memoria, dict):
+        return [], []
+    limite = max(0, min(int(limite), 200))
     nodos = []
-    for clave, dato in entradas:
-        valor = str(dato.get("valor", "")) if isinstance(dato, dict) else str(dato)
-        nodos.append({"id": str(clave), "etiqueta": str(clave)[:45],
-                      "estado": "aprendido", "texto": valor[:150]})
+    indices = {}
     enlaces = []
-    for i, a in enumerate(nodos):
-        palabras_a = set(re.findall(r"\w{4,}", (a["id"] + " " + a["texto"]).lower()))
-        for j in range(i + 1, len(nodos)):
-            b = nodos[j]
-            palabras_b = set(re.findall(r"\w{4,}", (b["id"] + " " + b["texto"]).lower()))
-            if palabras_a & palabras_b:
-                enlaces.append((i, j))
+    vistos = set()
+    for clave, dato in list(memoria.items())[:limite]:
+        valor = str(dato.get("valor", "")) if isinstance(dato, dict) else str(dato)
+        nodo = {"id": str(clave), "etiqueta": str(clave)[:45],
+                "estado": "aprendido", "texto": valor[:150]}
+        i = len(nodos)
+        nodos.append(nodo)
+        palabras = set(re.findall(r"\w{4,}", (nodo["id"] + " " + nodo["texto"]).lower()))
+        for palabra in palabras:
+            for j in indices.get(palabra, [])[-8:]:
+                par = (j, i)
+                if par not in vistos:
+                    enlaces.append(par)
+                    vistos.add(par)
+            indices.setdefault(palabra, []).append(i)
     return nodos, enlaces
 
 
