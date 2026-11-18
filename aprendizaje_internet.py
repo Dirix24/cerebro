@@ -76,7 +76,7 @@ def comprobar_red():
                   headers={"User-Agent": "CerebroLocal/0.2 (uso personal; contacto: GitHub Dirix24/cerebro)",
                            "Accept": "application/json"})
     try:
-        with urlopen(req, timeout=12) as respuesta:
+        with abrir_api(req, timeout=12) as respuesta:
             datos = json.load(respuesta)
         if "query" in datos:
             print("API de Wikipedia accesible. El aprendizaje puede intentar descargar artículos.")
@@ -89,6 +89,22 @@ def comprobar_red():
         return 1
 
 
+
+def abrir_api(req, timeout=25, intentos=2):
+    """Reintento breve solo para fallos transitorios, sin eludir HTTP 403."""
+    for intento in range(intentos):
+        try:
+            return urlopen(req, timeout=timeout)
+        except HTTPError as exc:
+            if exc.code not in (429, 500, 502, 503, 504) or intento + 1 == intentos:
+                raise
+        except (URLError, ConnectionResetError, TimeoutError) as exc:
+            if intento + 1 == intentos:
+                raise
+        time.sleep(1 + intento)
+
+
+
 def obtener_paginas(cantidad):
     params = {"action": "query", "generator": "random", "grnnamespace": "0",
               "grnlimit": str(cantidad), "prop": "extracts|info",
@@ -96,7 +112,7 @@ def obtener_paginas(cantidad):
               "format": "json", "formatversion": "2"}
     req = Request(API + "?" + urlencode(params),
                   headers={"User-Agent": "CerebroLocal/0.2 (uso personal; contacto: GitHub Dirix24/cerebro)"})
-    with urlopen(req, timeout=25) as respuesta:
+    with abrir_api(req, timeout=25) as respuesta:
         datos = json.load(respuesta)
     salida = []
     for pagina in datos.get("query", {}).get("pages", []):
