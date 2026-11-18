@@ -119,6 +119,8 @@ class AdvancedMemoryManager:
         if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, "r", encoding="utf-8") as f:
-                    self.long_term_memory = json.load(f).get("long_term", {})
+                    datos = json.load(f)
+                    recuerdos = datos.get("long_term", {}) if isinstance(datos, dict) else {}
+                    self.long_term_memory = recuerdos if isinstance(recuerdos, dict) else {}
             except (OSError, ValueError):
                 self.long_term_memory = {}
