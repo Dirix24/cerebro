@@ -61,3 +61,61 @@ def responder_definicion(pregunta, buscador=None, buscar_hechos=None):
         if respuesta:
             return respuesta, origen
     return None
+
+
+
+def respuesta_clara(texto, max_caracteres=430):
+    """Extrae hasta dos frases completas; nunca corta a mitad de palabra."""
+    limpio = re.sub(r"[\\u200b-\\u200f\\ufeff]", "", texto)
+    limpio = re.sub(r"\\s+", " ", limpio).strip()
+    # Los textos enciclopédicos suelen incluir marcas de referencias invisibles.
+    limpio = re.sub(r"\\[\\d+\\]", "", limpio)
+    frases = re.split(r"(?<=[.!?])\\s+(?=[A-ZÁÉÍÓÚÑ¿¡])", limpio)
+    salida = []
+    for frase in frases:
+        frase = frase.strip()
+        if not frase:
+            continue
+        candidato = " ".join(salida + [frase])
+        if len(candidato) > max_caracteres:
+            break
+        salida.append(frase)
+        if len(salida) == 2:
+            break
+    if salida:
+        return " ".join(salida)
+    # Si una frase supera el límite, buscar un cierre natural antes del límite.
+    trozo = limpio[:max_caracteres]
+    cierre = max(trozo.rfind("."), trozo.rfind(";"), trozo.rfind(","))
+    if cierre >= 80:
+        return trozo[:cierre].rstrip(",; ") + "."
+    corte = trozo.rfind(" ")
+    return (trozo[:corte] if corte > 40 else trozo).rstrip(" ,;:") + "…"
+
+
+def consultar_internet_si_falta(pregunta, obtener=None, guardar=None):
+    """Consulta pública solo para definiciones sin evidencia; sin enviar memoria ni historial."""
+    concepto = concepto_definicion(pregunta)
+    if not concepto or len(concepto) > 100:
+        return None
+    if obtener is None:
+        from aprendizaje_internet import obtener_tema
+        obtener = obtener_tema
+    if guardar is None:
+        from core.conocimiento import guardar as guardar_ficha
+        guardar = guardar_ficha
+    from urllib.error import HTTPError, URLError
+    import ssl
+    try:
+        pagina = obtener(concepto)
+        if not pagina:
+            return None
+        # No almacenar como conocimiento una página cuyo título no corresponde.
+        if normalizar(pagina["titulo"]) != normalizar(concepto):
+            return None
+        respuesta = pagina["texto"]
+        fuente = pagina["url"]
+        guardar(f"¿Qué es {concepto}?", respuesta, fuente)
+        return respuesta, fuente
+    except (HTTPError, URLError, OSError, TimeoutError, ssl.SSLError, ValueError, KeyError):
+        return None
