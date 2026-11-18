@@ -47,7 +47,16 @@ class AdvancedMemoryManager:
             "valor": valor, "categoria": categoria,
             "importancia": importancia, "fecha": _ahora(),
         }
-        self.persistir()
+        # Optimización conservadora: solo duplicados equivalentes al superar
+        # el umbral. No elimina hechos únicos ni modifica pesos aprendidos.
+        from memory.consolidacion import consolidar
+        anterior = self.long_term_memory.copy()
+        try:
+            consolidar(self.long_term_memory, self.filepath)
+            self.persistir()
+        except (OSError, ValueError, TypeError):
+            self.long_term_memory = anterior
+            raise
 
     def recuperar_largo_plazo(self, clave):
         entrada = self.long_term_memory.get(clave)
