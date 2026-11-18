@@ -101,23 +101,31 @@ class AdvancedMemoryManager:
         como máximo `limite` entradas, preservando la memoria explícita.
         """
         import re
-        palabras = {p for p in re.findall(r"[\wáéíóúñü]+", texto.lower()) if len(p) > 2}
+        palabras = {p for p in re.findall(r"[\wáéíóúñü]+", str(texto).lower()) if len(p) > 2}
         resultados = []
         for clave, entrada in self.long_term_memory.items():
+            if not isinstance(entrada, dict):
+                continue
             campo = f"{clave} {entrada.get('valor', '')} {entrada.get('categoria', '')}".lower()
             score = sum(1 for p in palabras if p in campo)
             if score:
-                score += 0.01 * float(entrada.get("importancia", 1))
-                resultados.append((score, clave, entrada["valor"]))
+                try:
+                    importancia = float(entrada.get("importancia", 1))
+                    if not __import__("math").isfinite(importancia):
+                        importancia = 1.0
+                except (TypeError, ValueError, OverflowError):
+                    importancia = 1.0
+                score += 0.01 * importancia
+                resultados.append((score, str(clave), entrada.get("valor")))
         resultados.sort(reverse=True)
         return {k: v for _, k, v in resultados[:max(0, limite)]}
 
     def buscar_similar(self, texto, limite=5):
         """Búsqueda TF-IDF de palabras y trigramas, sin modelos externos."""
         from core.semantic_memory import buscar_similares
-        claves = list(self.long_term_memory)
+        claves = [k for k, v in self.long_term_memory.items() if isinstance(v, dict)]
         documentos = [f"{k} {self.long_term_memory[k].get('valor', '')}" for k in claves]
-        return {claves[i]: self.long_term_memory[claves[i]]["valor"]
+        return {claves[i]: self.long_term_memory[claves[i]].get("valor")
                 for i, _ in buscar_similares(texto, documentos, limite)}
 
     # -- persistencia ---------------------------------------------------------------
