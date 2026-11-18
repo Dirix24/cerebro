@@ -39,9 +39,9 @@ def test_caracteres_de_control_no_llegan_a_curses():
         def addnstr(self, y, x, texto, n, estilo):
             self.texto = texto
     pantalla = Pantalla()
-    estacion_terminal._escribir(pantalla, 1, 1, "hola\\x1b[31m\\nsecreto")
-    assert "\\x1b" not in pantalla.texto
-    assert "\\n" not in pantalla.texto
+    estacion_terminal._escribir(pantalla, 1, 1, "hola\x1b[31m\nsecreto")
+    assert "\x1b" not in pantalla.texto
+    assert "\n" not in pantalla.texto
 
 
 def test_estacion_sin_archivo_de_memoria(tmp_path, monkeypatch):
