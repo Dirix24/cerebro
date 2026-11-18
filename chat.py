@@ -129,6 +129,12 @@ class Conversacion:
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
 
+        # La visualización se puede solicitar hablando, sin memorizar comandos.
+        import re as _viz
+        if _viz.search(r"\\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\\b",
+                       entrada.lower()):
+            return self._comando("/estacion-neuronal")
+
         # Guardado solicitado expresamente; no se considera verdad verificada.
         import re as _rec
         recuerdo = _rec.match(r"^(?:cerebro[, ]+)?recuerda que\s+(.{3,400})$",
@@ -290,6 +296,19 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/estacion-neuronal":
+            from pathlib import Path
+            from core.estacion_neuronal import guardar_estacion
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                ruta = Path(config.CEREBRO_HOME) / "data" / "estacion_neuronal.html"
+                if ruta.exists():
+                    return "Ya existe la estación. Muévela o elimínala para generar otra.", False
+                guardar_estacion(self.memoria.long_term_memory, ruta)
+                return f"Estación neuronal creada: {ruta}. Ábrela en tu navegador para explorar.", False
+            except (OSError, ValueError) as exc:
+                return f"Estación neuronal: {exc}", False
         if cmd == "/mapa-recuerdos":
             from pathlib import Path
             from core.mapa_memoria import guardar_mapa
