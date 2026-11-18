@@ -25,3 +25,25 @@ def test_mas_ram_no_reduce_capacidad():
     bajo = recomendar_tamano(2 * 1024 ** 3)
     alto = recomendar_tamano(64 * 1024 ** 3)
     assert perfiles.index(alto) >= perfiles.index(bajo)
+
+
+def test_proteccion_ssd_desconectado(monkeypatch, tmp_path):
+    import pytest
+    from core.entorno_portatil import verificar_almacenamiento
+    ruta = tmp_path / "desconectado"
+    monkeypatch.setenv("CEREBRO_HOME", str(ruta))
+    monkeypatch.setattr(config, "CEREBRO_HOME", str(ruta))
+    with pytest.raises(RuntimeError, match="no disponible"):
+        verificar_almacenamiento()
+    assert not ruta.exists()
+
+
+def test_preparacion_ssd_y_verificacion(monkeypatch, tmp_path):
+    from core.entorno_portatil import preparar_almacenamiento, verificar_almacenamiento
+    ruta = tmp_path / "unidad" / "Cerebro"
+    monkeypatch.setenv("CEREBRO_HOME", str(ruta))
+    monkeypatch.setattr(config, "CEREBRO_HOME", str(ruta))
+    preparar_almacenamiento()
+    verificar_almacenamiento()
+    assert (ruta / ".cerebro_ssd").is_file()
+    assert (ruta / "checkpoints").is_dir()
