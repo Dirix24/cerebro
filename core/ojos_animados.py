@@ -1,94 +1,162 @@
-"""Rostro expresivo de Cerebro, exclusivamente local y sin cámara.
+"""Ojos expresivos de Cerebro: animación terminal sin boca, cámara ni red.
 
-Animación de ojos en curses. No solicita dispositivos, no registra imágenes
-ni necesita un modelo entrenado. El usuario controla el estado con teclas.
+Modo automático opcional basado SOLO en estados de telemetría local.
+La actividad representa procesos del programa, no sentimientos.
 """
-import math
 import time
+from datetime import datetime, timezone
 
 try:
     import curses
 except ImportError:
     curses = None
 
+from core.actividad_neuronal import ultimos
+
+# Cada estado usa exclusivamente los dos ojos; nunca se dibuja boca.
 EXPRESIONES = {
-    "normal": ("◉", "◉", "Atento"),
-    "feliz": ("^", "^", "Feliz"),
-    "curioso": ("◉", "◉", "Curioso"),
+    "atento": ("◉", "◉", "Atento"),
+    "feliz": ("⌒", "⌒", "Feliz"),
+    "curioso": ("◉", "◎", "Curioso"),
     "pensando": ("·", "◉", "Pensando"),
     "sorprendido": ("O", "O", "Sorprendido"),
     "dormido": ("—", "—", "Descansando"),
+    "analizando": ("◉", "·", "Analizando"),
+    "aprendiendo": ("✦", "✦", "Aprendiendo"),
+    "investigando": ("◎", "◎", "Investigando"),
+    "asociando": ("◉", "◉", "Conectando recuerdos"),
+    "observando": ("◉", "◉", "Observando actividad"),
+    "consolidando": ("◡", "◡", "Consolidando"),
+    "error": ("×", "×", "Error detectado"),
+    "concentrado": ("▰", "▰", "Concentrado"),
+    "dudando": ("◔", "◕", "Evaluando"),
+    "esperando": ("·", "·", "Esperando"),
+    "saludando": ("◉", "◉", "Saludando"),
+    "descansando": ("—", "—", "En reposo"),
+}
+ESTADO_A_EXPRESION = {
+    "analizando": "analizando",
+    "aprendido": "aprendiendo",
+    "investigando": "investigando",
+    "asociando": "asociando",
+    "observando": "observando",
+    "consolidado": "consolidando",
+    "error": "error",
 }
 
 
-def fotograma(expresion="normal", instante=0.0):
-    """Devuelve dos ojos y etiqueta; no tiene efectos secundarios."""
+def expresion_de_actividad(eventos, ahora=None, caducidad=12):
+    """Solo refleja eventos recientes y válidos, sin analizar texto privado."""
+    if not eventos:
+        return "esperando"
+    evento = eventos[-1]
+    if not isinstance(evento, dict):
+        return "esperando"
+    estado = evento.get("estado")
+    if estado not in ESTADO_A_EXPRESION:
+        return "esperando"
+    try:
+        fecha = datetime.fromisoformat(str(evento["fecha"]).replace("Z", "+00:00"))
+        if fecha.tzinfo is None:
+            return "esperando"
+        momento = ahora or datetime.now(timezone.utc)
+        edad = (momento - fecha).total_seconds()
+        if edad < -2 or edad > caducidad:
+            return "esperando"
+    except (ValueError, TypeError, KeyError, OverflowError):
+        return "esperando"
+    return ESTADO_A_EXPRESION[estado]
+
+
+def fotograma(expresion="atento", instante=1.0):
+    """Devuelve (ojo izquierdo, ojo derecho, etiqueta). Sin efectos secundarios."""
+    if expresion == "normal":
+        expresion = "atento"  # Compatibilidad con versión anterior.
     if expresion not in EXPRESIONES:
-        expresion = "normal"
+        expresion = "atento"
     izquierdo, derecho, etiqueta = EXPRESIONES[expresion]
-    # Parpadeo breve cada ~4 segundos, salvo expresiones cerradas.
-    if expresion not in ("feliz", "dormido") and instante % 4.2 < .14:
+    if expresion not in ("feliz", "dormido", "descansando", "consolidando", "error") and instante % 4.2 < .14:
         izquierdo = derecho = "—"
+    # Movimiento de mirada, sin cámara: solo animación periódica.
+    if expresion in ("curioso", "observando", "saludando") and int(instante * 1.3) % 2:
+        izquierdo, derecho = derecho, izquierdo
     return izquierdo, derecho, etiqueta
 
 
-def _mostrar(pantalla):
+def _escribir(pantalla, y, x, texto, estilo=0):
+    alto, ancho = pantalla.getmaxyx()
+    if 0 <= y < alto and 0 <= x < ancho - 1:
+        try:
+            pantalla.addnstr(y, x, str(texto), ancho - x - 1, estilo)
+        except (curses.error, UnicodeError):
+            pass
+
+
+def _mostrar(pantalla, eventos_fn=ultimos):
     try:
         curses.curs_set(0)
     except curses.error:
         pass
-    pantalla.timeout(70)
-    expresiones = tuple(EXPRESIONES)
+    pantalla.timeout(90)
+    nombres = tuple(EXPRESIONES)
     indice = 0
+    automatico = False
     inicio = time.monotonic()
+    ultima_lectura = 0
+    expresion_auto = "esperando"
     while True:
+        ahora = time.monotonic()
+        if automatico and ahora - ultima_lectura >= .7:
+            try:
+                expresion_auto = expresion_de_actividad(eventos_fn())
+            except (OSError, ValueError, TypeError):
+                expresion_auto = "esperando"
+            ultima_lectura = ahora
+        expresion = expresion_auto if automatico else nombres[indice]
+        ojo1, ojo2, etiqueta = fotograma(expresion, ahora - inicio)
         alto, ancho = pantalla.getmaxyx()
         pantalla.erase()
-        expresion = expresiones[indice]
-        ojo1, ojo2, etiqueta = fotograma(expresion, time.monotonic() - inicio)
-        if alto < 10 or ancho < 36:
-            try:
-                pantalla.addnstr(0, 0, "Amplía la terminal. q: salir", max(0, ancho-1))
-            except curses.error:
-                pass
+        if alto < 12 or ancho < 42:
+            _escribir(pantalla, 0, 0, "Amplía la terminal (42x12). q: salir")
         else:
-            rostro = (
-                "    /-------------\\",
-                "   /               \\",
-                f"  |    {ojo1}     {ojo2}    |",
-                "  |       ___       |",
-                "   \\_______________/",
-            )
-            y = max(1, alto // 2 - 4)
-            x = max(0, ancho // 2 - 11)
-            try:
-                pantalla.addnstr(1, 2, "CEREBRO / OJOS ANIMADOS", ancho - 3, curses.A_BOLD)
-                for i, linea in enumerate(rostro):
-                    pantalla.addnstr(y+i, x, linea, max(0, ancho-x-1))
-                pantalla.addnstr(y+6, x, f"Expresión: {etiqueta}", max(0, ancho-x-1))
-                pantalla.addnstr(alto-2, 2, "← →: expresión   1-6: elegir   q: salir", ancho-3)
-                pantalla.addnstr(alto-1, 2, "Cámara: APAGADA. No se activa desde esta pantalla.", ancho-3)
-            except curses.error:
-                pass
+            _escribir(pantalla, 1, 2, "CEREBRO  /  OJOS EXPRESIVOS", curses.A_BOLD)
+            # Dos ojos, sin boca, nariz ni contorno facial.
+            x = max(1, ancho // 2 - 12)
+            y = max(3, alto // 2 - 3)
+            _escribir(pantalla, y, x, "╭────────╮    ╭────────╮")
+            _escribir(pantalla, y + 1, x, "│        │    │        │")
+            _escribir(pantalla, y + 2, x, f"│   {ojo1}    │    │   {ojo2}    │")
+            _escribir(pantalla, y + 3, x, "│        │    │        │")
+            _escribir(pantalla, y + 4, x, "╰────────╯    ╰────────╯")
+            _escribir(pantalla, y + 6, x, "Estado: " + etiqueta)
+            _escribir(pantalla, alto - 3, 2, f"Modo: {'AUTOMÁTICO (actividad local)' if automatico else 'MANUAL'}  |  a: alternar")
+            _escribir(pantalla, alto - 2, 2, "← →: cambiar   1-9: elegir   q: salir")
+            _escribir(pantalla, alto - 1, 2, "CÁMARA APAGADA · SIN AUDIO · SIN RED")
         pantalla.refresh()
         tecla = pantalla.getch()
         if tecla in (ord("q"), ord("Q"), 27):
-            break
-        if tecla in (curses.KEY_RIGHT, ord("n")):
-            indice = (indice + 1) % len(expresiones)
+            return
+        if tecla in (ord("a"), ord("A")):
+            automatico = not automatico
+            ultima_lectura = 0
+        elif tecla in (curses.KEY_RIGHT, ord("n")):
+            automatico = False
+            indice = (indice + 1) % len(nombres)
         elif tecla in (curses.KEY_LEFT, ord("p")):
-            indice = (indice - 1) % len(expresiones)
-        elif ord("1") <= tecla <= ord("6"):
+            automatico = False
+            indice = (indice - 1) % len(nombres)
+        elif ord("1") <= tecla <= ord("9"):
+            automatico = False
             indice = tecla - ord("1")
 
 
-def abrir():
+def abrir(eventos_fn=None):
     if curses is None:
         raise RuntimeError("En Windows instala windows-curses: pip install windows-curses")
     import sys
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise RuntimeError("Los ojos requieren una terminal interactiva.")
     try:
-        curses.wrapper(_mostrar)
+        curses.wrapper(_mostrar, eventos_fn or ultimos)
     except (curses.error, KeyboardInterrupt) as exc:
         raise RuntimeError("No se pudo iniciar la animación en esta terminal.") from exc
