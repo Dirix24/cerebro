@@ -120,7 +120,7 @@ def ejecutar_todo():
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
     ap.add_argument("accion", choices=("automejora", "laboratorio", "instalar", "desinstalar", "motores", "iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
-    ap.add_argument("--motor", choices=("original", "clasico", "avanzado", "gguf"), default="original")
+    ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
     ap.add_argument("--avanzado", action="store_true", help="Incluir PyTorch al instalar (descarga grande)")
@@ -175,13 +175,9 @@ def main(argv=None):
     if args.accion == "herramientas":
         return _ejecutar([sys.executable, str(RAIZ / "herramientas_locales.py"), *resto])
     if args.accion == "chat":
-        if args.motor == "gguf":
-            return _ejecutar([sys.executable, str(RAIZ / "main.py"), "--motor", "gguf", *resto])
         if args.motor != "original":
-            ap.error("Para PyTorch usa generar; para un GGUF local usa chat --motor gguf --modelo-gguf RUTA")
+            ap.error("El chat integrado utiliza el motor original; para PyTorch usa generar")
         return _ejecutar([sys.executable, str(RAIZ / "main.py"), *resto])
-    if args.motor == "gguf":
-        ap.error("El motor GGUF solo está disponible en chat: cerebro.py chat --motor gguf --modelo-gguf RUTA")
     if args.motor == "original":
         if args.accion == "generar":
             ap.error("Para generar con el motor original usa la acción chat")
