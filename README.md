@@ -273,6 +273,19 @@ También entiende «¿Quién te creó?» después de configurar la identidad. La
 
 **Pendiente:** perfiles aislados de varios usuarios, cifrado autenticado con clave del portador, recuperación privada voluntaria y mecanismo de sucesión/transferencia. No se deben desbloquear recuerdos privados solo porque alguien encuentre un USB. No existe detección automática de fallecimiento ni recuperación de una conciencia.
 
+### Recuperación cifrada de recuerdos privados desde USB
+
+```bash
+python3 -m pip install cryptography
+python3 -m core.memoria_cifrada exportar /ruta/usb/recuerdos.cerebro
+python3 -m core.memoria_cifrada examinar /ruta/usb/recuerdos.cerebro
+python3 -m core.memoria_cifrada restaurar /ruta/usb/recuerdos.cerebro --confirmar --destino /ruta/nueva/memoria.json
+```
+
+Cada operación solicita una **contraseña oculta** en la terminal. El respaldo de la memoria de largo plazo usa scrypt para derivar la clave y AES-256-GCM para cifrado autenticado; `cryptography` es una biblioteca criptográfica, **no un modelo de IA externo**. Se puede llevar el archivo en un USB. Sin la contraseña correcta no se puede descifrar. `examinar` solo muestra cuántas entradas hay; no imprime los recuerdos. `restaurar` exige `--confirmar` y **no sobrescribe** una memoria existente; usa un destino nuevo para impedir mezclar portadores accidentalmente. No se descifran pesos del modelo ni archivos arbitrarios: solo `long_term` de la memoria JSON.
+
+**Precauciones:** el USB no se detecta ni abre automáticamente, la contraseña no se guarda y, si se pierde, los datos cifrados pueden ser irrecuperables. No coloques contraseñas en comandos, chats o GitHub. No recupera memorias que nunca se guardaron, ni supone una continuidad de conciencia. La migración selectiva entre perfiles y el flujo conversacional de recuperación están pendientes.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
