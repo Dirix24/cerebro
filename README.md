@@ -330,6 +330,12 @@ python3 -m core.estacion_terminal
 
 Utiliza la biblioteca estándar `curses` (habitualmente incluida en Linux/macOS; en Windows requiere `pip install windows-curses` si Python no incluye `curses`). Necesita una terminal interactiva de al menos 52×15. Los recuerdos privados pueden verse en pantalla: úsala en un entorno de confianza.
 
+### Consolidación segura de recuerdos (sin perder lo aprendido)
+
+Cuando la memoria de largo plazo supera **500 entradas**, Cerebro busca únicamente duplicados equivalentes: la misma clave normalizada, el mismo valor y la misma categoría. Conserva la versión con mayor importancia y guarda las variantes redundantes en `memory_store.json.duplicados.jsonl` junto al archivo de memoria, **antes** de retirarlas del índice activo. No descarta conocimientos únicos ni toca checkpoints, pesos del modelo o datos de entrenamiento.
+
+El respaldo contiene información privada **en texto claro** y permanece en disco: esta consolidación reduce el tamaño de la memoria activa, pero **no garantiza liberar espacio de disco** mientras se conserve el respaldo. La memoria de conversación a corto plazo ya tiene un límite independiente. No se usa ninguna IA externa ni se envían datos a internet.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
