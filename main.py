@@ -19,11 +19,11 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import config
 from agent.controlled_agent import ControlledAgent
 from chat import Conversacion
-from core.checkpoint import cargar_checkpoint
 from memory.advanced_memory import AdvancedMemoryManager
 
 
 def cargar_modelo(ruta=None):
+    from core.checkpoint import cargar_checkpoint
     candidatos = [ruta] if ruta else [config.CKPT_MEJOR, config.CKPT_ULTIMO]
     for r in candidatos:
         if r and os.path.exists(r):
