@@ -3,7 +3,10 @@
 Representación de recuerdos, asociaciones léxicas y eventos registrados.
 No muestra las neuronas ni los pesos internos del modelo.
 """
-import curses
+try:
+    import curses
+except ImportError:
+    curses = None
 import json
 import math
 import re
@@ -15,10 +18,8 @@ from core.actividad_neuronal import ultimos
 from core.mapa_memoria import grafo
 
 PALETA = {
-    "analizando": curses.COLOR_YELLOW, "aprendido": curses.COLOR_BLUE,
-    "investigando": curses.COLOR_YELLOW, "consolidado": curses.COLOR_GREEN,
-    "asociando": curses.COLOR_MAGENTA, "observando": curses.COLOR_CYAN,
-    "error": curses.COLOR_RED,
+    "analizando": 3, "aprendido": 4, "investigando": 3,
+    "consolidado": 2, "asociando": 5, "observando": 6, "error": 1,
 }
 SIMBOLOS = {"analizando": "?", "aprendido": "o", "investigando": "*",
             "consolidado": "O", "asociando": "+", "observando": "@", "error": "!"}
@@ -39,9 +40,9 @@ def _escribir(pantalla, y, x, texto, estilo=0):
     alto, ancho = pantalla.getmaxyx()
     if 0 <= y < alto and 0 <= x < ancho - 1:
         try:
-            seguro = re.sub(r"[\\x00-\\x1f\\x7f-\\x9f]", " ", str(texto)).replace("\\n", " ")
+            seguro = re.sub(r"[\x00-\x1f\x7f-\x9f]", " ", str(texto))
             pantalla.addnstr(y, x, seguro, ancho - x - 1, estilo)
-        except curses.error:
+        except (curses.error, UnicodeError):
             pass
 
 
@@ -76,7 +77,7 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
                 estilos[estado] = curses.color_pair(i) | curses.A_BOLD
             except curses.error:
                 pass
-    seleccionado, desplazamiento, zoom, congelado, tick = 0, 0, 1.0, False, 0
+    seleccionado, desplazamiento, zoom, congelado = 0, 0, 1.0, False
     memoria, eventos = {}, []
     nodos, enlaces = [], []
     ultima = 0
@@ -124,7 +125,7 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
                 _escribir(pantalla, y, x, "@" if i == seleccionado else "o", estilo)
                 if i == seleccionado:
                     _escribir(pantalla, y + 1, max(1, x - 5), nodo["etiqueta"][:14], estilo)
-            estado = eventos[-1]["estado"] if eventos else "consolidado"
+            estado = eventos[-1].get("estado", "consolidado") if eventos and isinstance(eventos[-1], dict) else "consolidado"
             _escribir(pantalla, centro_y, centro_x - 4, "[NÚCLEO]", estilos.get(estado, 0))
             if not congelado and eventos:
                 _escribir(pantalla, centro_y - 2, centro_x, SIMBOLOS.get(estado, "*"), estilos.get(estado, 0))
@@ -143,7 +144,8 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
             _escribir(pantalla, alto - 4, 2, leyenda[:ancho-4])
             if eventos:
                 e = eventos[-1]
-                _escribir(pantalla, alto - 3, 2, "Última actividad: " + e["estado"] + " / " + e.get("texto", ""))
+                if isinstance(e, dict):
+                    _escribir(pantalla, alto - 3, 2, "Última actividad: " + str(e.get("estado", "")) + " / " + str(e.get("texto", "")))
             _escribir(pantalla, alto - 2, 2, "Nodos = recuerdos; líneas = palabras compartidas; animación ≠ neuronas físicas.")
         pantalla.refresh()
         tecla = pantalla.getch()
@@ -161,17 +163,18 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
             congelado = not congelado
         if not congelado:
             desplazamiento += .03
-        tick += 1
 
 
 def abrir(memoria_fn=None, eventos_fn=None):
     """Devuelve al chat al pulsar q. Requiere una terminal interactiva."""
     import sys
+    if curses is None:
+        raise RuntimeError("En Windows instala windows-curses: pip install windows-curses")
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         raise RuntimeError("La estación requiere una terminal interactiva")
     try:
         curses.wrapper(_pantalla, memoria_fn or cargar_recuerdos, eventos_fn or ultimos)
-    except (curses.error, ValueError) as exc:
+    except (curses.error, ValueError, KeyboardInterrupt) as exc:
         raise RuntimeError("No se pudo iniciar la pantalla de terminal") from exc
 
 
