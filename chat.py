@@ -190,7 +190,6 @@ class Conversacion:
             if accion == "recordatorios":
                 return self._comando("/recordatorios")
             if accion.startswith("github_"):
-                import re
                 m = re.search(r"(?<![\w.-])([\w.-]+/[\w.-]+)(?![\w.-])", entrada)
                 if not m:
                     return ("¿Qué repositorio de GitHub quieres consultar? "
