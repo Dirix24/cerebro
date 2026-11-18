@@ -1,3 +1,13 @@
+### Ojos animados y expresiones (sin cámara)
+
+```bash
+python3 main.py --ojos
+```
+
+Rostro animado dentro de la terminal, sin navegador y sin modelo entrenado. Parpadea automáticamente y ofrece expresiones **normal, feliz, curioso, pensando, sorprendido y dormido**. Usa las flechas izquierda/derecha o teclas 1-6 para cambiar; `q` para salir. Requiere terminal interactiva con curses (en Windows puede requerir `pip install windows-curses`).
+
+**Privacidad:** los ojos son solo una animación. No abren ni solicitan acceso a ninguna cámara, micrófono o red. Si en el futuro se conecta la visión a las expresiones, deberá ser opcional y requerir autorización explícita; la herramienta existente `camara_local.py --confirmar` sigue siendo una captura independiente y puntual.
+
 # 🧠 Cerebro — IA local, memoria y aprendizaje experimental
 
 > **Diseñado y desarrollado con asistencia de inteligencia artificial (IA).** Cerebro es un proyecto experimental impulsado por su creador, con colaboración de IA en el diseño de la arquitectura, programación, documentación y pruebas. Esta declaración describe el proceso de desarrollo, **no** significa que Cerebro sea una IA general ni que se haya diseñado a sí mismo.
