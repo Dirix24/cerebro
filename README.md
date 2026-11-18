@@ -525,3 +525,18 @@ python3 exploracion_autonoma.py --autorizar-hogar --solo-local
 **Importante:** el índice local autónomo está separado de la búsqueda conversacional; por ahora **no alimenta automáticamente al chat ni al entrenador neuronal**. La comparación es léxica, no verifica contradicciones ni aprende relaciones semánticas. La parte web usa el ciclo diario ya existente: si ya recopiló artículos hoy, no repetirá la descarga. `--entrenar` solicita el entrenamiento existente con control de recursos, validación y restauración de checkpoints; no promete que entrene en cada pasada. El proceso funciona mientras la terminal esté abierta y se detiene con Ctrl+C. No hay servicio persistente instalado.
 
 Prueba sin conexión: `python3 -m pytest -q tests/test_exploracion_autonoma.py`.
+
+
+## 🔎 Consultar los documentos de la exploración autónoma
+
+Después de ejecutar `python3 exploracion_autonoma.py --autorizar-hogar`, inicia el chat con `python3 cerebro.py iniciar` y pregunta:
+
+```text
+/mis-documentos robótica
+busca en mis documentos sensores
+consulta mis documentos inteligencia artificial
+```
+
+La consulta se hace **exclusivamente en el índice privado local** `data/exploracion_local.sqlite3`; no se envían consultas ni archivos a Internet. Muestra fragmentos de los documentos y la ruta de origen, marcados como coincidencias **no verificadas**. El índice se actualiza en cada exploración y puede quedar desactualizado si cambian los archivos. Para evitar divulgar información personal por accidente, la búsqueda se activa únicamente con estas expresiones o con el comando explícito, no en cualquier pregunta. Este cambio **no** conecta todavía esos textos al entrenamiento de pesos ni comprueba contradicciones.
+
+Pruebas: `python3 -m pytest -q tests/test_consulta_exploracion.py`.

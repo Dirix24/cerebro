@@ -43,7 +43,7 @@ AYUDA = """Comandos:
   /calc 12 * (3 + 4)        calculadora segura
   /buscar-corpus texto      busca información en el corpus local indexado
   /conocimiento texto       consulta la memoria con fuentes
-  /biblioteca texto         busca en documentos locales
+  /biblioteca texto         busca en documentos locales\n  /mis-documentos tema      busca en el índice privado de exploración autónoma
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
@@ -212,7 +212,7 @@ class Conversacion:
             _registrar_actividad("aprendido", "memoria")
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
-        # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
+        # Consultar documentos privados solo si el usuario lo pide explícitamente.\n        peticion_docs = re.match(r"^\\s*(?:busca\\s+en\\s+mis\\s+documentos|consulta\\s+mis\\s+documentos|en\\s+mis\\s+documentos)\\s+(.+)$", entrada, re.IGNORECASE)\n        if peticion_docs:\n            from core.consulta_exploracion import respuesta_documental\n            return respuesta_documental(peticion_docs.group(1)), False\n\n        # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
         from core.respuestas_con_fuentes import (
             concepto_definicion, responder_definicion, respuesta_clara,
             consultar_internet_si_falta,
@@ -352,7 +352,7 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
-        if cmd == "/estacion-neuronal":
+        if cmd == "/mis-documentos":\n            if "READ" not in config.PERMISOS_AGENTE:\n                return "Permiso READ requerido.", False\n            if not resto:\n                return "Uso: /mis-documentos tema", False\n            from core.consulta_exploracion import respuesta_documental\n            return respuesta_documental(resto), False\n\n        if cmd == "/estacion-neuronal":
             from pathlib import Path
             from core.estacion_neuronal import guardar_estacion
             if "READ" not in config.PERMISOS_AGENTE:
