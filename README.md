@@ -161,6 +161,8 @@ python3 main.py
 Dentro del chat:
 
 ```text
+/descubrir-i2c 0x3c 0x68
+/analizar-robot codigo_robot.py
 /usb
 /crear-robot mi_robot arduino
 /crear-robot robot_esp esp32
@@ -254,7 +256,7 @@ Dentro del chat:
 
 `/preparar-robot` lee un archivo de código existente en el workspace, y crea un proyecto nuevo `main.py` y `README.md` para **MicroPython ESP32 o RP2040**. Requiere permisos READ y WRITE; no sobrescribe proyectos, no convierte automáticamente código Arduino/C++, no valida pines ni controla motores. El código se copia sin ejecutarse. El usuario debe revisar compatibilidad y seguridad física antes de cualquier carga.
 
-**Todavía no se programa ninguna placa desde Cerebro.** El flasheo o comunicación serie deberá ser un paso posterior, explícitamente confirmado y probado con el hardware exacto. Una Raspberry Pi con Linux y un Arduino Uno usan flujos distintos a MicroPython.
+**Descubrimiento pasivo:** `/descubrir-i2c` interpreta direcciones I²C que tú proporciones (no consulta el bus); `/analizar-robot` revisa el código del workspace e identifica interfaces como I²C, SPI, GPIO o PWM sin ejecutarlo. Ninguno demuestra el modelo exacto del componente, ni activa motores. La detección real en placa requerirá firmware de diagnóstico autorizado y específico para ese hardware.\n\n**Todavía no se programa ninguna placa desde Cerebro.** El flasheo o comunicación serie deberá ser un paso posterior, explícitamente confirmado y probado con el hardware exacto. Una Raspberry Pi con Linux y un Arduino Uno usan flujos distintos a MicroPython.
 
 ## 🔒 Privacidad, recursos y seguridad
 
