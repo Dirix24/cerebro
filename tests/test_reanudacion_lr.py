@@ -41,3 +41,14 @@ def test_no_extender_horizonte_silenciosamente():
     motor = _motor_simulado(total_pasos=3, paso=2)
     with pytest.raises(ValueError, match="excede total_pasos"):
         motor.entrenar(2, log=None)
+
+
+def test_modo_legacy_permita_extender_sesiones():
+    motor = _motor_simulado(total_pasos=3)
+    motor.total_programado = None
+    vistos = []
+    with patch("trainer_engine.lr_coseno_con_calentamiento",
+               side_effect=lambda paso, total, *args: (vistos.append((paso, total)) or 0.01)):
+        motor.entrenar(3, log=None)
+        motor.entrenar(2, log=None)
+    assert vistos == [(0, 3), (1, 3), (2, 3), (3, 5), (4, 5)]
