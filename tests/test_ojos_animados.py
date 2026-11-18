@@ -68,7 +68,7 @@ def test_microanimaciones_sutiles():
     assert ojos_animados.fotograma("saludando", 1.3)[0] == "—"
     assert ojos_animados.fotograma("aprendiendo", 2.1)[:2] == ("✧", "✧")
     assert ojos_animados.fotograma("analizando", 1.0)[:2] != ojos_animados.fotograma("analizando", 1.6)[:2]
-    assert ojos_animados.fotograma("investigando", 1.0)[:2] != ojos_animados.fotograma("investigando", 2.0)[:2]
+    assert ojos_animados.fotograma("investigando", 1.0)[:2] != ojos_animados.fotograma("investigando", 1.5)[:2]
 
 
 def test_animaciones_sin_camara():
