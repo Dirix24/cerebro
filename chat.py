@@ -107,6 +107,12 @@ class Conversacion:
         entrada = entrada.strip()
         if not entrada:
             return "", False
+        # Telemetría real de recepción; sin registrar el texto del usuario.
+        try:
+            from core.actividad_neuronal import registrar as _registrar_actividad
+            _registrar_actividad("analizando", "mensaje")
+        except OSError:
+            pass
         if entrada.startswith("/"):
             return self._comando(entrada)
 
@@ -147,6 +153,7 @@ class Conversacion:
             clave = "declaracion_" + sha256(texto.encode("utf-8")).hexdigest()[:16]
             self.memoria.guardar_largo_plazo(clave, texto, categoria="declarado_por_usuario",
                                              importancia=2)
+            _registrar_actividad("aprendido", "memoria")
             return ("He guardado ese recuerdo como información declarada por ti, "
                     "no como un hecho verificado."), False
 
@@ -203,12 +210,14 @@ class Conversacion:
         if m and m.group(1).lower() not in _NO_SON_NOMBRES:
             nombre = m.group(1).capitalize()
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
+            _registrar_actividad("aprendido", "memoria")
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
         # Orquestador: usar fuentes locales verificables antes de generar texto.
         from agent.orquestador import seleccionar, extraer_consulta_local
         ruta = seleccionar(entrada)
         if ruta == "busqueda_local":
+            _registrar_actividad("investigando", "consulta")
             from core.local_search import buscar
             consulta = extraer_consulta_local(entrada)
             resultados = buscar(consulta) if consulta else []
@@ -216,6 +225,7 @@ class Conversacion:
                 return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
             return "No encontré información en el corpus local.", False
         if ruta == "conocimiento":
+            _registrar_actividad("investigando", "consulta")
             from core.conocimiento import buscar as buscar_conocimiento
             resultados = buscar_conocimiento(entrada, limite=1)
             if resultados:
@@ -229,7 +239,9 @@ class Conversacion:
                 return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
         except (OSError, ValueError):
             pass
-        return self.responder_modelo(entrada), False
+        resultado = self.responder_modelo(entrada)
+        _registrar_actividad("consolidado", "respuesta")
+        return resultado, False
 
     # -- respuesta del modelo -----------------------------------------------------------
 
