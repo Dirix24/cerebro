@@ -258,6 +258,19 @@ Dentro del chat:
 
 **Descubrimiento pasivo:** `/descubrir-i2c` interpreta direcciones I²C que tú proporciones (no consulta el bus); `/analizar-robot` revisa el código del workspace e identifica interfaces como I²C, SPI, GPIO o PWM sin ejecutarlo. Ninguno demuestra el modelo exacto del componente, ni activa motores. La detección real en placa requerirá firmware de diagnóstico autorizado y específico para ese hardware.\n\n**Todavía no se programa ninguna placa desde Cerebro.** El flasheo o comunicación serie deberá ser un paso posterior, explícitamente confirmado y probado con el hardware exacto. Una Raspberry Pi con Linux y un Arduino Uno usan flujos distintos a MicroPython.
 
+## 💬 Hablar con Cerebro sin comandos
+
+El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
+
+- «Cerebro, mira si tengo una placa conectada» → consulta puertos serie (no abre dispositivos)
+- «Revisa errores del repositorio GitHub Dirix24/cerebro» → consulta incidencias públicas
+- «Consulta GitHub Dirix24/cerebro» → estado público
+- «¿Qué tengo pendiente?» → lista recordatorios
+- «Mira con la cámara» → pide autorización y explica el procedimiento, **no la activa**
+- «Recuérdame revisar el robot» → solicita fecha/hora, **todavía no interpreta ni guarda el siguiente turno automáticamente**
+
+Es un **enrutador por reglas**, no comprensión general comparable a un asistente grande. Las acciones peligrosas o de escritura no se ejecutan automáticamente. Los comandos siguen disponibles para tareas avanzadas. La conversación de varios pasos y el aprendizaje de nuevas intenciones están pendientes.
+
 ## 📅 Recordatorios, GitHub y futura visión
 
 Cerebro incluye recordatorios **guardados localmente** en `CEREBRO_HOME/data/recordatorios.json` y una consulta **optativa de solo lectura** a la API pública de GitHub. GitHub no se usa para generar respuestas de IA ni para entrenar el modelo.
