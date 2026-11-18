@@ -5,6 +5,7 @@ No usa Internet, modelos externos ni servicios. Índice reconstruible desde text
 import argparse
 from pathlib import Path
 import sqlite3
+import re
 
 import config
 
@@ -48,19 +49,24 @@ def indexar(db=DB):
 
 def buscar(consulta, db=DB, limite=3):
     """Consulta de términos literales: evita interpretar operadores FTS del usuario."""
-    palabras = [p for p in __import__("re").findall(r"\w+", consulta, flags=__import__("re").UNICODE) if p]
+    palabras = [p for p in re.findall(r"\w+", consulta, flags=re.UNICODE) if p]
     if not palabras:
         return []
     db = Path(db)
     if not db.is_file() or db.is_symlink():
         return []
-    expresion = " OR ".join('"' + p.replace('"', '""') + '"' for p in palabras[:12])
+    terminos = ['"' + p.replace('"', '""') + '"' for p in palabras[:12]]
+    expresiones = [" AND ".join(terminos), " OR ".join(terminos)]
     with sqlite3.connect(f"file:{db.resolve()}?mode=ro", uri=True) as con:
         try:
-            return con.execute(
-                "SELECT texto, origen FROM corpus WHERE corpus MATCH ? ORDER BY bm25(corpus) LIMIT ?",
-                (expresion, max(1, min(int(limite), 10))),
-            ).fetchall()
+            for expresion in expresiones:
+                filas = con.execute(
+                    "SELECT texto, origen FROM corpus WHERE corpus MATCH ? ORDER BY bm25(corpus) LIMIT ?",
+                    (expresion, max(1, min(int(limite), 10))),
+                ).fetchall()
+                if filas:
+                    return filas
+            return []
         except sqlite3.OperationalError:
             return []
 

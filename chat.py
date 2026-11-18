@@ -303,8 +303,16 @@ class Conversacion:
             ids, max_nuevos=max_nuevos, temperatura=g["temperatura"], top_k=g["top_k"],
             top_p=g["top_p"], penalizacion=g["penalizacion"], parar_en=("\n",), rng=self.rng)
         texto = self.modelo.tokenizer.decodificar(nuevos).split("\n")[0].strip()
-        if not texto:
-            texto = "No sé qué responder a eso."
+        # Filtrar salidas obviamente defectuosas del modelo pequeño.
+        # No sustituye una evaluación lingüística completa.
+        palabras = re.findall(r"\\w+", texto, flags=re.UNICODE)
+        ruido = (not texto or len(texto) > 450 or
+                 any(len(palabra) > 30 for palabra in palabras) or
+                 texto.count("¿") > texto.count("?") + 1 or
+                 texto.count("(") != texto.count(")"))
+        if ruido:
+            texto = ("No tengo una respuesta fiable para eso. "
+                     "Prueba a reformularlo o consulta mis fuentes locales.")
         self.memoria.agregar_contexto("usuario", mensaje)
         self.memoria.agregar_contexto("ia", texto)
         return texto
