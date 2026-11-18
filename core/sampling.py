@@ -32,8 +32,21 @@ def muestrear(logits, rng, temperatura=1.0, top_k=None, top_p=None,
     """
     logits = np.array(logits, dtype=np.float64, copy=True)
 
-    if ids_prohibidos:
-        logits[list(ids_prohibidos)] = -np.inf
+    if logits.ndim != 1 or logits.size == 0:
+        raise ValueError("logits debe ser un vector no vacío.")
+    if not np.all(np.isfinite(logits)):
+        raise ValueError("logits contiene valores no finitos.")
+    if temperatura is not None and (not np.isfinite(temperatura) or temperatura < 0):
+        raise ValueError("temperatura debe ser finita y no negativa.")
+    if penalizacion is not None and (not np.isfinite(penalizacion) or penalizacion <= 0):
+        raise ValueError("penalizacion debe ser positiva y finita.")
+    if ids_prohibidos is not None:
+        prohibidos = np.asarray(list(ids_prohibidos), dtype=np.int64)
+        if np.any((prohibidos < 0) | (prohibidos >= logits.size)):
+            raise ValueError("ids_prohibidos contiene índices fuera del vocabulario.")
+        logits[prohibidos] = -np.inf
+    if not np.isfinite(logits).any():
+        raise ValueError("No queda ningún token permitido para generar.")
 
     if penalizacion and penalizacion != 1.0 and ids_previos is not None and len(ids_previos):
         vistos = np.unique(np.asarray(ids_previos, dtype=np.int64))
