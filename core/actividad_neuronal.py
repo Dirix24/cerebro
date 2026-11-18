@@ -33,22 +33,27 @@ def registrar(estado, detalle=""):
 
 def ultimos(limite=120):
     ruta = ruta_eventos()
-    if not ruta.is_file():
+    try:
+        if not ruta.is_file():
+            return []
+        # Leer solo los últimos 256 KB; tolerar desaparición del archivo.
+        with ruta.open("rb") as f:
+            f.seek(0, os.SEEK_END)
+            tam = f.tell()
+            f.seek(max(0, tam - 262144))
+            if tam > 262144:
+                f.readline()
+            lineas = f.readlines()[-max(1, min(120, int(limite))):]
+    except (OSError, ValueError, TypeError):
         return []
-    # Limita lectura a últimos 256 KB; evita cargar un registro ilimitado.
-    with ruta.open("rb") as f:
-        f.seek(0, os.SEEK_END)
-        tam = f.tell()
-        f.seek(max(0, tam - 262144))
-        if tam > 262144:
-            f.readline()
-        lineas = f.readlines()[-max(1, min(120, limite)):]
     eventos = []
     for linea in lineas:
         try:
             evento = json.loads(linea)
-            if evento.get("estado") in ESTADOS:
-                eventos.append(evento)
+            if isinstance(evento, dict) and evento.get("estado") in ESTADOS:
+                eventos.append({"estado": evento["estado"],
+                                "texto": evento.get("texto", "") if isinstance(evento.get("texto", ""), str) else "",
+                                "fecha": evento.get("fecha", "")})
         except (ValueError, UnicodeDecodeError):
             continue
     return eventos
