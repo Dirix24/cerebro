@@ -169,7 +169,7 @@ def main(argv=None):
             ap.error("La acción todo no admite argumentos adicionales")
         return ejecutar_todo()
     if args.accion == "conocimiento":
-        return _ejecutar([sys.executable, str(RAIZ / "core" / "conocimiento.py"), *resto])
+        return _ejecutar([sys.executable, "-m", "core.conocimiento", *resto])
     if args.accion == "aprender":
         return _ejecutar([sys.executable, str(RAIZ / "aprendizaje_internet.py"), *resto])
     if args.accion == "herramientas":
