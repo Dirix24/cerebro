@@ -17,6 +17,15 @@ class TestContratosNucleo(unittest.TestCase):
         self.assertFalse(set(train) & set(val))
         self.assertEqual(len(train) + len(val), 20)
 
+    def test_documentos_duplicados_no_contaminan_validacion(self):
+        train, val = dividir_documentos(["igual", "igual", "otro", "tercero"], frac_val=0.5)
+        self.assertFalse(set(train) & set(val))
+        self.assertEqual(set(train) | set(val), {"igual", "otro", "tercero"})
+
+    def test_corpus_solo_duplicados_se_rechaza(self):
+        with self.assertRaisesRegex(ValueError, "distintos"):
+            dividir_documentos(["igual"] * 10)
+
     def test_fraccion_invalida(self):
         with self.assertRaisesRegex(ValueError, "frac_val"):
             dividir_documentos(["a", "b"], frac_val=1.0)
