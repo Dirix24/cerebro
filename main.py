@@ -41,6 +41,8 @@ def main():
     ap.add_argument("--guardar-historial", action="store_true", help="guardar turnos localmente")
     args = ap.parse_args()
 
+    from core.entorno_portatil import verificar_almacenamiento
+    verificar_almacenamiento()
     modelo, meta, ruta = cargar_modelo(args.ckpt)
     if modelo is None:
         sys.exit("[!] No hay ningún modelo entrenado.\n"
