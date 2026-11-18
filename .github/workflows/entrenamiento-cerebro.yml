@@ -1,6 +1,13 @@
 name: Cerebro - entrenamiento local de prueba
 on:
   workflow_dispatch:
+    inputs:
+      pasos_numpy:
+        description: 'Pasos de entrenamiento NumPy (máximo recomendado en runner: 300)'
+        required: false
+        default: '100'
+        type: choice
+        options: ['30', '100', '300']
   push:
     branches: [main, integracion-entrenamiento-neuronal, integracion-capacidades-cerebro, fase-1-historial-y-herramientas]
     paths:
@@ -49,3 +56,29 @@ jobs:
           name: cerebro-smoke-${{ matrix.arquitectura }}
           path: checkpoints/smoke-${{ matrix.arquitectura }}.pt
           retention-days: 7
+
+  entrenar-numpy-validado:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencias de entrenamiento NumPy
+        run: python -m pip install numpy pytest
+      - name: Validar núcleo y datos antes de entrenar
+        run: python -m pytest -q tests/test_plan_y_motores.py tests/test_motores_laboratorio_pdf.py tests/test_criterio.py
+      - name: Entrenar mini con validación y selección del mejor checkpoint
+        run: python train.py --tamano mini --pasos ${{ inputs.pasos_numpy }} --batch 2 --semilla 1234
+      - name: Conservar checkpoints para revisión manual
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cerebro-numpy-entrenado-${{ github.run_id }}
+          path: |
+            checkpoints/best.npz
+            checkpoints/last.npz
+          if-no-files-found: error
+          retention-days: 14
