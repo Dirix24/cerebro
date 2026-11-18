@@ -40,6 +40,8 @@ AYUDA = """Comandos:
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
   /motor-especializado texto recomienda motor sin ejecutar
+  /usb                      lista puertos serie del equipo, sin abrirlos
+  /preparar-robot nombre placa archivo.py   prepara proyecto MicroPython (WRITE)
   /motores                  lista motores disponibles y futuros
   /laboratorio archivo.py   inspecciona archivo del workspace sin ejecutarlo
   /crear-pdf nombre texto   crea PDF local (requiere reportlab)
@@ -229,6 +231,36 @@ class Conversacion:
                 return json.dumps(proponer_motor(resto), ensure_ascii=False, indent=2), False
             except ValueError:
                 return "Uso: /motor-especializado tarea que quieres realizar", False
+        if cmd == "/usb":
+            import json
+            from core.dispositivos_usb import listar_puertos
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps(listar_puertos(), ensure_ascii=False, indent=2), False
+            except (RuntimeError, OSError) as exc:
+                return f"USB: {exc}", False
+        if cmd == "/preparar-robot":
+            import json
+            from pathlib import Path
+            from core.proyectos_robot import preparar_robot
+            from core.entorno_portatil import verificar_almacenamiento
+            partes = resto.split()
+            if len(partes) != 3:
+                return "Uso: /preparar-robot nombre esp32|rp2040 archivo.py", False
+            if "READ" not in config.PERMISOS_AGENTE or "WRITE" not in config.PERMISOS_AGENTE:
+                return "Se requieren permisos READ y WRITE.", False
+            try:
+                verificar_almacenamiento()
+                base = Path(config.WORKSPACE_DIR).resolve(strict=True)
+                archivo = (base / partes[2]).resolve(strict=True)
+                if not archivo.is_relative_to(base) or not archivo.is_file() or archivo.stat().st_size > 100000:
+                    raise ValueError("El código debe ser un archivo regular del workspace de hasta 100 KB.")
+                codigo = archivo.read_text(encoding="utf-8")
+                resultado = preparar_robot(partes[0], partes[1], codigo)
+                return json.dumps(resultado, ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, UnicodeError, RuntimeError) as exc:
+                return f"Robot: {exc}", False
         if cmd == "/motores":
             from agent.motores import capacidades
             import json
