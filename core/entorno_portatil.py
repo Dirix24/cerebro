@@ -61,3 +61,31 @@ def recomendar_tamano(ram_bytes=None, fraccion=0.25):
         if estimacion <= ram_bytes * fraccion:
             elegible = tamano
     return elegible
+
+
+MARCADOR = ".cerebro_ssd"
+
+
+def preparar_almacenamiento(ruta=None):
+    """Inicialización explícita del hogar portátil; no borra datos."""
+    destino = Path(ruta or config.CEREBRO_HOME).expanduser().resolve()
+    destino.mkdir(parents=True, exist_ok=True)
+    marcador = destino / MARCADOR
+    if not marcador.exists():
+        marcador.write_text("cerebro-ssd-v1\\n", encoding="utf-8")
+    for nombre in ("data", "memory", "checkpoints", "learning"):
+        (destino / nombre).mkdir(exist_ok=True)
+    return destino
+
+
+def verificar_almacenamiento():
+    """Si se configuró SSD externo, exige marcador para evitar escrituras accidentales."""
+    if "CEREBRO_HOME" not in os.environ:
+        return
+    destino = Path(config.CEREBRO_HOME)
+    if not destino.is_dir() or not (destino / MARCADOR).is_file():
+        raise RuntimeError(
+            f"Almacenamiento portátil no disponible: {destino}. "
+            "Conecta el SSD y comprueba CEREBRO_HOME. "
+            "Solo en la primera instalación usa: python train.py --preparar-ssd"
+        )
