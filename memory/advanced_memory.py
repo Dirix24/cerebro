@@ -24,7 +24,7 @@ def _ahora():
 class AdvancedMemoryManager:
     def __init__(self, filepath=None, max_turnos=None):
         self.filepath = filepath or config.MEMORY_FILE
-        self.max_turnos = max_turnos or config.MEMORIA_CORTO_PLAZO_TURNOS * 2
+        self.max_turnos = config.MEMORIA_CORTO_PLAZO_TURNOS * 2 if max_turnos is None else max(0, int(max_turnos))
         self.short_term_context = []   # [{"rol": "usuario"|"ia", "contenido": str}]
         self.long_term_memory = {}
         self.cargar_memoria()
@@ -43,6 +43,7 @@ class AdvancedMemoryManager:
     # -- largo plazo ---------------------------------------------------------------
 
     def guardar_largo_plazo(self, clave, valor, categoria="general", importancia=1):
+        anterior = self.long_term_memory.copy()
         self.long_term_memory[clave] = {
             "valor": valor, "categoria": categoria,
             "importancia": importancia, "fecha": _ahora(),
@@ -51,7 +52,6 @@ class AdvancedMemoryManager:
         # el umbral. No elimina hechos únicos ni modifica pesos aprendidos.
         from memory.consolidacion import consolidar
         if len(self.long_term_memory) > 500:
-            anterior = self.long_term_memory.copy()
             try:
                 consolidar(self.long_term_memory, self.filepath)
                 self.persistir()
@@ -59,24 +59,39 @@ class AdvancedMemoryManager:
                 self.long_term_memory = anterior
                 raise
         else:
-            self.persistir()
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory = anterior
+                raise
 
     def recuperar_largo_plazo(self, clave):
         entrada = self.long_term_memory.get(clave)
-        return entrada["valor"] if entrada else None
+        return entrada.get("valor") if isinstance(entrada, dict) else None
 
     def actualizar_largo_plazo(self, clave, nuevo_valor):
         if clave in self.long_term_memory:
-            self.long_term_memory[clave]["valor"] = nuevo_valor
-            self.long_term_memory[clave]["fecha"] = _ahora()
-            self.persistir()
+            anterior = self.long_term_memory[clave]
+            actual = dict(anterior) if isinstance(anterior, dict) else {}
+            actual["valor"] = nuevo_valor
+            actual["fecha"] = _ahora()
+            self.long_term_memory[clave] = actual
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory[clave] = anterior
+                raise
             return True
         return False
 
     def eliminar_largo_plazo(self, clave):
         if clave in self.long_term_memory:
-            del self.long_term_memory[clave]
-            self.persistir()
+            anterior = self.long_term_memory.pop(clave)
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory[clave] = anterior
+                raise
             return True
         return False
 
