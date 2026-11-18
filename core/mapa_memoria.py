@@ -1,5 +1,6 @@
 """Grafo local de recuerdos y estados. No representa neuronas físicas."""
 import html
+from itertools import islice
 import json
 import math
 import re
@@ -18,7 +19,7 @@ def grafo(memoria, limite=35):
     indices = {}
     enlaces = []
     vistos = set()
-    for clave, dato in list(memoria.items())[:limite]:
+    for clave, dato in islice(memoria.items(), limite):
         valor = str(dato.get("valor", "")) if isinstance(dato, dict) else str(dato)
         nodo = {"id": str(clave), "etiqueta": str(clave)[:45],
                 "estado": "aprendido", "texto": valor[:150]}
