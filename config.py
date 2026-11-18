@@ -19,6 +19,11 @@ _RAIZ = os.path.abspath(os.path.dirname(__file__))
 # El código sigue en _RAIZ; los datos persistentes van a CEREBRO_HOME.
 CEREBRO_HOME = os.path.abspath(os.path.expanduser(os.environ.get("CEREBRO_HOME", _RAIZ)))
 
+
+def raiz_datos():
+    """Raíz portable; respeta _RAIZ en instalaciones antiguas y pruebas."""
+    return CEREBRO_HOME if "CEREBRO_HOME" in os.environ else _RAIZ
+
 # ----------------------------------------------------------------------------
 # PERFILES DE MODELO
 # ----------------------------------------------------------------------------
