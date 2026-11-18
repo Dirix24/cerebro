@@ -15,6 +15,9 @@ Puedes cambiar de perfil sin editar nada con una variable de entorno:
 import os
 
 _RAIZ = os.path.abspath(os.path.dirname(__file__))
+# Directorio de datos portátil: se puede apuntar a un SSD externo.
+# El código sigue en _RAIZ; los datos persistentes van a CEREBRO_HOME.
+CEREBRO_HOME = os.path.abspath(os.path.expanduser(os.environ.get("CEREBRO_HOME", _RAIZ)))
 
 # ----------------------------------------------------------------------------
 # PERFILES DE MODELO
@@ -133,21 +136,21 @@ MAX_TOOL_CALLS = 3
 # solo lectura. Las herramientas exigen su permiso y se rechazan si falta.
 PERMISOS_AGENTE = {"CALCULATE", "READ", "WRITE"}
 MAX_FILE_BYTES = 1_000_000       # tope de lectura/escritura por archivo
-WORKSPACE_DIR = os.path.join(_RAIZ, "data", "workspace")
+WORKSPACE_DIR = os.path.join(CEREBRO_HOME, "data", "workspace")
 
 # ----------------------------------------------------------------------------
 # RUTAS
 # ----------------------------------------------------------------------------
-CORPUS_FILE = os.path.join(_RAIZ, "data", "corpus.txt")
-CORPUS_DIR = os.path.join(_RAIZ, "data", "corpus")      # todos los .txt de aquí se añaden
-VALIDACION_FILE = os.path.join(_RAIZ, "data", "validacion.txt")  # reformulaciones nuevas de cosas que sí sabe
-GENERALIZACION_FILE = os.path.join(_RAIZ, "data", "generalizacion.txt")  # diálogos totalmente nuevos (nunca entrenados)
-TEST_FILE = os.path.join(_RAIZ, "data", "test.txt")  # conjunto final: nunca selecciona checkpoints
-MEMORY_FILE = os.path.join(_RAIZ, "memory", "memory_store.json")
-DIR_CHECKPOINTS = os.path.join(_RAIZ, "checkpoints")
+CORPUS_FILE = os.path.join(CEREBRO_HOME, "data", "corpus.txt")
+CORPUS_DIR = os.path.join(CEREBRO_HOME, "data", "corpus")      # todos los .txt de aquí se añaden
+VALIDACION_FILE = os.path.join(CEREBRO_HOME, "data", "validacion.txt")  # reformulaciones nuevas de cosas que sí sabe
+GENERALIZACION_FILE = os.path.join(CEREBRO_HOME, "data", "generalizacion.txt")  # diálogos totalmente nuevos (nunca entrenados)
+TEST_FILE = os.path.join(CEREBRO_HOME, "data", "test.txt")  # conjunto final: nunca selecciona checkpoints
+MEMORY_FILE = os.path.join(CEREBRO_HOME, "memory", "memory_store.json")
+DIR_CHECKPOINTS = os.path.join(CEREBRO_HOME, "checkpoints")
 CKPT_MEJOR = os.path.join(DIR_CHECKPOINTS, "best.npz")   # el que usa el chat
 CKPT_ULTIMO = os.path.join(DIR_CHECKPOINTS, "last.npz")  # con estado del optimizador
-DIR_EVOLUTION = os.path.join(_RAIZ, "learning", "evolution")
+DIR_EVOLUTION = os.path.join(CEREBRO_HOME, "learning", "evolution")
 
 
 # Una única opción para elegir capacidad sin ajustar manualmente dimensiones.
