@@ -113,7 +113,7 @@ def _mostrar(pantalla, eventos_fn=ultimos):
     pantalla.timeout(90)
     nombres = tuple(EXPRESIONES)
     indice = 0
-    automatico = False
+    automatico = True  # Modo automático por defecto.
     inicio = time.monotonic()
     ultima_lectura = 0
     expresion_auto = "esperando"
