@@ -39,6 +39,7 @@ AYUDA = """Comandos:
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
+  /motor-especializado texto recomienda motor sin ejecutar
   /motores                  lista motores disponibles y futuros
   /laboratorio archivo.py   inspecciona archivo del workspace sin ejecutarlo
   /crear-pdf nombre texto   crea PDF local (requiere reportlab)
@@ -221,6 +222,13 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/motor-especializado":
+            from agent.enrutador_especializado import proponer_motor
+            import json
+            try:
+                return json.dumps(proponer_motor(resto), ensure_ascii=False, indent=2), False
+            except ValueError:
+                return "Uso: /motor-especializado tarea que quieres realizar", False
         if cmd == "/motores":
             from agent.motores import capacidades
             import json
