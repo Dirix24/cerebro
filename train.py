@@ -44,9 +44,10 @@ def main():
     ap.add_argument("--pasos", type=int, default=None, help="pasos de entrenamiento")
     ap.add_argument("--perfil", choices=sorted(config.PERFILES), default=None,
                     help="perfil de modelo (también puede usarse CEREBRO_PERFIL)")
-    ap.add_argument("--tamano", choices=sorted(config.TAMANOS_NUCLEO), default=None,
+    ap.add_argument("--tamano", choices=sorted(config.TAMANOS_NUCLEO) + ["auto"], default=None,
                     help="único ajuste de capacidad NumPy: mini, normal, grande, potente, extra, maximo, experimental")
     ap.add_argument("--listar-tamanos", action="store_true", help="mostrar perfiles y memoria estimada sin entrenar")
+    ap.add_argument("--detectar-equipo", action="store_true", help="mostrar CPU, RAM y espacio del SSD sin entrenar")
     ap.add_argument("--epocas", type=float, default=None, help="alternativa a --pasos")
     ap.add_argument("--resume", action="store_true", help="continuar desde last.npz (o best.npz)")
     ap.add_argument("--corpus", default=None, help="archivo o carpeta de corpus alternativo")
@@ -57,6 +58,13 @@ def main():
     ap.add_argument("--forzar", action="store_true", help="sobrescribir best.npz sin comparar")
     args = ap.parse_args()
 
+    if args.detectar_equipo:
+        from core.entorno_portatil import detectar_entorno, recomendar_tamano
+        info = detectar_entorno()
+        for clave, valor in info.items():
+            print(f"{clave}: {valor}")
+        print(f"tamano_recomendado: {recomendar_tamano(info['ram_bytes'])}")
+        return
     if args.listar_tamanos:
         for nombre, perfil in config.TAMANOS_NUCLEO.items():
             n = config.estimar_parametros(perfil)
@@ -64,6 +72,10 @@ def main():
             memoria_mib = n * 16 / (1024 ** 2)
             print(f"{nombre:14} {perfil:10} {n:>13,} parámetros | >= {memoria_mib:,.0f} MiB para pesos/gradientes/AdamW")
         return
+    if args.tamano == "auto":
+        from core.entorno_portatil import recomendar_tamano
+        args.tamano = recomendar_tamano()
+        print(f"[i] Tamaño elegido por RAM: {args.tamano} (estimación, no garantía).")
     if args.tamano and args.perfil:
         ap.error("Usa --tamano o --perfil, no ambos.")
 
