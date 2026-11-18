@@ -30,7 +30,8 @@ def cargar_recuerdos():
     try:
         if not ruta.is_file() or ruta.stat().st_size > 5_000_000:
             return {}
-        memoria = json.loads(ruta.read_text(encoding="utf-8")).get("long_term", {})
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        memoria = datos.get("long_term", {}) if isinstance(datos, dict) else {}
         return memoria if isinstance(memoria, dict) else {}
     except (OSError, ValueError):
         return {}
