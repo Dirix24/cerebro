@@ -268,7 +268,32 @@ Cerebro incluye recordatorios **guardados localmente** en `CEREBRO_HOME/data/rec
 /github-estado Dirix24/cerebro
 ```
 
-Las fechas deben incluir zona horaria y ser futuras. **Los recordatorios no generan notificaciones por sí solos ni funcionan con Cerebro cerrado**; el comando `/recordatorios` muestra cuáles han vencido. Para avisos automáticos habrá que integrar posteriormente un planificador local autorizado. `/github-estado` requiere Internet y acceso al repositorio público; no lee repositorios privados, no pide credenciales, no hace commits y no abre pull requests.
+Las fechas deben incluir zona horaria y ser futuras. **Los recordatorios no generan notificaciones por sí solos ni funcionan con Cerebro cerrado**; el comando `/recordatorios` muestra cuáles han vencido. Para avisos automáticos habrá que integrar posteriormente un planificador local autorizado. `/github-estado` y `/github-errores` requieren Internet y acceso al repositorio público; no leen repositorios privados, no piden credenciales, no hacen commits y no abren pull requests.
+
+**Avisos locales automáticos mientras se ejecuta el planificador:**
+
+```bash
+python3 recordatorios_daemon.py --una-vez
+python3 recordatorios_daemon.py --intervalo 30
+```
+
+El segundo comando mantiene el proceso activo y muestra en su terminal los recordatorios vencidos una sola vez. Para avisos al cerrar esa terminal será necesario configurar un servicio local de usuario con consentimiento; no se instala automáticamente. Los avisos aún no son notificaciones gráficas.
+
+**GitHub (consulta de incidencias):**
+
+```text
+/github-errores Dirix24/cerebro
+```
+
+**Cámara (captura voluntaria y análisis geométrico básico):**
+
+```bash
+python3 -m pip install opencv-python
+python3 camara_local.py --confirmar
+python3 camara_local.py --confirmar --guardar imagen_robot.png
+```
+
+No se abre la cámara sin `--confirmar`. Se libera tras una captura; por defecto no se guarda ninguna foto. El número de contornos **no equivale a identificar objetos**. No hay reconocimiento semántico ni modelo de visión entrenado todavía.
 
 **Plan para la cámara:** incorporar captura local con permiso explícito, detección de objetos con un modelo de visión **propio** entrenado desde cero, almacenamiento de imágenes opcional y una política que prohíba encender la cámara sin autorización. Instalar OpenCV u otra biblioteca de imágenes no proporciona por sí solo un detector entrenado. La cámara y el reconocimiento de objetos **todavía no funcionan**.
 
