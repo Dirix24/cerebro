@@ -20,6 +20,10 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /origen                   identidad histórica declarada del creador
+  /configurar-creador nombre establece creador una sola vez
+  /exportar-legado ruta     exporta identidad pública, sin datos privados
+  /examinar-legado ruta     inspecciona respaldo sin importarlo
   /recordar-tarea FECHA_ISO texto  guarda recordatorio con zona horaria
   /recordatorios            muestra tareas guardadas y vencidas
   /github-estado dueño/repo consulta repositorio público, solo lectura
@@ -124,6 +128,17 @@ class Conversacion:
             resultado = "Correcto" if correcto else "Incorrecto"
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
+
+        # La identidad pública del creador se consulta sin acceder a memorias privadas.
+        import re as _re
+        if _re.search(r"\\b(quien te creo|quien fue tu creador|quien es tu creador)\\b",
+                      entrada.lower().replace("é", "e")):
+            from core.legado_identidad import leer_origen
+            origen = leer_origen()
+            if origen["creador"]:
+                return ("Mi creador registrado es " + origen["creador"] +
+                        ". Es una identidad declarada, no verificada criptográficamente."), False
+            return "Todavía no tengo registrada la identidad de mi creador.", False
 
         # Peticiones cotidianas: consultar herramientas sin memorizar comandos.
         from agent.lenguaje_natural import interpretar
@@ -300,6 +315,28 @@ class Conversacion:
                 return json.dumps(estado_publico(resto), ensure_ascii=False, indent=2), False
             except (OSError, ValueError, KeyError) as exc:
                 return f"GitHub: {exc}", False
+        if cmd in {"/origen", "/configurar-creador", "/exportar-legado", "/examinar-legado"}:
+            import json
+            from core.legado_identidad import (leer_origen, configurar_creador,
+                                                exportar_legado_publico, examinar_legado)
+            try:
+                if cmd == "/origen":
+                    resultado = leer_origen()
+                elif cmd == "/configurar-creador":
+                    if "WRITE" not in config.PERMISOS_AGENTE:
+                        return "Permiso WRITE requerido.", False
+                    resultado = configurar_creador(resto)
+                elif cmd == "/exportar-legado":
+                    if "WRITE" not in config.PERMISOS_AGENTE:
+                        return "Permiso WRITE requerido.", False
+                    resultado = exportar_legado_publico(resto)
+                else:
+                    if "READ" not in config.PERMISOS_AGENTE:
+                        return "Permiso READ requerido.", False
+                    resultado = examinar_legado(resto)
+                return json.dumps(resultado, ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                return f"Legado: {exc}", False
         if cmd == "/motor-especializado":
             from agent.enrutador_especializado import proponer_motor
             import json
