@@ -26,7 +26,7 @@ def grafo(memoria, limite=35):
         nodos.append(nodo)
         palabras = set(re.findall(r"\w{4,}", (nodo["id"] + " " + nodo["texto"]).lower()))
         for palabra in palabras:
-            for j in indices.get(palabra, [])[-8:]:
+            for j in (indices.get(palabra, []) if limite <= 35 else indices.get(palabra, [])[-8:]):
                 par = (j, i)
                 if par not in vistos:
                     enlaces.append(par)
