@@ -5,7 +5,6 @@ archivo de respaldo local, para permitir su recuperación manual.
 """
 import json
 import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -35,7 +34,10 @@ def plan_duplicados(memoria, umbral=500):
         categoria = _normalizar(dato.get("categoria", "general"))
         if not valor:
             continue
-        grupos.setdefault((valor, categoria), []).append(clave)
+        # Claves distintas pueden tener significados distintos aunque su valor coincida.
+        # Solo unificar variantes de escritura de la MISMA clave.
+        clave_normalizada = _normalizar(clave)
+        grupos.setdefault((clave_normalizada, valor, categoria), []).append(clave)
     sobrantes = []
     for claves in grupos.values():
         if len(claves) > 1:
