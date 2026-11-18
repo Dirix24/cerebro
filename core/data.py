@@ -83,7 +83,9 @@ def cargar_documentos(ruta=None):
 def dividir_documentos(docs, frac_val=0.1, seed=SEED_DIVISION):
     """División train/val por DOCUMENTO, con barajado determinista."""
     if len(docs) < 2:
-        return list(docs), list(docs)   # imposible separar: se valida sobre lo mismo
+        raise ValueError("Se necesitan al menos dos documentos para separar entrenamiento y validación.")
+    if not 0.0 < frac_val < 1.0:
+        raise ValueError("frac_val debe estar entre 0 y 1 (exclusivos).")
     orden = np.random.default_rng(seed).permutation(len(docs))
     n_val = min(max(1, int(round(len(docs) * frac_val))), len(docs) - 1)
     val = [docs[i] for i in orden[:n_val]]
@@ -125,6 +127,8 @@ def cargar_datos(ruta=None, frac_val=0.1):
     if explicita:
         vistos = set(explicita)
         train = [d for d in docs if d not in vistos]
+        if not train:
+            raise ValueError("Todos los documentos están en validación: no quedan datos de entrenamiento.")
         return train, explicita, "archivo data/validacion.txt"
     train, val = dividir_documentos(docs, frac_val)
     return train, val, f"{int(round(frac_val * 100))}% de documentos al azar"
