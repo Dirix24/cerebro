@@ -55,11 +55,17 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
     curses.curs_set(0)
     pantalla.nodelay(True)
     pantalla.timeout(120)
+    estilos = {estado: curses.A_BOLD for estado in PALETA}
     if curses.has_colors():
         curses.start_color()
+        try:
+            curses.use_default_colors()
+            fondo = -1
+        except curses.error:
+            fondo = curses.COLOR_BLACK
         for i, estado in enumerate(PALETA, 1):
-            curses.init_pair(i, PALETA[estado], -1 if curses.use_default_colors() is None else -1)
-    estilos = {estado: curses.color_pair(i) | curses.A_BOLD for i, estado in enumerate(PALETA, 1)}
+            curses.init_pair(i, PALETA[estado], fondo)
+            estilos[estado] = curses.color_pair(i) | curses.A_BOLD
     seleccionado, desplazamiento, zoom, congelado, tick = 0, 0, 1.0, False, 0
     memoria, eventos = {}, []
     nodos, enlaces = [], []
