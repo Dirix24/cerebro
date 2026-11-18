@@ -44,6 +44,9 @@ def main():
     ap.add_argument("--pasos", type=int, default=None, help="pasos de entrenamiento")
     ap.add_argument("--perfil", choices=sorted(config.PERFILES), default=None,
                     help="perfil de modelo (también puede usarse CEREBRO_PERFIL)")
+    ap.add_argument("--tamano", choices=sorted(config.TAMANOS_NUCLEO), default=None,
+                    help="único ajuste de capacidad NumPy: mini, normal, grande, potente, extra, maximo, experimental")
+    ap.add_argument("--listar-tamanos", action="store_true", help="mostrar perfiles y memoria estimada sin entrenar")
     ap.add_argument("--epocas", type=float, default=None, help="alternativa a --pasos")
     ap.add_argument("--resume", action="store_true", help="continuar desde last.npz (o best.npz)")
     ap.add_argument("--corpus", default=None, help="archivo o carpeta de corpus alternativo")
@@ -53,6 +56,16 @@ def main():
     ap.add_argument("--semilla", type=int, default=None)
     ap.add_argument("--forzar", action="store_true", help="sobrescribir best.npz sin comparar")
     args = ap.parse_args()
+
+    if args.listar_tamanos:
+        for nombre, perfil in config.TAMANOS_NUCLEO.items():
+            n = config.estimar_parametros(perfil)
+            # Pesos + gradientes + 2 momentos AdamW, float32 (mínimo teórico).
+            memoria_mib = n * 16 / (1024 ** 2)
+            print(f"{nombre:14} {perfil:10} {n:>13,} parámetros | >= {memoria_mib:,.0f} MiB para pesos/gradientes/AdamW")
+        return
+    if args.tamano and args.perfil:
+        ap.error("Usa --tamano o --perfil, no ambos.")
 
     ce = ConfigEntrenamiento()
     if args.lr is not None:
@@ -74,7 +87,8 @@ def main():
         print(f"[OK] Reanudando desde {os.path.relpath(origen)} (paso {trainer.paso})")
     else:
         cambios = {"dropout": args.dropout} if args.dropout is not None else None
-        trainer = TrainerEngine.desde_cero(docs_train, docs_val, perfil=args.perfil or config.PERFIL,
+        trainer = TrainerEngine.desde_cero(docs_train, docs_val, perfil=(config.perfil_por_tamano(args.tamano) if args.tamano
+                                                       else args.perfil or config.PERFIL),
                                                ce=ce, cambios_modelo=cambios)
 
     m = trainer.modelo
