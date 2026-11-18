@@ -494,3 +494,12 @@ El comando analiza el historial de evaluaciones, las correcciones pendientes y l
 **Qué NO hace:** reescribir su código fuente, instalar programas por iniciativa propia, controlar libremente el ordenador, aceptar correcciones no verificadas, cambiar arquitectura sin pruebas ni garantizar que cada entrenamiento lo vuelva más inteligente. Las propuestas del informe requieren revisión; el comando `automejora` **no entrena ni modifica pesos**.
 
 Pruebas específicas: `python3 -m pytest -q tests/test_automejora.py`.
+
+
+## 🌐 Consulta automática y respuestas claras (PR pendiente)
+
+En preguntas como `¿Qué es la robótica?`, Cerebro primero consulta su biblioteca local. Si falta una definición respaldada, **intenta automáticamente** obtener el artículo correspondiente de la API pública de Wikipedia en español. Guarda la definición con su fuente para consultas posteriores y muestra hasta dos frases en vez de cortar arbitrariamente a mitad de palabra.
+
+**Privacidad:** solo se envía el nombre del concepto, no el historial, recuerdos o archivos. No introduzcas información privada en una pregunta de definición si no quieres que su concepto se consulte en Wikipedia. La consulta automática solo se activa para definiciones sin respuesta local; otras preguntas siguen funcionando localmente. Si la conexión falla o Wikipedia devuelve HTTP 403, Cerebro informa de que no encontró una fuente fiable. No se utilizan APIs de IA externa ni se reentrenan pesos automáticamente.
+
+Pruebas: `python3 -m pytest -q tests/test_respuestas_claras_internet.py`. Estas funciones se encuentran en una PR pendiente de fusión, no necesariamente en `main`.
