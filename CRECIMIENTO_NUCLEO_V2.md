@@ -60,3 +60,22 @@ para los parámetros y el contexto consume memoria cuadrática por cabeza.
 Estos perfiles **no están preentrenados** y no aumentan automáticamente la
 calidad: requieren datos y evaluación. Los checkpoints pequeños no pueden
 cargarse directamente como arquitectura mayor sin migración de pesos.
+
+## Selector único de tamaño (NumPy)
+
+Para no configurar dimensiones, capas y cabezas por separado, usa `--tamano`:
+
+```bash
+python train.py --listar-tamanos
+python train.py --tamano grande --pasos 1000
+```
+
+Opciones: `mini`, `normal`, `grande`, `potente`, `extra`, `maximo`, `experimental`.
+Corresponden a `v2`, `v2_plus`, `v2_6m`, `v2_16m`, `v2_30m`,
+`v2_60m`, `v2_120m`. El último escalón es experimental y puede requerir
+mucha RAM y tiempo. `--listar-tamanos` estima un mínimo de memoria para
+pesos, gradientes y dos momentos AdamW en float32; no incluye activaciones,
+corpus ni memoria adicional de Python/NumPy.
+
+El selector se aplica al entrenamiento **desde cero**. `--resume` carga la
+arquitectura del checkpoint existente y no la convierte a otro tamaño.
