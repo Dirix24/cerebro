@@ -22,3 +22,18 @@ def estado_publico(repositorio, *, abrir=urlopen):
             "privado": datos["private"], "url": datos["html_url"],
             "actualizado": datos.get("pushed_at"),
             "modo": "solo_lectura", "modelo_ia_externo": False}
+
+
+def incidencias_publicas(repositorio, *, abrir=urlopen):
+    """Consulta incidencias públicas sin credenciales ni escrituras."""
+    if not _REPO.fullmatch(repositorio) or ".." in repositorio:
+        raise ValueError("Repositorio inválido; usa propietario/nombre")
+    solicitud = Request("https://api.github.com/repos/" + repositorio +
+                        "/issues?state=open&per_page=20",
+                        headers={"Accept": "application/vnd.github+json",
+                                 "User-Agent": "Cerebro-V2-local"})
+    with abrir(solicitud, timeout=8) as respuesta:
+        datos = json.load(respuesta)
+    return [{"numero": item["number"], "titulo": item["title"],
+             "url": item["html_url"]} for item in datos
+            if "pull_request" not in item]
