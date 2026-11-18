@@ -12,6 +12,7 @@ Memoria de Cerebro.
 
 import datetime
 import json
+import math
 import os
 
 import config
@@ -24,7 +25,7 @@ def _ahora():
 class AdvancedMemoryManager:
     def __init__(self, filepath=None, max_turnos=None):
         self.filepath = filepath or config.MEMORY_FILE
-        self.max_turnos = max_turnos or config.MEMORIA_CORTO_PLAZO_TURNOS * 2
+        self.max_turnos = config.MEMORIA_CORTO_PLAZO_TURNOS * 2 if max_turnos is None else max(0, int(max_turnos))
         self.short_term_context = []   # [{"rol": "usuario"|"ia", "contenido": str}]
         self.long_term_memory = {}
         self.cargar_memoria()
@@ -43,28 +44,55 @@ class AdvancedMemoryManager:
     # -- largo plazo ---------------------------------------------------------------
 
     def guardar_largo_plazo(self, clave, valor, categoria="general", importancia=1):
+        anterior = self.long_term_memory.copy()
         self.long_term_memory[clave] = {
             "valor": valor, "categoria": categoria,
             "importancia": importancia, "fecha": _ahora(),
         }
-        self.persistir()
+        # Optimización conservadora: solo duplicados equivalentes al superar
+        # el umbral. No elimina hechos únicos ni modifica pesos aprendidos.
+        from memory.consolidacion import consolidar
+        if len(self.long_term_memory) > 500:
+            try:
+                consolidar(self.long_term_memory, self.filepath)
+                self.persistir()
+            except Exception:
+                self.long_term_memory = anterior
+                raise
+        else:
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory = anterior
+                raise
 
     def recuperar_largo_plazo(self, clave):
         entrada = self.long_term_memory.get(clave)
-        return entrada["valor"] if entrada else None
+        return entrada.get("valor") if isinstance(entrada, dict) else None
 
     def actualizar_largo_plazo(self, clave, nuevo_valor):
         if clave in self.long_term_memory:
-            self.long_term_memory[clave]["valor"] = nuevo_valor
-            self.long_term_memory[clave]["fecha"] = _ahora()
-            self.persistir()
+            anterior = self.long_term_memory[clave]
+            actual = dict(anterior) if isinstance(anterior, dict) else {}
+            actual["valor"] = nuevo_valor
+            actual["fecha"] = _ahora()
+            self.long_term_memory[clave] = actual
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory[clave] = anterior
+                raise
             return True
         return False
 
     def eliminar_largo_plazo(self, clave):
         if clave in self.long_term_memory:
-            del self.long_term_memory[clave]
-            self.persistir()
+            anterior = self.long_term_memory.pop(clave)
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory[clave] = anterior
+                raise
             return True
         return False
 
@@ -74,23 +102,31 @@ class AdvancedMemoryManager:
         como máximo `limite` entradas, preservando la memoria explícita.
         """
         import re
-        palabras = {p for p in re.findall(r"[\wáéíóúñü]+", texto.lower()) if len(p) > 2}
+        palabras = {p for p in re.findall(r"[\wáéíóúñü]+", str(texto).lower()) if len(p) > 2}
         resultados = []
         for clave, entrada in self.long_term_memory.items():
+            if not isinstance(entrada, dict):
+                continue
             campo = f"{clave} {entrada.get('valor', '')} {entrada.get('categoria', '')}".lower()
             score = sum(1 for p in palabras if p in campo)
             if score:
-                score += 0.01 * float(entrada.get("importancia", 1))
-                resultados.append((score, clave, entrada["valor"]))
+                try:
+                    importancia = float(entrada.get("importancia", 1))
+                    if not math.isfinite(importancia):
+                        importancia = 1.0
+                except (TypeError, ValueError, OverflowError):
+                    importancia = 1.0
+                score += 0.01 * importancia
+                resultados.append((score, str(clave), entrada.get("valor")))
         resultados.sort(reverse=True)
         return {k: v for _, k, v in resultados[:max(0, limite)]}
 
     def buscar_similar(self, texto, limite=5):
         """Búsqueda TF-IDF de palabras y trigramas, sin modelos externos."""
         from core.semantic_memory import buscar_similares
-        claves = list(self.long_term_memory)
+        claves = [k for k, v in self.long_term_memory.items() if isinstance(v, dict)]
         documentos = [f"{k} {self.long_term_memory[k].get('valor', '')}" for k in claves]
-        return {claves[i]: self.long_term_memory[claves[i]]["valor"]
+        return {claves[i]: self.long_term_memory[claves[i]].get("valor")
                 for i, _ in buscar_similares(texto, documentos, limite)}
 
     # -- persistencia ---------------------------------------------------------------
@@ -107,6 +143,8 @@ class AdvancedMemoryManager:
         if os.path.exists(self.filepath):
             try:
                 with open(self.filepath, "r", encoding="utf-8") as f:
-                    self.long_term_memory = json.load(f).get("long_term", {})
+                    datos = json.load(f)
+                    recuerdos = datos.get("long_term", {}) if isinstance(datos, dict) else {}
+                    self.long_term_memory = recuerdos if isinstance(recuerdos, dict) else {}
             except (OSError, ValueError):
                 self.long_term_memory = {}

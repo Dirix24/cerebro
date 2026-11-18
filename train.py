@@ -44,6 +44,13 @@ def main():
     ap.add_argument("--pasos", type=int, default=None, help="pasos de entrenamiento")
     ap.add_argument("--perfil", choices=sorted(config.PERFILES), default=None,
                     help="perfil de modelo (también puede usarse CEREBRO_PERFIL)")
+    ap.add_argument("--tamano", choices=sorted(config.TAMANOS_NUCLEO) + ["auto"], default=None,
+                    help="único ajuste de capacidad NumPy: mini, normal, grande, potente, extra, maximo, experimental")
+    ap.add_argument("--plan-entrenamiento", action="store_true", help="calcular presupuesto RAM sin entrenar")
+    ap.add_argument("--permitir-riesgo-memoria", action="store_true", help="aceptar entrenar aunque la estimación supere el presupuesto RAM")
+    ap.add_argument("--listar-tamanos", action="store_true", help="mostrar perfiles y memoria estimada sin entrenar")
+    ap.add_argument("--preparar-ssd", action="store_true", help="inicializar una sola vez CEREBRO_HOME")
+    ap.add_argument("--detectar-equipo", action="store_true", help="mostrar CPU, RAM y espacio del SSD sin entrenar")
     ap.add_argument("--epocas", type=float, default=None, help="alternativa a --pasos")
     ap.add_argument("--resume", action="store_true", help="continuar desde last.npz (o best.npz)")
     ap.add_argument("--corpus", default=None, help="archivo o carpeta de corpus alternativo")
@@ -54,6 +61,52 @@ def main():
     ap.add_argument("--forzar", action="store_true", help="sobrescribir best.npz sin comparar")
     args = ap.parse_args()
 
+    if args.preparar_ssd:
+        from core.entorno_portatil import preparar_almacenamiento
+        if "CEREBRO_HOME" not in os.environ:
+            ap.error("Define CEREBRO_HOME con la ruta real del SSD antes de prepararlo.")
+        print(f"Almacenamiento preparado: {preparar_almacenamiento()}")
+        return
+    if args.detectar_equipo:
+        from core.entorno_portatil import detectar_entorno, recomendar_tamano
+        info = detectar_entorno()
+        for clave, valor in info.items():
+            print(f"{clave}: {valor}")
+        print(f"tamano_recomendado: {recomendar_tamano(info['ram_bytes'])}")
+        return
+    if args.listar_tamanos:
+        for nombre, perfil in config.TAMANOS_NUCLEO.items():
+            n = config.estimar_parametros(perfil)
+            # Pesos + gradientes + 2 momentos AdamW, float32 (mínimo teórico).
+            memoria_mib = n * 16 / (1024 ** 2)
+            print(f"{nombre:14} {perfil:10} {n:>13,} parámetros | >= {memoria_mib:,.0f} MiB para pesos/gradientes/AdamW")
+        return
+    if args.tamano == "auto":
+        from core.entorno_portatil import recomendar_tamano
+        args.tamano = recomendar_tamano()
+        print(f"[i] Tamaño elegido por RAM: {args.tamano} (estimación, no garantía).")
+    if args.plan_entrenamiento:
+        import json
+        from core.plan_entrenamiento import plan_entrenamiento
+        elegido = args.tamano or "mini"
+        if elegido == "auto":
+            from core.entorno_portatil import recomendar_tamano
+            elegido = recomendar_tamano()
+        print(json.dumps(plan_entrenamiento(elegido), ensure_ascii=False, indent=2))
+        return
+    if args.tamano and args.perfil:
+        ap.error("Usa --tamano o --perfil, no ambos.")
+
+    from core.entorno_portatil import verificar_almacenamiento
+    verificar_almacenamiento()
+
+    if args.tamano and not args.resume:
+        from core.plan_entrenamiento import plan_entrenamiento
+        plan = plan_entrenamiento(args.tamano)
+        if plan["cabe_en_presupuesto"] is False and not args.permitir_riesgo_memoria:
+            ap.error("El tamaño elegido supera el presupuesto conservador de RAM. "
+                     "Usa --plan-entrenamiento para revisarlo, reduce --tamano "
+                     "o acepta expresamente con --permitir-riesgo-memoria.")
     ce = ConfigEntrenamiento()
     if args.lr is not None:
         ce.lr = args.lr
@@ -74,7 +127,8 @@ def main():
         print(f"[OK] Reanudando desde {os.path.relpath(origen)} (paso {trainer.paso})")
     else:
         cambios = {"dropout": args.dropout} if args.dropout is not None else None
-        trainer = TrainerEngine.desde_cero(docs_train, docs_val, perfil=args.perfil or config.PERFIL,
+        trainer = TrainerEngine.desde_cero(docs_train, docs_val, perfil=(config.perfil_por_tamano(args.tamano) if args.tamano
+                                                       else args.perfil or config.PERFIL),
                                                ce=ce, cambios_modelo=cambios)
 
     m = trainer.modelo

@@ -20,6 +20,14 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /origen                   identidad histórica declarada del creador
+  /configurar-creador nombre establece creador una sola vez
+  /exportar-legado ruta     exporta identidad pública, sin datos privados
+  /examinar-legado ruta     inspecciona respaldo sin importarlo
+  /recordar-tarea FECHA_ISO texto  guarda recordatorio con zona horaria
+  /recordatorios            muestra tareas guardadas y vencidas
+  /github-estado dueño/repo consulta repositorio público, solo lectura
+  /github-errores dueño/repo lista incidencias públicas abiertas
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
@@ -38,6 +46,18 @@ AYUDA = """Comandos:
   /biblioteca texto         busca en documentos locales
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
+  /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
+  /motor-especializado texto recomienda motor sin ejecutar
+  /descubrir-i2c 0x3c 0x68 interpreta direcciones I2C aportadas, sin sondear
+  /analizar-robot archivo.py analiza interfaces de código sin ejecutarlo
+  /usb                      lista puertos serie del equipo, sin abrirlos
+  /preparar-robot nombre placa archivo.py   prepara proyecto MicroPython (WRITE)
+  /usb                      enumera puertos serie sin abrirlos (pyserial opcional)\n  /crear-robot nombre arduino|esp32  prepara firmware de ejemplo sin instalarlo\n  /motores                  lista motores disponibles y futuros
+  /laboratorio archivo.py   inspecciona archivo del workspace sin ejecutarlo
+  /crear-pdf nombre texto   crea PDF local (requiere reportlab)
+  /criterio petición        evalúa ruta, permisos y riesgos sin actuar
+  /materias                 lista materias disponibles
+  /estudiar materia         propone temas y práctica local
   /experimentos             muestra metricas registradas
   /resumir texto            resumen extractivo local
   /palabras-clave texto     palabras frecuentes del texto
@@ -87,6 +107,12 @@ class Conversacion:
         entrada = entrada.strip()
         if not entrada:
             return "", False
+        # Telemetría real de recepción; sin registrar el texto del usuario.
+        try:
+            from core.actividad_neuronal import registrar as _registrar_actividad
+            _registrar_actividad("analizando", "mensaje")
+        except OSError:
+            _registrar_actividad = lambda *_args: None
         if entrada.startswith("/"):
             return self._comando(entrada)
 
@@ -96,7 +122,7 @@ class Conversacion:
             from pathlib import Path
             from core.repaso_espaciado import cargar, calificar
             from core.autoevaluacion import evaluar_respuesta
-            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ruta = Path(config.raiz_datos()) / "data" / "repaso_espaciado.json"
             ficha = next((t for t in cargar(ruta)
                           if t["pregunta"] == self.pregunta_repaso), None)
             if ficha is None:
@@ -108,6 +134,69 @@ class Conversacion:
             resultado = "Correcto" if correcto else "Incorrecto"
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
+
+        # La visualización se puede solicitar hablando, sin memorizar comandos.
+        import re as _viz
+        if _viz.search(r"\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\b",
+                       entrada.lower()):
+            return self._comando("/estacion-neuronal")
+
+        # Guardado solicitado expresamente; no se considera verdad verificada.
+        import re as _rec
+        recuerdo = _rec.match(r"^(?:cerebro[, ]+)?recuerda que\s+(.{3,400})$",
+                              entrada, flags=_rec.IGNORECASE)
+        if recuerdo:
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Necesito permiso WRITE para guardar el recuerdo.", False
+            from hashlib import sha256
+            texto = recuerdo.group(1).strip()
+            clave = "declaracion_" + sha256(texto.encode("utf-8")).hexdigest()[:16]
+            self.memoria.guardar_largo_plazo(clave, texto, categoria="declarado_por_usuario",
+                                             importancia=2)
+            _registrar_actividad("aprendido", "memoria")
+            return ("He guardado ese recuerdo como información declarada por ti, "
+                    "no como un hecho verificado."), False
+
+        # La identidad pública del creador se consulta sin acceder a memorias privadas.
+        import re as _re
+        if _re.search(r"\b(quien te creo|quien fue tu creador|quien es tu creador)\b",
+                      entrada.lower().replace("é", "e")):
+            from core.legado_identidad import leer_origen
+            origen = leer_origen()
+            if origen["creador"]:
+                return ("Mi creador registrado es " + origen["creador"] +
+                        ". Es una identidad declarada, no verificada criptográficamente."), False
+            return "Todavía no tengo registrada la identidad de mi creador.", False
+
+        # Peticiones cotidianas: consultar herramientas sin memorizar comandos.
+        from agent.lenguaje_natural import interpretar
+        solicitud = interpretar(entrada)
+        if solicitud:
+            accion = solicitud["accion"]
+            if solicitud["requiere_confirmacion"]:
+                respuestas = {
+                    "camara": "Puedo capturar una imagen, pero necesito tu autorización explícita. "
+                              "La captura puntual está disponible en camara_local.py --confirmar; "
+                              "todavía no identifico objetos con un modelo entrenado.",
+                    "github_escritura": "Puedo consultar GitHub, pero todavía no modifico repositorios "
+                                       "automáticamente. No haré cambios sin revisar una propuesta contigo.",
+                    "recordatorio_nuevo": "Claro. Dime la fecha y la hora con zona horaria "
+                                          "(por ejemplo, 2027-01-20T10:00:00+01:00) "
+                                          "y el texto que quieres recordar.",
+                }
+                return respuestas[accion], False
+            if accion == "usb":
+                return self._comando("/usb")
+            if accion == "recordatorios":
+                return self._comando("/recordatorios")
+            if accion.startswith("github_"):
+                import re
+                m = re.search(r"(?<![\w.-])([\w.-]+/[\w.-]+)(?![\w.-])", entrada)
+                if not m:
+                    return ("¿Qué repositorio de GitHub quieres consultar? "
+                            "Dime propietario/nombre, por ejemplo Dirix24/cerebro."), False
+                return self._comando(("/github-errores " if accion == "github_errores"
+                                      else "/github-estado ") + m.group(1))
 
         plan = detectar_intencion(entrada)
         if plan:
@@ -121,19 +210,22 @@ class Conversacion:
         if m and m.group(1).lower() not in _NO_SON_NOMBRES:
             nombre = m.group(1).capitalize()
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
+            _registrar_actividad("aprendido", "memoria")
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
         # Orquestador: usar fuentes locales verificables antes de generar texto.
-        from agent.orquestador import seleccionar
+        from agent.orquestador import seleccionar, extraer_consulta_local
         ruta = seleccionar(entrada)
         if ruta == "busqueda_local":
+            _registrar_actividad("investigando", "consulta")
             from core.local_search import buscar
-            consulta = re.sub(r"(?i)^\\s*[¿]?\\s*(?:busca(?:r)?|consulta(?:r)?)\\s+(?:en\\s+)?(?:el\\s+)?(?:corpus|biblioteca)\\s*[: ]+", "", entrada).strip()
+            consulta = extraer_consulta_local(entrada)
             resultados = buscar(consulta) if consulta else []
             if resultados:
                 return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
             return "No encontré información en el corpus local.", False
         if ruta == "conocimiento":
+            _registrar_actividad("investigando", "consulta")
             from core.conocimiento import buscar as buscar_conocimiento
             resultados = buscar_conocimiento(entrada, limite=1)
             if resultados:
@@ -147,7 +239,9 @@ class Conversacion:
                 return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
         except (OSError, ValueError):
             pass
-        return self.responder_modelo(entrada), False
+        resultado = self.responder_modelo(entrada)
+        _registrar_actividad("consolidado", "respuesta")
+        return resultado, False
 
     # -- respuesta del modelo -----------------------------------------------------------
 
@@ -167,11 +261,15 @@ class Conversacion:
             if len(ids) <= B - max_nuevos or not turnos:
                 break
             turnos = turnos[2:] if len(turnos) >= 2 else []   # descarta el turno más viejo
-        return ids[-(B - max_nuevos):]
+        # Preserva al menos el prefijo de generación y evita slicing [-0:]
+        # (que devolvería el prompt entero y desbordaría el contexto).
+        espacio = max(1, B - max_nuevos)
+        return ids[-espacio:]
 
     def responder_modelo(self, mensaje):
         g = self.gen
-        max_nuevos = max(8, min(g["max_nuevos"], self.modelo.cfg.block_size - 40))
+        # Nunca solicitar más tokens que los que caben en la ventana.
+        max_nuevos = max(1, min(g["max_nuevos"], self.modelo.cfg.block_size - 1))
         ids = self._armar_prompt_ids(mensaje, max_nuevos)
         nuevos, _ = self.modelo.generar_ids(
             ids, max_nuevos=max_nuevos, temperatura=g["temperatura"], top_k=g["top_k"],
@@ -210,6 +308,250 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/estacion-neuronal":
+            from pathlib import Path
+            from core.estacion_neuronal import guardar_estacion
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                ruta = Path(config.CEREBRO_HOME) / "data" / "estacion_neuronal.html"
+                if ruta.exists():
+                    return "Ya existe la estación. Muévela o elimínala para generar otra.", False
+                guardar_estacion(self.memoria.long_term_memory, ruta)
+                return f"Estación neuronal creada: {ruta}. Ábrela en tu navegador para explorar.", False
+            except (OSError, ValueError) as exc:
+                return f"Estación neuronal: {exc}", False
+        if cmd == "/mapa-recuerdos":
+            from pathlib import Path
+            from core.mapa_memoria import guardar_mapa
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                ruta = Path(config.CEREBRO_HOME) / "data" / "mapa_recuerdos.svg"
+                if ruta.exists():
+                    return "El mapa ya existe; mueve o elimina el anterior para generar otro.", False
+                guardar_mapa(self.memoria.long_term_memory, ruta)
+                return f"Mapa local creado: {ruta}. Ábrelo en un navegador.", False
+            except (OSError, ValueError) as exc:
+                return f"Mapa de recuerdos: {exc}", False
+        if cmd == "/recordar-tarea":
+            import json
+            from core.recordatorios_locales import crear
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Permiso WRITE requerido.", False
+            fecha, separador, texto = resto.partition(" ")
+            if not separador:
+                return "Uso: /recordar-tarea 2027-01-20T10:00:00+01:00 revisar proyecto", False
+            try:
+                return json.dumps(crear(fecha, texto), ensure_ascii=False), False
+            except (OSError, ValueError) as exc:
+                return f"Recordatorio: {exc}", False
+        if cmd == "/recordatorios":
+            import json
+            from core.recordatorios_locales import listar, pendientes
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps({"todos": listar(), "vencidos": pendientes()},
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError) as exc:
+                return f"Recordatorios: {exc}", False
+        if cmd == "/github-errores":
+            import json
+            from core.github_local import incidencias_publicas
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps(incidencias_publicas(resto), ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, KeyError) as exc:
+                return f"GitHub: {exc}", False
+        if cmd == "/github-estado":
+            import json
+            from core.github_local import estado_publico
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps(estado_publico(resto), ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, KeyError) as exc:
+                return f"GitHub: {exc}", False
+        if cmd in {"/origen", "/configurar-creador", "/exportar-legado", "/examinar-legado"}:
+            import json
+            from core.legado_identidad import (leer_origen, configurar_creador,
+                                                exportar_legado_publico, examinar_legado)
+            try:
+                if cmd == "/origen":
+                    resultado = leer_origen()
+                elif cmd == "/configurar-creador":
+                    if "WRITE" not in config.PERMISOS_AGENTE:
+                        return "Permiso WRITE requerido.", False
+                    resultado = configurar_creador(resto)
+                elif cmd == "/exportar-legado":
+                    if "WRITE" not in config.PERMISOS_AGENTE:
+                        return "Permiso WRITE requerido.", False
+                    resultado = exportar_legado_publico(resto)
+                else:
+                    if "READ" not in config.PERMISOS_AGENTE:
+                        return "Permiso READ requerido.", False
+                    resultado = examinar_legado(resto)
+                return json.dumps(resultado, ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                return f"Legado: {exc}", False
+        if cmd == "/motor-especializado":
+            from agent.enrutador_especializado import proponer_motor
+            import json
+            try:
+                return json.dumps(proponer_motor(resto), ensure_ascii=False, indent=2), False
+            except ValueError:
+                return "Uso: /motor-especializado tarea que quieres realizar", False
+        if cmd == "/descubrir-i2c":
+            import json
+            from core.descubrimiento_robot import interpretar_inventario_i2c
+            if not resto:
+                return "Uso: /descubrir-i2c 0x3c 0x68", False
+            try:
+                tokens = resto.split()
+                direcciones = [int(x, 16) for x in tokens]
+                return json.dumps(interpretar_inventario_i2c(direcciones),
+                                  ensure_ascii=False, indent=2), False
+            except ValueError as exc:
+                return f"I2C: {exc}", False
+        if cmd == "/analizar-robot":
+            import json
+            from pathlib import Path
+            from core.descubrimiento_robot import analizar_codigo_robot
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            if not resto:
+                return "Uso: /analizar-robot archivo.py", False
+            try:
+                base = Path(config.WORKSPACE_DIR).resolve(strict=True)
+                archivo = (base / resto).resolve(strict=True)
+                if not archivo.is_relative_to(base) or not archivo.is_file() or archivo.stat().st_size > 100000:
+                    raise ValueError("Archivo inválido o fuera del workspace.")
+                return json.dumps(analizar_codigo_robot(archivo.read_text(encoding="utf-8")),
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, UnicodeError) as exc:
+                return f"Robot: {exc}", False
+        if cmd == "/usb":
+            import json
+            from core.dispositivos_usb import listar_puertos
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps(listar_puertos(), ensure_ascii=False, indent=2), False
+            except (RuntimeError, OSError) as exc:
+                return f"USB: {exc}", False
+        if cmd == "/preparar-robot":
+            import json
+            from pathlib import Path
+            from core.proyectos_robot import preparar_robot
+            from core.entorno_portatil import verificar_almacenamiento
+            partes = resto.split()
+            if len(partes) != 3:
+                return "Uso: /preparar-robot nombre esp32|rp2040 archivo.py", False
+            if "READ" not in config.PERMISOS_AGENTE or "WRITE" not in config.PERMISOS_AGENTE:
+                return "Se requieren permisos READ y WRITE.", False
+            try:
+                verificar_almacenamiento()
+                base = Path(config.WORKSPACE_DIR).resolve(strict=True)
+                archivo = (base / partes[2]).resolve(strict=True)
+                if not archivo.is_relative_to(base) or not archivo.is_file() or archivo.stat().st_size > 100000:
+                    raise ValueError("El código debe ser un archivo regular del workspace de hasta 100 KB.")
+                codigo = archivo.read_text(encoding="utf-8")
+                resultado = preparar_robot(partes[0], partes[1], codigo)
+                return json.dumps(resultado, ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, UnicodeError, RuntimeError) as exc:
+                return f"Robot: {exc}", False
+        if cmd == "/usb":
+            import json
+            from core.dispositivos_conectados import listar_puertos
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido para consultar dispositivos.", False
+            try:
+                return json.dumps(listar_puertos(), ensure_ascii=False, indent=2), False
+            except (ImportError, OSError) as exc:
+                return f"No pude enumerar puertos: {exc}", False
+        if cmd == "/crear-robot":
+            import json
+            from core.robotica_local import preparar_robot
+            from core.entorno_portatil import verificar_almacenamiento
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Permiso WRITE requerido.", False
+            partes = resto.split()
+            if len(partes) != 2:
+                return "Uso: /crear-robot nombre arduino|esp32", False
+            try:
+                verificar_almacenamiento()
+                return json.dumps(preparar_robot(partes[0], partes[1]),
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, RuntimeError) as exc:
+                return f"No pude preparar el robot: {exc}", False
+        if cmd == "/motores":
+            from agent.motores import capacidades
+            import json
+            return json.dumps(capacidades(), ensure_ascii=False, indent=2), False
+        if cmd == "/laboratorio":
+            from core.laboratorio_seguridad import inspeccionar_archivo
+            from core.entorno_portatil import verificar_almacenamiento
+            import json
+            if not resto:
+                return "Uso: /laboratorio archivo.py", False
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                verificar_almacenamiento()
+                return json.dumps(inspeccionar_archivo(resto, config.WORKSPACE_DIR),
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, RuntimeError) as exc:
+                return f"Laboratorio: {exc}", False
+        if cmd == "/crear-pdf":
+            from core.documentos_pdf import crear_pdf
+            from core.entorno_portatil import verificar_almacenamiento
+            partes_pdf = resto.split(None, 1)
+            if len(partes_pdf) != 2:
+                return "Uso: /crear-pdf nombre texto del documento", False
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Permiso WRITE requerido.", False
+            try:
+                verificar_almacenamiento()
+                ruta_pdf = crear_pdf(partes_pdf[0], partes_pdf[1])
+                return f"PDF creado: {ruta_pdf}", False
+            except (OSError, ValueError, RuntimeError) as exc:
+                return f"No pude crear PDF: {exc}", False
+        if cmd == "/criterio":
+            from agent.criterio import evaluar_peticion
+            if not resto.strip():
+                return "Uso: /criterio /crear-proyecto mi_app cli", False
+            import json
+            evaluacion = evaluar_peticion(resto, config.PERMISOS_AGENTE)
+            return json.dumps(evaluacion, ensure_ascii=False, indent=2), False
+        if cmd == "/materias":
+            from core.materias import listar_materias
+            return ("Materias disponibles:\\n" +
+                    "\\n".join(f"- {clave}: {titulo}" for clave, titulo in listar_materias())), False
+        if cmd == "/estudiar":
+            from core.materias import plan_materia
+            try:
+                return plan_materia(resto.strip().lower()), False
+            except ValueError:
+                return "Materia desconocida. Escribe /materias para ver las disponibles.", False
+        if cmd == "/crear-proyecto":
+            from core.proyectos_locales import crear_proyecto
+            from core.entorno_portatil import verificar_almacenamiento
+            partes_proyecto = resto.split()
+            if not 1 <= len(partes_proyecto) <= 2:
+                return "Uso: /crear-proyecto nombre [cli|biblioteca]", False
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "No puedo crear proyectos: falta permiso WRITE.", False
+            try:
+                verificar_almacenamiento()
+                creado = crear_proyecto(partes_proyecto[0],
+                                       partes_proyecto[1] if len(partes_proyecto) == 2 else "cli")
+                return ("Proyecto creado: " + creado["ruta"] +
+                        "\\nArchivos: " + ", ".join(creado["archivos"]) +
+                        "\\nNo se ha ejecutado código."), False
+            except (ValueError, OSError, RuntimeError) as exc:
+                return f"No pude crear el proyecto: {exc}", False
         if cmd == "/motor-para":
             from agent.orquestador import explicar_seleccion
             if not resto:
@@ -219,7 +561,7 @@ class Conversacion:
         if cmd in ("/registrar-error", "/errores-pendientes"):
             from pathlib import Path
             from core.errores_aprendizaje import registrar, pendientes
-            ruta = Path(config._RAIZ) / "data" / "errores_aprendizaje.jsonl"
+            ruta = Path(config.raiz_datos()) / "data" / "errores_aprendizaje.jsonl"
             if cmd == "/errores-pendientes":
                 errores = pendientes(ruta)
                 return ("\n".join(f"{e['pregunta']} => {e['correccion']}" for e in errores)
@@ -235,7 +577,7 @@ class Conversacion:
         if cmd == "/progreso":
             from pathlib import Path
             from core.medicion_progreso import medir
-            raiz = Path(config._RAIZ) / "data"
+            raiz = Path(config.raiz_datos()) / "data"
             estado_rng = self.rng.bit_generator.state
             turnos = list(self.memoria.short_term_context)
             try:
@@ -254,7 +596,7 @@ class Conversacion:
         if cmd == "/autoevaluar":
             from pathlib import Path
             from core.autoevaluacion import ejecutar
-            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ruta = Path(config.raiz_datos()) / "data" / "repaso_espaciado.json"
             estado_rng = self.rng.bit_generator.state
             turnos = list(self.memoria.short_term_context)
             try:
@@ -272,7 +614,7 @@ class Conversacion:
         if cmd in ("/aprender-ficha", "/repasar", "/calificar"):
             from pathlib import Path
             from core.repaso_espaciado import anadir, pendientes, calificar
-            ruta = Path(config._RAIZ) / "data" / "repaso_espaciado.json"
+            ruta = Path(config.raiz_datos()) / "data" / "repaso_espaciado.json"
             try:
                 if cmd == "/aprender-ficha":
                     if " || " not in resto:
@@ -344,7 +686,7 @@ class Conversacion:
                 return "Uso: /biblioteca texto", False
             from pathlib import Path
             from core.biblioteca_local import buscar_en_biblioteca
-            raiz = Path(__file__).resolve().parent / "data"
+            raiz = Path(config.raiz_datos()) / "data"
             resultados = buscar_en_biblioteca(resto, raiz)
             return ("\n\n".join(f"[{r['archivo']}] {r['fragmento']}" for r in resultados)
                     if resultados else "No encontré documentos relacionados."), False
@@ -400,7 +742,7 @@ class Conversacion:
         if cmd in ("/aprobar-ejemplo", "/ejemplos-aprobados"):
             from pathlib import Path
             from core.ejemplos_aprobados import aprobar, listar
-            ruta = Path(__file__).resolve().parent / "data" / "ejemplos_aprobados.jsonl"
+            ruta = Path(config.raiz_datos()) / "data" / "ejemplos_aprobados.jsonl"
             if cmd == "/ejemplos-aprobados":
                 ejemplos = listar(ruta)
                 return ("\n".join(f"P: {e['pregunta']}\nR: {e['respuesta']}"
@@ -417,7 +759,7 @@ class Conversacion:
         if cmd == "/historial":
             from pathlib import Path
             from core.historial_local import consultar
-            ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            ruta = Path(config.raiz_datos()) / "data" / "historial_cerebro.jsonl"
             turnos = consultar(ruta, limite=20)
             return ("\n".join(f"{t['rol']}: {t['texto']}" for t in turnos)
                     if turnos else "No hay turnos guardados."), False
@@ -428,7 +770,7 @@ class Conversacion:
             if len(partes_turno) != 2:
                 return "Uso: /guardar-turno usuario|cerebro texto", False
             try:
-                ruta = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+                ruta = Path(config.raiz_datos()) / "data" / "historial_cerebro.jsonl"
                 guardar(ruta, partes_turno[0], partes_turno[1])
                 return "Turno guardado localmente.", False
             except (ValueError, OSError) as exc:

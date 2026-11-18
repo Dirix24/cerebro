@@ -4,6 +4,7 @@ Sin modelos externos ni APIs de IA. La detección es heurística: señala
 candidatos para revisión, no determina la verdad.
 """
 import argparse
+import config
 import json
 from pathlib import Path
 import re
@@ -14,7 +15,7 @@ try:
 except ModuleNotFoundError:
     from semantic_memory import buscar_similares
 
-BASE = Path(__file__).resolve().parents[1] / "data" / "conocimiento.sqlite3"
+BASE = Path(config.CEREBRO_HOME) / "data" / "conocimiento.sqlite3"
 
 
 def conectar(ruta=BASE):

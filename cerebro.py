@@ -176,7 +176,7 @@ def main(argv=None):
         return _ejecutar([sys.executable, str(RAIZ / "herramientas_locales.py"), *resto])
     if args.accion == "chat":
         if args.motor != "original":
-            ap.error("El chat integrado actualmente utiliza el motor original; usa generar para el motor PyTorch")
+            ap.error("El chat integrado utiliza el motor original; para PyTorch usa generar")
         return _ejecutar([sys.executable, str(RAIZ / "main.py"), *resto])
     if args.motor == "original":
         if args.accion == "generar":

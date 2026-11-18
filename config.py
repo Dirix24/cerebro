@@ -15,6 +15,14 @@ Puedes cambiar de perfil sin editar nada con una variable de entorno:
 import os
 
 _RAIZ = os.path.abspath(os.path.dirname(__file__))
+# Directorio de datos portátil: se puede apuntar a un SSD externo.
+# El código sigue en _RAIZ; los datos persistentes van a CEREBRO_HOME.
+CEREBRO_HOME = os.path.abspath(os.path.expanduser(os.environ.get("CEREBRO_HOME", _RAIZ)))
+
+
+def raiz_datos():
+    """Raíz portable; respeta _RAIZ en instalaciones antiguas y pruebas."""
+    return CEREBRO_HOME if "CEREBRO_HOME" in os.environ else _RAIZ
 
 # ----------------------------------------------------------------------------
 # PERFILES DE MODELO
@@ -55,6 +63,20 @@ PERFILES = {
     # V2: más capacidad y contexto, manteniendo NumPy puro.
     "v2":      dict(vocab_objetivo=768, block_size=192, dim=96, n_heads=4,
                      n_layers=4, dim_ffn=384, dropout=0.08),
+    # Crecimiento opcional: mayor capacidad, sin modificar pesos/checkpoints existentes.
+    "v2_plus": dict(vocab_objetivo=1536, block_size=256, dim=192, n_heads=6,
+                    n_layers=6, dim_ffn=768, dropout=0.10),
+    # Escalones de capacidad NumPy: opcionales, CPU/RAM más exigentes.
+    "v2_6m": dict(vocab_objetivo=2048, block_size=256, dim=256, n_heads=8,
+                  n_layers=8, dim_ffn=1024, dropout=0.10),
+    "v2_16m": dict(vocab_objetivo=4096, block_size=384, dim=384, n_heads=8,
+                   n_layers=8, dim_ffn=1536, dropout=0.10),
+    "v2_30m": dict(vocab_objetivo=4096, block_size=512, dim=512, n_heads=8,
+                   n_layers=10, dim_ffn=2048, dropout=0.10),
+    "v2_60m": dict(vocab_objetivo=8192, block_size=512, dim=640, n_heads=10,
+                   n_layers=12, dim_ffn=2560, dropout=0.10),
+    "v2_120m": dict(vocab_objetivo=8192, block_size=768, dim=896, n_heads=14,
+                    n_layers=12, dim_ffn=3584, dropout=0.10),
 
 }
 
@@ -119,18 +141,49 @@ MAX_TOOL_CALLS = 3
 # solo lectura. Las herramientas exigen su permiso y se rechazan si falta.
 PERMISOS_AGENTE = {"CALCULATE", "READ", "WRITE"}
 MAX_FILE_BYTES = 1_000_000       # tope de lectura/escritura por archivo
-WORKSPACE_DIR = os.path.join(_RAIZ, "data", "workspace")
+WORKSPACE_DIR = os.path.join(CEREBRO_HOME, "data", "workspace")
 
 # ----------------------------------------------------------------------------
 # RUTAS
 # ----------------------------------------------------------------------------
-CORPUS_FILE = os.path.join(_RAIZ, "data", "corpus.txt")
-CORPUS_DIR = os.path.join(_RAIZ, "data", "corpus")      # todos los .txt de aquí se añaden
-VALIDACION_FILE = os.path.join(_RAIZ, "data", "validacion.txt")  # reformulaciones nuevas de cosas que sí sabe
-GENERALIZACION_FILE = os.path.join(_RAIZ, "data", "generalizacion.txt")  # diálogos totalmente nuevos (nunca entrenados)
-TEST_FILE = os.path.join(_RAIZ, "data", "test.txt")  # conjunto final: nunca selecciona checkpoints
-MEMORY_FILE = os.path.join(_RAIZ, "memory", "memory_store.json")
-DIR_CHECKPOINTS = os.path.join(_RAIZ, "checkpoints")
+CORPUS_FILE = os.path.join(CEREBRO_HOME, "data", "corpus.txt")
+CORPUS_DIR = os.path.join(CEREBRO_HOME, "data", "corpus")      # todos los .txt de aquí se añaden
+VALIDACION_FILE = os.path.join(CEREBRO_HOME, "data", "validacion.txt")  # reformulaciones nuevas de cosas que sí sabe
+GENERALIZACION_FILE = os.path.join(CEREBRO_HOME, "data", "generalizacion.txt")  # diálogos totalmente nuevos (nunca entrenados)
+TEST_FILE = os.path.join(CEREBRO_HOME, "data", "test.txt")  # conjunto final: nunca selecciona checkpoints
+MEMORY_FILE = os.path.join(CEREBRO_HOME, "memory", "memory_store.json")
+DIR_CHECKPOINTS = os.path.join(CEREBRO_HOME, "checkpoints")
 CKPT_MEJOR = os.path.join(DIR_CHECKPOINTS, "best.npz")   # el que usa el chat
 CKPT_ULTIMO = os.path.join(DIR_CHECKPOINTS, "last.npz")  # con estado del optimizador
-DIR_EVOLUTION = os.path.join(_RAIZ, "learning", "evolution")
+DIR_EVOLUTION = os.path.join(CEREBRO_HOME, "learning", "evolution")
+
+
+# Una única opción para elegir capacidad sin ajustar manualmente dimensiones.
+TAMANOS_NUCLEO = {
+    "mini": "v2",
+    "normal": "v2_plus",
+    "grande": "v2_6m",
+    "potente": "v2_16m",
+    "extra": "v2_30m",
+    "maximo": "v2_60m",
+    "experimental": "v2_120m",
+}
+
+
+def perfil_por_tamano(tamano):
+    """Convierte una única elección de tamaño en arquitectura NumPy completa."""
+    try:
+        return TAMANOS_NUCLEO[tamano]
+    except KeyError as exc:
+        raise ValueError(f"Tamaño desconocido: {tamano}. Opciones: {', '.join(TAMANOS_NUCLEO)}") from exc
+
+
+def estimar_parametros(perfil):
+    """Cuenta pesos del Transformer actual sin instanciar matrices enormes.
+
+    Usa el vocabulario objetivo (cota aproximada si BPE aprende menos tokens).
+    """
+    p = PERFILES[perfil] if isinstance(perfil, str) else perfil
+    d, f, v, b, l = (p["dim"], p["dim_ffn"], p["vocab_objetivo"],
+                      p["block_size"], p["n_layers"])
+    return v * d + b * d + l * (4 * d * d + 2 * d * f + 9 * d + f) + 2 * d + v
