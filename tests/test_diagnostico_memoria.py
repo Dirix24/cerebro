@@ -42,3 +42,10 @@ def test_restauracion_tras_consolidacion(tmp_path):
     assert restaurar(gestor, " Robot ", confirmado=True) is True
     assert gestor.long_term_memory[" Robot "]["valor"] == "sensor"
     assert " Robot " in _gestor(tmp_path).long_term_memory
+
+
+def test_listado_limite_cero_no_expone_claves(tmp_path):
+    ruta = tmp_path / "memory.json"
+    respaldo = tmp_path / "memory.json.duplicados.jsonl"
+    respaldo.write_text(json.dumps({"duplicados": {"privado": {"valor": "secreto"}}}) + "\n")
+    assert listar_archivados(ruta, limite=0) == []
