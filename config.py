@@ -63,6 +63,12 @@ PERFILES = {
                   n_layers=8, dim_ffn=1024, dropout=0.10),
     "v2_16m": dict(vocab_objetivo=4096, block_size=384, dim=384, n_heads=8,
                    n_layers=8, dim_ffn=1536, dropout=0.10),
+    "v2_30m": dict(vocab_objetivo=4096, block_size=512, dim=512, n_heads=8,
+                   n_layers=10, dim_ffn=2048, dropout=0.10),
+    "v2_60m": dict(vocab_objetivo=8192, block_size=512, dim=640, n_heads=10,
+                   n_layers=12, dim_ffn=2560, dropout=0.10),
+    "v2_120m": dict(vocab_objetivo=8192, block_size=768, dim=896, n_heads=14,
+                    n_layers=12, dim_ffn=3584, dropout=0.10),
 
 }
 
@@ -142,3 +148,34 @@ DIR_CHECKPOINTS = os.path.join(_RAIZ, "checkpoints")
 CKPT_MEJOR = os.path.join(DIR_CHECKPOINTS, "best.npz")   # el que usa el chat
 CKPT_ULTIMO = os.path.join(DIR_CHECKPOINTS, "last.npz")  # con estado del optimizador
 DIR_EVOLUTION = os.path.join(_RAIZ, "learning", "evolution")
+
+
+# Una única opción para elegir capacidad sin ajustar manualmente dimensiones.
+TAMANOS_NUCLEO = {
+    "mini": "v2",
+    "normal": "v2_plus",
+    "grande": "v2_6m",
+    "potente": "v2_16m",
+    "extra": "v2_30m",
+    "maximo": "v2_60m",
+    "experimental": "v2_120m",
+}
+
+
+def perfil_por_tamano(tamano):
+    """Convierte una única elección de tamaño en arquitectura NumPy completa."""
+    try:
+        return TAMANOS_NUCLEO[tamano]
+    except KeyError as exc:
+        raise ValueError(f"Tamaño desconocido: {tamano}. Opciones: {', '.join(TAMANOS_NUCLEO)}") from exc
+
+
+def estimar_parametros(perfil):
+    """Cuenta pesos del Transformer actual sin instanciar matrices enormes.
+
+    Usa el vocabulario objetivo (cota aproximada si BPE aprende menos tokens).
+    """
+    p = PERFILES[perfil] if isinstance(perfil, str) else perfil
+    d, f, v, b, l = (p["dim"], p["dim_ffn"], p["vocab_objetivo"],
+                      p["block_size"], p["n_layers"])
+    return v * d + b * d + l * (4 * d * d + 2 * d * f + 9 * d + f) + 2 * d + v
