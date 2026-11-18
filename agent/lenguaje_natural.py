@@ -22,7 +22,7 @@ def interpretar(texto):
     if "github" in t or "repositorio" in t:
         if re.search(r"\b(corrige|modifica|sube|publica|commit|fusiona|merge|borra)\b", t):
             return {"accion": "github_escritura", "requiere_confirmacion": True}
-        if re.search(r"\b(error|fallo|incidencia|issue|problema)\b", t):
+        if re.search(r"\b(errores?|fallos?|incidencias?|issues?|problemas?)\b", t):
             return {"accion": "github_errores", "requiere_confirmacion": False}
         return {"accion": "github_estado", "requiere_confirmacion": False}
     if re.search(r"\b(recordatorios|tareas pendientes|que tengo pendiente)\b", t):
