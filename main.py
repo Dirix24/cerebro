@@ -35,6 +35,7 @@ def cargar_modelo(ruta=None):
 def main():
     ap = argparse.ArgumentParser(description="Cerebro - chat local")
     ap.add_argument("--estacion-terminal", action="store_true", help="abrir estación neuronal en terminal sin modelo")
+    ap.add_argument("--ojos", action="store_true", help="rostro animado en terminal; cámara apagada")
     ap.add_argument("--diagnostico-memoria", action="store_true", help="estadísticas locales sin mostrar recuerdos")
     ap.add_argument("--archivados", action="store_true", help="listar claves de recuerdos archivados")
     ap.add_argument("--restaurar-recuerdo", metavar="CLAVE", help="restaurar una clave archivada sin sobrescribir")
@@ -47,6 +48,11 @@ def main():
     ap.add_argument("--confirmar", action="store_true", help="autorizar expresamente la vinculación del equipo")
     ap.add_argument("--guardar-historial", action="store_true", help="guardar turnos localmente")
     args = ap.parse_args()
+
+    if args.ojos:
+        from core.ojos_animados import abrir
+        abrir()
+        return
 
     if args.diagnostico_memoria or args.archivados or args.restaurar_recuerdo:
         import json
