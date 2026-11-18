@@ -149,6 +149,27 @@ python3 cerebro.py motores
 GitHub Actions ejecuta comprobaciones de sintaxis y pruebas automatizadas en la rama de integración. **Una ejecución anterior** de la suite principal terminó con **68 pruebas superadas y 2 omitidas**, pero ese resultado **no valida los cambios posteriores** ni sustituye pruebas en MX Linux. El entrenamiento PyTorch, la instalación, el primer arranque y la desinstalación real requieren verificación separada. Consulta la pestaña **Actions** del repositorio para el resultado más reciente.
 
 
+## 🤖 Modo simbionte: USB y robótica experimental
+
+Cerebro puede **enumerar puertos serie** conectados al ordenador anfitrión (solo metadatos), con permiso READ y la biblioteca opcional `pyserial`. Enumerar un puerto **no** identifica de forma infalible el tipo de placa, no abre el dispositivo y no inspecciona todo tipo de USB.
+
+```bash
+python3 -m pip install pyserial
+python3 main.py
+```
+
+Dentro del chat:
+
+```text
+/usb
+/crear-robot mi_robot arduino
+/crear-robot robot_esp esp32
+```
+
+`/crear-robot` requiere WRITE y genera en el workspace un proyecto nuevo con archivo `.ino` y README. Es una plantilla de parpadeo de LED: **no compila, no instala, no flashea ni controla físicamente la placa**. Revisa el pin LED, las tensiones y el circuito para cada placa. No se incluyen controladores para motores, baterías, servos ni sensores. El usuario decide si quiere compilar y cargar firmware mediante sus herramientas habituales.
+
+**Diseño futuro:** vincular de forma explícita una placa concreta; importar y analizar el código que proporcione el usuario; generar un protocolo de comunicación limitado entre Cerebro y un microcontrolador; probar en simulación; y solicitar confirmación específica antes de cada carga de firmware. Nada de propagarse a dispositivos USB, buscar equipos ajenos ni instalar código automáticamente. El «fragmento de Cerebro» para una placa es firmware especializado, no una copia de la red neuronal completa.
+
 ## 🧠 Cerebro V2: entrenamiento, motores y SSD portátil
 
 **Política de motores propios:** NumPy y PyTorch se usan como bibliotecas matemáticas para construir y entrenar arquitecturas originales de Cerebro desde cero. No se cargan modelos de lenguaje preentrenados ajenos, ni se depende de APIs de otros asistentes. La calidad del modelo depende de los datos, entrenamiento y evaluación; los pesos propios todavía son experimentales.
