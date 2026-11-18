@@ -40,6 +40,8 @@ AYUDA = """Comandos:
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
   /motor-especializado texto recomienda motor sin ejecutar
+  /descubrir-i2c 0x3c 0x68 interpreta direcciones I2C aportadas, sin sondear
+  /analizar-robot archivo.py analiza interfaces de código sin ejecutarlo
   /usb                      lista puertos serie del equipo, sin abrirlos
   /preparar-robot nombre placa archivo.py   prepara proyecto MicroPython (WRITE)
   /usb                      enumera puertos serie sin abrirlos (pyserial opcional)\n  /crear-robot nombre arduino|esp32  prepara firmware de ejemplo sin instalarlo\n  /motores                  lista motores disponibles y futuros
@@ -231,6 +233,35 @@ class Conversacion:
                 return json.dumps(proponer_motor(resto), ensure_ascii=False, indent=2), False
             except ValueError:
                 return "Uso: /motor-especializado tarea que quieres realizar", False
+        if cmd == "/descubrir-i2c":
+            import json
+            from core.descubrimiento_robot import interpretar_inventario_i2c
+            if not resto:
+                return "Uso: /descubrir-i2c 0x3c 0x68", False
+            try:
+                tokens = resto.split()
+                direcciones = [int(x, 16) for x in tokens]
+                return json.dumps(interpretar_inventario_i2c(direcciones),
+                                  ensure_ascii=False, indent=2), False
+            except ValueError as exc:
+                return f"I2C: {exc}", False
+        if cmd == "/analizar-robot":
+            import json
+            from pathlib import Path
+            from core.descubrimiento_robot import analizar_codigo_robot
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            if not resto:
+                return "Uso: /analizar-robot archivo.py", False
+            try:
+                base = Path(config.WORKSPACE_DIR).resolve(strict=True)
+                archivo = (base / resto).resolve(strict=True)
+                if not archivo.is_relative_to(base) or not archivo.is_file() or archivo.stat().st_size > 100000:
+                    raise ValueError("Archivo inválido o fuera del workspace.")
+                return json.dumps(analizar_codigo_robot(archivo.read_text(encoding="utf-8")),
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, UnicodeError) as exc:
+                return f"Robot: {exc}", False
         if cmd == "/usb":
             import json
             from core.dispositivos_usb import listar_puertos
