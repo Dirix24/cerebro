@@ -51,8 +51,13 @@ def main():
 
     if args.ojos:
         from core.ojos_animados import abrir
-        abrir()
-        return
+        try:
+            abrir()
+            print("Ojos cerrados normalmente (q o Esc).")
+        except (RuntimeError, OSError) as exc:
+            print(f"No se pudieron abrir los ojos: {exc}", file=sys.stderr)
+            return 1
+        return 0
 
     if args.diagnostico_memoria or args.archivados or args.restaurar_recuerdo:
         import json
@@ -72,8 +77,13 @@ def main():
 
     if args.estacion_terminal:
         from core.estacion_terminal import abrir
-        abrir()
-        return
+        try:
+            abrir()
+            print("Estación neuronal cerrada normalmente (q o Esc).")
+        except (RuntimeError, OSError) as exc:
+            print(f"No se pudo abrir la estación neuronal: {exc}", file=sys.stderr)
+            return 1
+        return 0
 
     from core.entorno_portatil import verificar_almacenamiento
     verificar_almacenamiento()
