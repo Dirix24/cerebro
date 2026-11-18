@@ -150,8 +150,8 @@ class Conversacion:
                 import re
                 m = re.search(r"(?<![\w.-])([\w.-]+/[\w.-]+)(?![\w.-])", entrada)
                 if not m:
-                    return "¿Qué repositorio de GitHub quieres consultar? "
-                           "Dime propietario/nombre, por ejemplo Dirix24/cerebro.", False
+                    return ("¿Qué repositorio de GitHub quieres consultar? "
+                            "Dime propietario/nombre, por ejemplo Dirix24/cerebro."), False
                 return self._comando(("/github-errores " if accion == "github_errores"
                                       else "/github-estado ") + m.group(1))
 
