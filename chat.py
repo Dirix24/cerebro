@@ -129,6 +129,21 @@ class Conversacion:
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
 
+        # Guardado solicitado expresamente; no se considera verdad verificada.
+        import re as _rec
+        recuerdo = _rec.match(r"^(?:cerebro[, ]+)?recuerda que\s+(.{3,400})$",
+                              entrada, flags=_rec.IGNORECASE)
+        if recuerdo:
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Necesito permiso WRITE para guardar el recuerdo.", False
+            from hashlib import sha256
+            texto = recuerdo.group(1).strip()
+            clave = "declaracion_" + sha256(texto.encode("utf-8")).hexdigest()[:16]
+            self.memoria.guardar_largo_plazo(clave, texto, categoria="declarado_por_usuario",
+                                             importancia=2)
+            return ("He guardado ese recuerdo como información declarada por ti, "
+                    "no como un hecho verificado."), False
+
         # La identidad pública del creador se consulta sin acceder a memorias privadas.
         import re as _re
         if _re.search(r"\\b(quien te creo|quien fue tu creador|quien es tu creador)\\b",
@@ -275,6 +290,19 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/mapa-recuerdos":
+            from pathlib import Path
+            from core.mapa_memoria import guardar_mapa
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                ruta = Path(config.CEREBRO_HOME) / "data" / "mapa_recuerdos.svg"
+                if ruta.exists():
+                    return "El mapa ya existe; mueve o elimina el anterior para generar otro.", False
+                guardar_mapa(self.memoria.long_term_memory, ruta)
+                return f"Mapa local creado: {ruta}. Ábrelo en un navegador.", False
+            except (OSError, ValueError) as exc:
+                return f"Mapa de recuerdos: {exc}", False
         if cmd == "/recordar-tarea":
             import json
             from core.recordatorios_locales import crear
