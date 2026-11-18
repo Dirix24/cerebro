@@ -12,6 +12,7 @@ Memoria de Cerebro.
 
 import datetime
 import json
+import math
 import os
 
 import config
@@ -111,7 +112,7 @@ class AdvancedMemoryManager:
             if score:
                 try:
                     importancia = float(entrada.get("importancia", 1))
-                    if not __import__("math").isfinite(importancia):
+                    if not math.isfinite(importancia):
                         importancia = 1.0
                 except (TypeError, ValueError, OverflowError):
                     importancia = 1.0
