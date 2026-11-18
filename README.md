@@ -326,9 +326,9 @@ python3 main.py --estacion-terminal
 python3 -m core.estacion_terminal
 ```
 
-**Controles:** flechas para seleccionar recuerdos; `+` y `-` para acercar y alejar; espacio para pausar el movimiento; `q` para salir. Los recuerdos y eventos se actualizan periódicamente desde el disco o la memoria del chat. El núcleo cambia de color según el **último evento registrado**. Los puntos y conexiones son una **visualización de recuerdos y coincidencias de palabras**, no las neuronas ni sinapsis físicas del modelo. La animación es decorativa.
+**Controles:** flechas para seleccionar recuerdos; `+` y `-` para acercar y alejar; espacio para pausar el movimiento; `q` para salir. Los recuerdos y eventos se actualizan periódicamente desde el disco o la memoria del chat. El visor limita el grafo a 120 recuerdos para mantener la fluidez; no borra recuerdos de la memoria. El núcleo cambia de color según el **último evento registrado**. Los puntos y conexiones son una **visualización de recuerdos y coincidencias de palabras**, no las neuronas ni sinapsis físicas del modelo. La animación es decorativa.
 
-Utiliza la biblioteca estándar `curses` (habitualmente incluida en Linux/macOS; en Windows puede requerir `windows-curses`). Necesita una terminal interactiva de al menos 52×15. Los recuerdos privados pueden verse en pantalla: úsala en un entorno de confianza.
+Utiliza la biblioteca estándar `curses` (habitualmente incluida en Linux/macOS; en Windows requiere `pip install windows-curses` si Python no incluye `curses`). Necesita una terminal interactiva de al menos 52×15. Los recuerdos privados pueden verse en pantalla: úsala en un entorno de confianza.
 
 ## 💬 Hablar con Cerebro sin comandos
 
