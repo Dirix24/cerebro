@@ -130,6 +130,7 @@ class ConfigEntrenamiento:
     fraccion_val: float = config.FRACCION_VALIDACION
     acumulacion_gradientes: int = config.ACUMULACION_GRADIENTES
     paciencia_early_stop: int = config.PACIENCIA_EARLY_STOP
+    total_pasos: int = None  # horizonte global fijo para reanudar sin alterar el LR
 
 
 def config_modelo_desde_perfil(perfil=None, vocab_size=None, **cambios):
@@ -147,7 +148,8 @@ def config_modelo_desde_perfil(perfil=None, vocab_size=None, **cambios):
 # =============================================================================
 
 class TrainerEngine:
-    def __init__(self, modelo, docs_train, docs_val, ce=None, opt_state=None, rng_state=None):
+    def __init__(self, modelo, docs_train, docs_val, ce=None, opt_state=None, rng_state=None,
+                 total_programado=None):
         self.modelo = modelo
         self.ce = ce or ConfigEntrenamiento()
         self.docs_train, self.docs_val = docs_train, docs_val
@@ -163,6 +165,10 @@ class TrainerEngine:
         if opt_state is not None:
             self.optim.load_state_dict(opt_state)
         self.paso = self.optim.t
+        self.total_programado = (total_programado if total_programado is not None
+                                 else self.ce.total_pasos)
+        if self.total_programado is not None and self.total_programado < max(1, self.paso):
+            raise ValueError("total_pasos debe ser >= al paso global actual y >= 1.")
         self.mejor = None            # dict(bpb, loss, paso, estado)
         self.historial = []
         self.mejor_sin_mejora = 0
@@ -215,7 +221,9 @@ class TrainerEngine:
         Reutiliza SU tokenizador; los documentos nuevos se codifican con él."""
         ce = ce or ConfigEntrenamiento()
         datos = cargar_checkpoint(ruta, con_optimizador=con_optimizador)
-        return cls(datos["modelo"], docs_train, docs_val, ce, opt_state=datos["opt_state"], rng_state=datos.get("rng_state"))
+        return cls(datos["modelo"], docs_train, docs_val, ce, opt_state=datos["opt_state"],
+                   rng_state=datos.get("rng_state"),
+                   total_programado=datos["meta"].get("total_programado") if con_optimizador else None)
 
     # -- evaluación / mejor modelo ----------------------------------------------------------
 
@@ -244,7 +252,14 @@ class TrainerEngine:
             raise ValueError("acumulacion_gradientes debe ser >= 1")
         if ce.eval_cada < 1:
             raise ValueError("eval_cada debe ser >= 1")
-        total_programado = max(1, self.paso + pasos)
+        if pasos < 1:
+            raise ValueError("pasos debe ser >= 1")
+        if self.total_programado is None:
+            self.total_programado = self.paso + pasos
+        if self.paso + pasos > self.total_programado:
+            raise ValueError("El entrenamiento excede total_pasos. Define un horizonte global "
+                             "mayor antes de comenzar o inicia un plan nuevo explícitamente.")
+        total_programado = self.total_programado
         for i in range(pasos):
             # El scheduler usa el paso GLOBAL: al reanudar no vuelve a empezar en warmup.
             lr = lr_coseno_con_calentamiento(
@@ -304,6 +319,7 @@ class TrainerEngine:
     def _meta(self, extra=None):
         meta = {
             "paso": self.paso,
+            "total_programado": self.total_programado,
             "perfil": config.PERFIL,
             "entrenamiento": {k: getattr(self.ce, k) for k in self.ce.__dataclass_fields__},
             "n_tokens_train": int(len(self.stream_train)),
