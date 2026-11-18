@@ -66,11 +66,11 @@ def responder_definicion(pregunta, buscador=None, buscar_hechos=None):
 
 def respuesta_clara(texto, max_caracteres=430):
     """Extrae hasta dos frases completas; nunca corta a mitad de palabra."""
-    limpio = re.sub(r"[\\u200b-\\u200f\\ufeff]", "", texto)
-    limpio = re.sub(r"\\s+", " ", limpio).strip()
+    limpio = re.sub(r"[\u200b-\u200f\ufeff]", "", texto)
+    limpio = re.sub(r"\s+", " ", limpio).strip()
     # Los textos enciclopédicos suelen incluir marcas de referencias invisibles.
-    limpio = re.sub(r"\\[\\d+\\]", "", limpio)
-    frases = re.split(r"(?<=[.!?])\\s+(?=[A-ZÁÉÍÓÚÑ¿¡])", limpio)
+    limpio = re.sub(r"\[\d+\]", "", limpio)
+    frases = re.split(r"(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])", limpio)
     salida = []
     for frase in frases:
         frase = frase.strip()
