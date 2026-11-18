@@ -124,11 +124,11 @@ class Conversacion:
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
         # Orquestador: usar fuentes locales verificables antes de generar texto.
-        from agent.orquestador import seleccionar
+        from agent.orquestador import seleccionar, extraer_consulta_local
         ruta = seleccionar(entrada)
         if ruta == "busqueda_local":
             from core.local_search import buscar
-            consulta = re.sub(r"(?i)^\\s*[¿]?\\s*(?:busca(?:r)?|consulta(?:r)?)\\s+(?:en\\s+)?(?:el\\s+)?(?:corpus|biblioteca)\\s*[: ]+", "", entrada).strip()
+            consulta = extraer_consulta_local(entrada)
             resultados = buscar(consulta) if consulta else []
             if resultados:
                 return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
