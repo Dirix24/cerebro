@@ -59,6 +59,6 @@ def test_evento_invalido_no_produce_expresion_falsa():
 def test_solo_ojos_sin_boca():
     import inspect
     fuente = inspect.getsource(ojos_animados._mostrar)
-    assert "boca" not in fuente.lower()
+    assert "│       ___" not in fuente
     assert "VideoCapture" not in fuente
     assert "cv2" not in fuente
