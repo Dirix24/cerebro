@@ -63,10 +63,10 @@ small{color:#9baecc}#detalle{white-space:pre-wrap;overflow-wrap:anywhere;line-he
 <script id="datos" type="application/json">__DATOS__</script>
 <script>
 "use strict";
-const d=JSON.parse(document.getElementById("datos").textContent);
+let d=JSON.parse(document.getElementById("datos").textContent);
 const canvas=document.getElementById("red"),ctx=canvas.getContext("2d");
 const detalle=document.getElementById("detalle");
-const nodos=d.nodos.map((n,i)=>({...n,angle:i*2.399963,rad:110+38*Math.sqrt(i),fase:i*.73}));
+let nodos=d.nodos.map((n,i)=>({...n,angle:i*2.399963,rad:110+38*Math.sqrt(i),fase:i*.73}));
 let zoom=1,panX=0,panY=0,pausa=false,t=0,seleccion=-1,drag=null,ultimo=0;
 const estadoColor=e=>d.colores[e]||d.colores.aprendido;
 document.getElementById("leyenda").replaceChildren(...Object.entries(d.colores).map(([k,v])=>{
@@ -74,6 +74,31 @@ document.getElementById("leyenda").replaceChildren(...Object.entries(d.colores).
  el.append(dot,document.createTextNode(k));return el;
 }));
 document.getElementById("contador").textContent=nodos.length+" recuerdos · "+d.enlaces.length+" conexiones";
+// Solo solicita datos al servidor local cuando la estación se abre por HTTP.
+let ultimaFirma="";
+async function actualizar(){
+ if(location.protocol!=="http:" || location.hostname!=="127.0.0.1")return;
+ try{
+  const respuesta=await fetch("/snapshot",{cache:"no-store"});
+  if(!respuesta.ok)return;
+  const nuevo=await respuesta.json();
+  if(!nuevo||!Array.isArray(nuevo.nodos)||!Array.isArray(nuevo.enlaces)||!Array.isArray(nuevo.eventos))return;
+  const firma=JSON.stringify(nuevo);
+  if(firma===ultimaFirma)return;
+  ultimaFirma=firma;
+  const anterior=nodos.length;
+  d=nuevo;
+  nodos=d.nodos.map((n,i)=>({...n,angle:i*2.399963,rad:110+38*Math.sqrt(i),fase:i*.73}));
+  if(nodos.length!==anterior)seleccion=-1;
+  document.getElementById("contador").textContent=nodos.length+" recuerdos · "+d.enlaces.length+" conexiones";
+  const reciente=d.eventos[d.eventos.length-1];
+  if(reciente && seleccion<0)detalle.textContent="Actividad registrada: "+reciente.estado+" · "+reciente.texto+
+   "\\n"+reciente.fecha+"\\n\\nSelecciona un recuerdo para explorar.";
+ }catch(_){/* El visor sigue funcionando con los datos iniciales. */}
+}
+if(location.protocol==="http:" && location.hostname==="127.0.0.1"){
+ actualizar();setInterval(actualizar,1500);
+}
 function resize(){const r=canvas.getBoundingClientRect(),scale=devicePixelRatio||1;
  canvas.width=Math.max(1,Math.round(r.width*scale));canvas.height=Math.max(1,Math.round(r.height*scale));
  ctx.setTransform(scale,0,0,scale,0,0)}
