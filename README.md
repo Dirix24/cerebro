@@ -286,6 +286,14 @@ Cada operación solicita una **contraseña oculta** en la terminal. El respaldo 
 
 **Precauciones:** el USB no se detecta ni abre automáticamente, la contraseña no se guarda y, si se pierde, los datos cifrados pueden ser irrecuperables. No coloques contraseñas en comandos, chats o GitHub. No recupera memorias que nunca se guardaron, ni supone una continuidad de conciencia. La migración selectiva entre perfiles y el flujo conversacional de recuperación están pendientes.
 
+## 🧠 Recuerdos y mapa de conexiones
+
+En el chat puedes decir «Cerebro, recuerda que mi robot usa un sensor de distancia». Cerebro lo guarda como **declaración del usuario**, no como verdad verificada, en su memoria local de largo plazo.
+
+`/mapa-recuerdos` crea un archivo SVG local en `CEREBRO_HOME/data/mapa_recuerdos.svg`. Puedes abrirlo en un navegador. Los círculos azules son recuerdos guardados; las líneas muestran coincidencias de palabras entre recuerdos. La leyenda reserva amarillo para **analizando** y naranja para **investigando**, pero **esta primera versión no monitoriza en vivo esos estados**. No muestra las neuronas reales ni las conexiones de pesos del Transformer. Es un mapa de memoria, no una medición de actividad neuronal.
+
+El mapa contiene texto de recuerdos privados: no lo compartas ni lo subas a GitHub. Para regenerarlo, mueve o elimina el SVG anterior. Pendiente: visualización dinámica de estados, filtros por usuario y relaciones semánticas aprendidas.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
