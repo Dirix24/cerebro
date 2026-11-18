@@ -42,7 +42,7 @@ AYUDA = """Comandos:
   /motor-especializado texto recomienda motor sin ejecutar
   /usb                      lista puertos serie del equipo, sin abrirlos
   /preparar-robot nombre placa archivo.py   prepara proyecto MicroPython (WRITE)
-  /motores                  lista motores disponibles y futuros
+  /usb                      enumera puertos serie sin abrirlos (pyserial opcional)\n  /crear-robot nombre arduino|esp32  prepara firmware de ejemplo sin instalarlo\n  /motores                  lista motores disponibles y futuros
   /laboratorio archivo.py   inspecciona archivo del workspace sin ejecutarlo
   /crear-pdf nombre texto   crea PDF local (requiere reportlab)
   /criterio petición        evalúa ruta, permisos y riesgos sin actuar
@@ -261,6 +261,30 @@ class Conversacion:
                 return json.dumps(resultado, ensure_ascii=False, indent=2), False
             except (OSError, ValueError, UnicodeError, RuntimeError) as exc:
                 return f"Robot: {exc}", False
+        if cmd == "/usb":
+            import json
+            from core.dispositivos_conectados import listar_puertos
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido para consultar dispositivos.", False
+            try:
+                return json.dumps(listar_puertos(), ensure_ascii=False, indent=2), False
+            except (ImportError, OSError) as exc:
+                return f"No pude enumerar puertos: {exc}", False
+        if cmd == "/crear-robot":
+            import json
+            from core.robotica_local import preparar_robot
+            from core.entorno_portatil import verificar_almacenamiento
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Permiso WRITE requerido.", False
+            partes = resto.split()
+            if len(partes) != 2:
+                return "Uso: /crear-robot nombre arduino|esp32", False
+            try:
+                verificar_almacenamiento()
+                return json.dumps(preparar_robot(partes[0], partes[1]),
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, RuntimeError) as exc:
+                return f"No pude preparar el robot: {exc}", False
         if cmd == "/motores":
             from agent.motores import capacidades
             import json
