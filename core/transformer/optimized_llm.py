@@ -51,6 +51,8 @@ class ModeloConfig:
     dtype: str = "float32"
 
     def validar(self):
+        if self.n_heads < 1:
+            raise ValueError("n_heads debe ser >= 1.")
         if self.dim % self.n_heads != 0:
             raise ValueError(f"dim ({self.dim}) debe ser múltiplo de n_heads ({self.n_heads}).")
         if min(self.vocab_size, self.block_size, self.dim, self.n_layers, self.dim_ffn) < 1:
