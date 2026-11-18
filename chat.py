@@ -217,7 +217,7 @@ class Conversacion:
         if concepto_definicion(entrada):
             _registrar_actividad("investigando", "consulta")
             dato = responder_definicion(entrada)
-            respuesta = (dato[0] + "\\nFuente: " + dato[1] if dato else
+            respuesta = (dato[0] + "\nFuente: " + dato[1] if dato else
                          "No encontré una definición en mis fuentes locales. "
                          "Puedes añadir una ficha con /aprender-ficha.")
             self.memoria.agregar_contexto("usuario", entrada)
