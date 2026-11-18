@@ -70,7 +70,9 @@ def _pantalla(pantalla, memoria_fn, eventos_fn):
             fondo = curses.COLOR_BLACK
         for i, estado in enumerate(PALETA, 1):
             try:
-                curses.init_pair(i, PALETA[estado], fondo)
+                primer_plano = (208 if estado == "investigando" and curses.COLORS >= 256
+                                 else PALETA[estado])
+                curses.init_pair(i, primer_plano, fondo)
                 estilos[estado] = curses.color_pair(i) | curses.A_BOLD
             except curses.error:
                 pass
