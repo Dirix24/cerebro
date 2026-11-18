@@ -20,6 +20,9 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /recordar-tarea FECHA_ISO texto  guarda recordatorio con zona horaria
+  /recordatorios            muestra tareas guardadas y vencidas
+  /github-estado dueño/repo consulta repositorio público, solo lectura
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
@@ -226,6 +229,37 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/recordar-tarea":
+            import json
+            from core.recordatorios_locales import crear
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Permiso WRITE requerido.", False
+            fecha, separador, texto = resto.partition(" ")
+            if not separador:
+                return "Uso: /recordar-tarea 2027-01-20T10:00:00+01:00 revisar proyecto", False
+            try:
+                return json.dumps(crear(fecha, texto), ensure_ascii=False), False
+            except (OSError, ValueError) as exc:
+                return f"Recordatorio: {exc}", False
+        if cmd == "/recordatorios":
+            import json
+            from core.recordatorios_locales import listar, pendientes
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps({"todos": listar(), "vencidos": pendientes()},
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError) as exc:
+                return f"Recordatorios: {exc}", False
+        if cmd == "/github-estado":
+            import json
+            from core.github_local import estado_publico
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                return json.dumps(estado_publico(resto), ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, KeyError) as exc:
+                return f"GitHub: {exc}", False
         if cmd == "/motor-especializado":
             from agent.enrutador_especializado import proponer_motor
             import json
