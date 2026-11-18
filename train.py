@@ -47,6 +47,7 @@ def main():
     ap.add_argument("--tamano", choices=sorted(config.TAMANOS_NUCLEO) + ["auto"], default=None,
                     help="único ajuste de capacidad NumPy: mini, normal, grande, potente, extra, maximo, experimental")
     ap.add_argument("--listar-tamanos", action="store_true", help="mostrar perfiles y memoria estimada sin entrenar")
+    ap.add_argument("--preparar-ssd", action="store_true", help="inicializar una sola vez CEREBRO_HOME")
     ap.add_argument("--detectar-equipo", action="store_true", help="mostrar CPU, RAM y espacio del SSD sin entrenar")
     ap.add_argument("--epocas", type=float, default=None, help="alternativa a --pasos")
     ap.add_argument("--resume", action="store_true", help="continuar desde last.npz (o best.npz)")
@@ -58,6 +59,12 @@ def main():
     ap.add_argument("--forzar", action="store_true", help="sobrescribir best.npz sin comparar")
     args = ap.parse_args()
 
+    if args.preparar_ssd:
+        from core.entorno_portatil import preparar_almacenamiento
+        if "CEREBRO_HOME" not in os.environ:
+            ap.error("Define CEREBRO_HOME con la ruta real del SSD antes de prepararlo.")
+        print(f"Almacenamiento preparado: {preparar_almacenamiento()}")
+        return
     if args.detectar_equipo:
         from core.entorno_portatil import detectar_entorno, recomendar_tamano
         info = detectar_entorno()
@@ -78,6 +85,9 @@ def main():
         print(f"[i] Tamaño elegido por RAM: {args.tamano} (estimación, no garantía).")
     if args.tamano and args.perfil:
         ap.error("Usa --tamano o --perfil, no ambos.")
+
+    from core.entorno_portatil import verificar_almacenamiento
+    verificar_almacenamiento()
 
     ce = ConfigEntrenamiento()
     if args.lr is not None:
