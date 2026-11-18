@@ -126,13 +126,25 @@ def cargar_datos(ruta=None, frac_val=0.1):
     pidió un corpus alternativo, se usa; en otro caso se aparta una fracción
     al azar. Un documento de validación jamás aparece en el entrenamiento."""
     docs = cargar_documentos(ruta)
+    # El test final y la generalización nunca deben entrar en entrenamiento.
+    # Solo se aplican los conjuntos reservados del proyecto al corpus por defecto.
+    if ruta is None:
+        reservados = set(cargar_test() or []) | set(cargar_generalizacion() or [])
+        docs = [d for d in docs if d not in reservados]
+        if not docs:
+            raise ValueError("No quedan documentos de entrenamiento tras excluir test y generalización.")
     explicita = cargar_validacion() if ruta is None else None
     if explicita:
         vistos = set(explicita)
-        train = [d for d in docs if d not in vistos]
+        train = list(dict.fromkeys(d for d in docs if d not in vistos))
+        val = list(dict.fromkeys(explicita))
         if not train:
             raise ValueError("Todos los documentos están en validación: no quedan datos de entrenamiento.")
-        return train, explicita, "archivo data/validacion.txt"
+        if ruta is None:
+            reservados = set(cargar_test() or []) | set(cargar_generalizacion() or [])
+            if reservados.intersection(val):
+                raise ValueError("Validación contiene documentos reservados para test o generalización.")
+        return train, val, "archivo data/validacion.txt"
     train, val = dividir_documentos(docs, frac_val)
     return train, val, f"{int(round(frac_val * 100))}% de documentos al azar"
 
