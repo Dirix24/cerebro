@@ -39,6 +39,7 @@ AYUDA = """Comandos:
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
+  /criterio petición        evalúa ruta, permisos y riesgos sin actuar
   /materias                 lista materias disponibles
   /estudiar materia         propone temas y práctica local
   /experimentos             muestra metricas registradas
@@ -217,6 +218,13 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/criterio":
+            from agent.criterio import evaluar_peticion
+            if not resto.strip():
+                return "Uso: /criterio /crear-proyecto mi_app cli", False
+            import json
+            evaluacion = evaluar_peticion(resto, config.PERMISOS_AGENTE)
+            return json.dumps(evaluacion, ensure_ascii=False, indent=2), False
         if cmd == "/materias":
             from core.materias import listar_materias
             return ("Materias disponibles:\\n" +
