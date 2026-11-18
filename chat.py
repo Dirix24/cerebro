@@ -39,6 +39,8 @@ AYUDA = """Comandos:
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
+  /materias                 lista materias disponibles
+  /estudiar materia         propone temas y práctica local
   /experimentos             muestra metricas registradas
   /resumir texto            resumen extractivo local
   /palabras-clave texto     palabras frecuentes del texto
@@ -215,6 +217,16 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/materias":
+            from core.materias import listar_materias
+            return ("Materias disponibles:\\n" +
+                    "\\n".join(f"- {clave}: {titulo}" for clave, titulo in listar_materias())), False
+        if cmd == "/estudiar":
+            from core.materias import plan_materia
+            try:
+                return plan_materia(resto.strip().lower()), False
+            except ValueError:
+                return "Materia desconocida. Escribe /materias para ver las disponibles.", False
         if cmd == "/crear-proyecto":
             from core.proyectos_locales import crear_proyecto
             from core.entorno_portatil import verificar_almacenamiento
