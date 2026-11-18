@@ -58,7 +58,7 @@ def main():
         if args.guardar_historial:
             from core.historial_local import guardar
             from pathlib import Path
-            ruta_hist = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            ruta_hist = Path(config.CEREBRO_HOME) / "data" / "historial_cerebro.jsonl"
             guardar(ruta_hist, "usuario", args.una_vez)
             if respuesta:
                 guardar(ruta_hist, "cerebro", respuesta)
@@ -80,7 +80,7 @@ def main():
         if args.guardar_historial and entrada.strip() and not entrada.startswith("/"):
             from core.historial_local import guardar
             from pathlib import Path
-            ruta_hist = Path(__file__).resolve().parent / "data" / "historial_cerebro.jsonl"
+            ruta_hist = Path(config.CEREBRO_HOME) / "data" / "historial_cerebro.jsonl"
             try:
                 guardar(ruta_hist, "usuario", entrada)
                 if respuesta:
