@@ -136,15 +136,13 @@ class Conversacion:
                     f"Próximo repaso: {tarjeta['fecha']}."), False
 
         # La visualización se puede solicitar hablando, sin memorizar comandos.
-        import re as _viz
-        if _viz.search(r"\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\b",
+        if re.search(r"\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\b",
                        entrada.lower()):
             return self._comando("/estacion-neuronal")
 
         # Guardado solicitado expresamente; no se considera verdad verificada.
-        import re as _rec
-        recuerdo = _rec.match(r"^(?:cerebro[, ]+)?recuerda que\s+(.{3,400})$",
-                              entrada, flags=_rec.IGNORECASE)
+        recuerdo = re.match(r"^(?:cerebro[, ]+)?recuerda que\s+(.{3,400})$",
+                              entrada, flags=re.IGNORECASE)
         if recuerdo:
             if "WRITE" not in config.PERMISOS_AGENTE:
                 return "Necesito permiso WRITE para guardar el recuerdo.", False
@@ -158,8 +156,7 @@ class Conversacion:
                     "no como un hecho verificado."), False
 
         # La identidad pública del creador se consulta sin acceder a memorias privadas.
-        import re as _re
-        if _re.search(r"\b(quien\s*te\s*creo|quien fue tu creador|quien es tu creador)\b",
+        if re.search(r"\b(quien\s*te\s*creo|quien fue tu creador|quien es tu creador)\b",
                       entrada.lower().replace("é", "e")):
             from core.legado_identidad import leer_origen
             origen = leer_origen()
