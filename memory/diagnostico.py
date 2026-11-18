@@ -42,7 +42,8 @@ def listar_archivados(archivo, limite=30):
                             resultado[clave] = dato
             except (UnicodeError, ValueError, TypeError):
                 continue
-    return list(resultado)[-max(0, min(100, int(limite))):]
+    cantidad = max(0, min(100, int(limite)))
+    return list(resultado)[-cantidad:] if cantidad else []
 
 
 def restaurar(gestor, clave, confirmado=False):
