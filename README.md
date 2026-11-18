@@ -212,6 +212,29 @@ Inicia `python3 main.py` cuando tengas un checkpoint NumPy compatible. Los coman
 
 Para PDF instala `python3 -m pip install reportlab` en el entorno de Cerebro. Los documentos y proyectos se escriben en el workspace configurado. La inspección del laboratorio es **estática**, no equivale a un antivirus ni a una auditoría completa. La cámara, el reconocimiento visual, el micrófono y la conversación hablada son **integraciones futuras** y no se activan por este registro.
 
+## 🤖 Cerebro Simbionte: USB y robots programables
+
+La detección es **voluntaria y local**, no busca dispositivos por red ni instala firmware.
+
+```bash
+python3 -m pip install pyserial   # opcional: solo para listar puertos serie
+python3 main.py
+```
+
+Dentro del chat:
+
+```text
+/usb
+/preparar-robot mi_robot esp32 codigo_robot.py
+/preparar-robot mi_robot_pico rp2040 codigo_robot.py
+```
+
+`/usb` lista los puertos serie visibles para el ordenador, sin abrirlos ni conectarse a ellos. VID/PID y fabricante son pistas, **no prueban el modelo de placa**. Requiere permiso READ.
+
+`/preparar-robot` lee un archivo de código existente en el workspace, y crea un proyecto nuevo `main.py` y `README.md` para **MicroPython ESP32 o RP2040**. Requiere permisos READ y WRITE; no sobrescribe proyectos, no convierte automáticamente código Arduino/C++, no valida pines ni controla motores. El código se copia sin ejecutarse. El usuario debe revisar compatibilidad y seguridad física antes de cualquier carga.
+
+**Todavía no se programa ninguna placa desde Cerebro.** El flasheo o comunicación serie deberá ser un paso posterior, explícitamente confirmado y probado con el hardware exacto. Una Raspberry Pi con Linux y un Arduino Uno usan flujos distintos a MicroPython.
+
 ## 🔒 Privacidad, recursos y seguridad
 
 - Los datos personales, el corpus y los checkpoints permanecen localmente salvo las peticiones explícitas a Wikipedia.
