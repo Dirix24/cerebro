@@ -62,3 +62,17 @@ def test_solo_ojos_sin_boca():
     assert "│       ___" not in fuente
     assert "VideoCapture" not in fuente
     assert "cv2" not in fuente
+
+
+def test_microanimaciones_sutiles():
+    assert ojos_animados.fotograma("saludando", 1.3)[0] == "—"
+    assert ojos_animados.fotograma("aprendiendo", 2.1)[:2] == ("✧", "✧")
+    assert ojos_animados.fotograma("analizando", 1.0)[:2] != ojos_animados.fotograma("analizando", 1.6)[:2]
+    assert ojos_animados.fotograma("investigando", 1.0)[:2] != ojos_animados.fotograma("investigando", 2.0)[:2]
+
+
+def test_animaciones_sin_camara():
+    for nombre in ojos_animados.EXPRESIONES:
+        for instante in (0, 0.2, 1.3, 2.1, 3.1, 9.0):
+            ojo_izq, ojo_der, etiqueta = ojos_animados.fotograma(nombre, instante)
+            assert ojo_izq and ojo_der and etiqueta
