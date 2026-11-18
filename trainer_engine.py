@@ -254,12 +254,14 @@ class TrainerEngine:
             raise ValueError("eval_cada debe ser >= 1")
         if pasos < 1:
             raise ValueError("pasos debe ser >= 1")
-        if self.total_programado is None:
-            self.total_programado = self.paso + pasos
-        if self.paso + pasos > self.total_programado:
+        # Compatibilidad: sin total_pasos explícito, cada llamada puede extender
+        # el entrenamiento como en las versiones anteriores.
+        # Con total_pasos explícito, el calendario permanece fijo al reanudar.
+        if self.total_programado is not None and self.paso + pasos > self.total_programado:
             raise ValueError("El entrenamiento excede total_pasos. Define un horizonte global "
                              "mayor antes de comenzar o inicia un plan nuevo explícitamente.")
-        total_programado = self.total_programado
+        total_programado = (self.total_programado if self.total_programado is not None
+                            else self.paso + pasos)
         for i in range(pasos):
             # El scheduler usa el paso GLOBAL: al reanudar no vuelve a empezar en warmup.
             lr = lr_coseno_con_calentamiento(
