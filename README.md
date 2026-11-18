@@ -258,6 +258,22 @@ Dentro del chat:
 
 **Descubrimiento pasivo:** `/descubrir-i2c` interpreta direcciones I²C que tú proporciones (no consulta el bus); `/analizar-robot` revisa el código del workspace e identifica interfaces como I²C, SPI, GPIO o PWM sin ejecutarlo. Ninguno demuestra el modelo exacto del componente, ni activa motores. La detección real en placa requerirá firmware de diagnóstico autorizado y específico para ese hardware.\n\n**Todavía no se programa ninguna placa desde Cerebro.** El flasheo o comunicación serie deberá ser un paso posterior, explícitamente confirmado y probado con el hardware exacto. Una Raspberry Pi con Linux y un Arduino Uno usan flujos distintos a MicroPython.
 
+## 📅 Recordatorios, GitHub y futura visión
+
+Cerebro incluye recordatorios **guardados localmente** en `CEREBRO_HOME/data/recordatorios.json` y una consulta **optativa de solo lectura** a la API pública de GitHub. GitHub no se usa para generar respuestas de IA ni para entrenar el modelo.
+
+```text
+/recordar-tarea 2027-01-20T10:00:00+01:00 revisar el proyecto del robot
+/recordatorios
+/github-estado Dirix24/cerebro
+```
+
+Las fechas deben incluir zona horaria y ser futuras. **Los recordatorios no generan notificaciones por sí solos ni funcionan con Cerebro cerrado**; el comando `/recordatorios` muestra cuáles han vencido. Para avisos automáticos habrá que integrar posteriormente un planificador local autorizado. `/github-estado` requiere Internet y acceso al repositorio público; no lee repositorios privados, no pide credenciales, no hace commits y no abre pull requests.
+
+**Plan para la cámara:** incorporar captura local con permiso explícito, detección de objetos con un modelo de visión **propio** entrenado desde cero, almacenamiento de imágenes opcional y una política que prohíba encender la cámara sin autorización. Instalar OpenCV u otra biblioteca de imágenes no proporciona por sí solo un detector entrenado. La cámara y el reconocimiento de objetos **todavía no funcionan**.
+
+**Arquitectura:** aumentar parámetros solo tras medir RAM, tiempo y calidad; separar motor neuronal, memoria, herramientas, dispositivos y permisos. No se incorporan pesos ni APIs de otras IA.
+
 ## 🔒 Privacidad, recursos y seguridad
 
 - Los datos personales, el corpus y los checkpoints permanecen localmente salvo las peticiones explícitas a Wikipedia.
