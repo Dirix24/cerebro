@@ -294,6 +294,14 @@ En el chat puedes decir «Cerebro, recuerda que mi robot usa un sensor de distan
 
 El mapa contiene texto de recuerdos privados: no lo compartas ni lo subas a GitHub. Para regenerarlo, mueve o elimina el SVG anterior. Pendiente: visualización dinámica de estados, filtros por usuario y relaciones semánticas aprendidas.
 
+### Estación neuronal explorable
+
+En el chat: «Cerebro, abre la estación neuronal», «visualiza tus neuronas» o el comando avanzado `/estacion-neuronal`. Se genera `CEREBRO_HOME/data/estacion_neuronal.html`, una página **local y autónoma** que puedes abrir en el navegador, sin servidor, CDN ni IA externa.
+
+Incluye núcleo central animado, recuerdos alrededor, conexiones y pulsos decorativos; puedes arrastrar, acercar, alejar, pausar y seleccionar un recuerdo para consultar su contenido. Colores: amarillo (analizando), azul (aprendido), naranja (investigando), verde (consolidado), violeta (asociando), cian (observando), rojo (error). **Actualmente los recuerdos se muestran azules; los demás colores están preparados para eventos, pero todavía no se conectan a una telemetría en tiempo real.** Los enlaces reflejan palabras compartidas, no sinapsis ni pesos reales. Los puntos se animan visualmente; no son neuronas nuevas creadas al entrenar.
+
+**Privacidad:** el HTML incluye recuerdos privados en texto para poder explorarlos sin red. No lo compartas ni lo subas a repositorios públicos. Para actualizarlo, mueve o elimina el archivo anterior y vuelve a solicitarlo.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
