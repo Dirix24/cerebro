@@ -56,7 +56,9 @@ def evaluar_stream(modelo, stream, tokenizador=None, tam_lote=16):
     if cola is not None:
         acumular([cola[0]], [cola[1]])
 
-    loss = nll_total / max(n_total, 1)
+    if n_total == 0:
+        raise ValueError("El conjunto de evaluación no contiene tokens objetivo válidos.")
+    loss = nll_total / n_total
     bpb = nll_total / (math.log(2) * max(bytes_total, 1))
     return {"loss": loss, "ppl": math.exp(min(loss, 50.0)), "bpb": bpb, "n_tokens": n_total}
 
@@ -90,7 +92,8 @@ def precision_de_respuestas(modelo, docs):
     similitud = 0.0
     for d in docs:
         lineas = d.split("\n")
-        if len(lineas) != 2 or not lineas[0].startswith("usuario:"):
+        if (len(lineas) != 2 or not lineas[0].startswith("usuario:")
+                or not lineas[1].startswith("cerebro:")):
             continue
         esperado = lineas[1][len("cerebro:"):].strip()
         prompt = lineas[0] + "\ncerebro:"
@@ -239,6 +242,8 @@ class TrainerEngine:
 
         if ce.acumulacion_gradientes < 1:
             raise ValueError("acumulacion_gradientes debe ser >= 1")
+        if ce.eval_cada < 1:
+            raise ValueError("eval_cada debe ser >= 1")
         total_programado = max(1, self.paso + pasos)
         for i in range(pasos):
             # El scheduler usa el paso GLOBAL: al reanudar no vuelve a empezar en warmup.
