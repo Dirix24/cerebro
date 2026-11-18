@@ -258,6 +258,21 @@ Dentro del chat:
 
 **Descubrimiento pasivo:** `/descubrir-i2c` interpreta direcciones I²C que tú proporciones (no consulta el bus); `/analizar-robot` revisa el código del workspace e identifica interfaces como I²C, SPI, GPIO o PWM sin ejecutarlo. Ninguno demuestra el modelo exacto del componente, ni activa motores. La detección real en placa requerirá firmware de diagnóstico autorizado y específico para ese hardware.\n\n**Todavía no se programa ninguna placa desde Cerebro.** El flasheo o comunicación serie deberá ser un paso posterior, explícitamente confirmado y probado con el hardware exacto. Una Raspberry Pi con Linux y un Arduino Uno usan flujos distintos a MicroPython.
 
+## 🧬 Identidad, portadores y legado público
+
+Cerebro puede conservar la **identidad histórica declarada** de su creador en `CEREBRO_HOME/memory/legado/origen.json`. La identidad se configura una sola vez; no está pregrabado ningún nombre.
+
+```text
+/configurar-creador Danny
+/origen
+/exportar-legado /ruta/al/usb/legado.json
+/examinar-legado /ruta/al/usb/legado.json
+```
+
+También entiende «¿Quién te creó?» después de configurar la identidad. La exportación solo incluye información pública sobre el origen; **nunca conversaciones, contraseñas ni memorias privadas**. El archivo SHA-256 detecta alteraciones accidentales, **no demuestra autenticidad ni autoriza a revelar datos**. Examinar un respaldo no lo instala ni cambia el estado de Cerebro.
+
+**Pendiente:** perfiles aislados de varios usuarios, cifrado autenticado con clave del portador, recuperación privada voluntaria y mecanismo de sucesión/transferencia. No se deben desbloquear recuerdos privados solo porque alguien encuentre un USB. No existe detección automática de fallecimiento ni recuperación de una conciencia.
+
 ## 💬 Hablar con Cerebro sin comandos
 
 El chat reconoce **algunas peticiones habituales en español** y selecciona una herramienta segura sin necesidad de escribir una barra:
