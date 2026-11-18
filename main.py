@@ -35,6 +35,9 @@ def cargar_modelo(ruta=None):
 def main():
     ap = argparse.ArgumentParser(description="Cerebro - chat local")
     ap.add_argument("--estacion-terminal", action="store_true", help="abrir estación neuronal en terminal sin modelo")
+    ap.add_argument("--diagnostico-memoria", action="store_true", help="estadísticas locales sin mostrar recuerdos")
+    ap.add_argument("--archivados", action="store_true", help="listar claves de recuerdos archivados")
+    ap.add_argument("--restaurar-recuerdo", metavar="CLAVE", help="restaurar una clave archivada sin sobrescribir")
     ap.add_argument("--una-vez", default=None, metavar="MENSAJE")
     ap.add_argument("--semilla", type=int, default=None)
     ap.add_argument("--ckpt", default=None)
@@ -44,6 +47,22 @@ def main():
     ap.add_argument("--confirmar", action="store_true", help="autorizar expresamente la vinculación del equipo")
     ap.add_argument("--guardar-historial", action="store_true", help="guardar turnos localmente")
     args = ap.parse_args()
+
+    if args.diagnostico_memoria or args.archivados or args.restaurar_recuerdo:
+        import json
+        from memory.diagnostico import informe, listar_archivados, restaurar
+        memoria = AdvancedMemoryManager()
+        if args.diagnostico_memoria:
+            print(json.dumps(informe(memoria.long_term_memory, memoria.filepath),
+                             ensure_ascii=False, indent=2))
+        elif args.archivados:
+            print(json.dumps(listar_archivados(memoria.filepath), ensure_ascii=False, indent=2))
+        else:
+            if not args.confirmar:
+                ap.error("Restaurar requiere --confirmar y no sobrescribe recuerdos existentes")
+            recuperado = restaurar(memoria, args.restaurar_recuerdo, confirmado=True)
+            print("Recuerdo restaurado." if recuperado else "No se encontró o ya existe.")
+        return
 
     if args.estacion_terminal:
         from core.estacion_terminal import abrir
