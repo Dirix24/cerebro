@@ -39,6 +39,9 @@ AYUDA = """Comandos:
   /calcular-local cuenta    calcula expresiones aritmeticas
   /analizar-codigo texto    analiza Python sin ejecutarlo
   /crear-proyecto nombre [cli|biblioteca]   crea proyecto Python en workspace
+  /motores                  lista motores disponibles y futuros
+  /laboratorio archivo.py   inspecciona archivo del workspace sin ejecutarlo
+  /crear-pdf nombre texto   crea PDF local (requiere reportlab)
   /criterio petición        evalúa ruta, permisos y riesgos sin actuar
   /materias                 lista materias disponibles
   /estudiar materia         propone temas y práctica local
@@ -218,6 +221,38 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd == "/motores":
+            from agent.motores import capacidades
+            import json
+            return json.dumps(capacidades(), ensure_ascii=False, indent=2), False
+        if cmd == "/laboratorio":
+            from core.laboratorio_seguridad import inspeccionar_archivo
+            from core.entorno_portatil import verificar_almacenamiento
+            import json
+            if not resto:
+                return "Uso: /laboratorio archivo.py", False
+            if "READ" not in config.PERMISOS_AGENTE:
+                return "Permiso READ requerido.", False
+            try:
+                verificar_almacenamiento()
+                return json.dumps(inspeccionar_archivo(resto, config.WORKSPACE_DIR),
+                                  ensure_ascii=False, indent=2), False
+            except (OSError, ValueError, RuntimeError) as exc:
+                return f"Laboratorio: {exc}", False
+        if cmd == "/crear-pdf":
+            from core.documentos_pdf import crear_pdf
+            from core.entorno_portatil import verificar_almacenamiento
+            partes_pdf = resto.split(None, 1)
+            if len(partes_pdf) != 2:
+                return "Uso: /crear-pdf nombre texto del documento", False
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Permiso WRITE requerido.", False
+            try:
+                verificar_almacenamiento()
+                ruta_pdf = crear_pdf(partes_pdf[0], partes_pdf[1])
+                return f"PDF creado: {ruta_pdf}", False
+            except (OSError, ValueError, RuntimeError) as exc:
+                return f"No pude crear PDF: {exc}", False
         if cmd == "/criterio":
             from agent.criterio import evaluar_peticion
             if not resto.strip():
