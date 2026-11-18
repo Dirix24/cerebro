@@ -2,7 +2,7 @@
 
 > **Diseñado y desarrollado con asistencia de inteligencia artificial (IA).** Cerebro es un proyecto experimental impulsado por su creador, con colaboración de IA en el diseño de la arquitectura, programación, documentación y pruebas. Esta declaración describe el proceso de desarrollo, **no** significa que Cerebro sea una IA general ni que se haya diseñado a sí mismo.
 
-**Cerebro** es un proyecto de inteligencia artificial local en Python: combina un Transformer propio NumPy, motores Transformer opcionales basados en PyTorch, búsqueda de información, memoria, herramientas deterministas y entrenamiento experimental. **No utiliza modelos preentrenados de terceros, Ollama ni APIs de IA para generar respuestas.** Wikipedia se utiliza como fuente de textos, no como motor de IA.
+**Cerebro** es un proyecto de inteligencia artificial local en Python: combina un Transformer propio NumPy, motores Transformer opcionales basados en PyTorch, búsqueda de información, memoria, herramientas deterministas y entrenamiento experimental. **Por defecto no utiliza modelos preentrenados de terceros, Ollama ni APIs de IA para generar respuestas; el motor GGUF opcional sí permite utilizar pesos preentrenados elegidos por el usuario.** Wikipedia se utiliza como fuente de textos, no como motor de IA.
 
 **Estado:** versión **experimental**, desarrollada en una rama de integración. Algunas pruebas automáticas han pasado, pero el arranque integral, la desinstalación en el equipo de destino, la calidad de las respuestas y el entrenamiento de larga duración **todavía requieren verificación**. No se debe confundir «módulo integrado en el repositorio» con «motor entrenado y disponible automáticamente dentro del chat».
 
@@ -148,6 +148,23 @@ python3 cerebro.py motores
 
 GitHub Actions ejecuta comprobaciones de sintaxis y pruebas automatizadas en la rama de integración. **Una ejecución anterior** de la suite principal terminó con **68 pruebas superadas y 2 omitidas**, pero ese resultado **no valida los cambios posteriores** ni sustituye pruebas en MX Linux. El entrenamiento PyTorch, la instalación, el primer arranque y la desinstalación real requieren verificación separada. Consulta la pestaña **Actions** del repositorio para el resultado más reciente.
 
+
+## 🧠 Motor conversacional GGUF opcional (llama.cpp)
+
+Cerebro conserva su núcleo NumPy y los motores PyTorch propios, y admite ahora un **motor de conversación local con pesos GGUF preentrenados** mediante `llama-cpp-python`. Esta opción puede ofrecer respuestas más útiles si se utiliza un modelo compatible de calidad; no mejora automáticamente los pesos NumPy ni descarga modelos.
+
+```bash
+python3 -m pip install llama-cpp-python
+python3 cerebro.py chat --motor gguf --modelo-gguf "/ruta/al/modelo.gguf"
+# También:
+python3 main.py --motor gguf --modelo-gguf "/ruta/al/modelo.gguf" --una-vez "Hola"
+# CPU por defecto; GPU solo si llama.cpp fue compilado con soporte compatible:
+python3 main.py --motor gguf --modelo-gguf "/ruta/al/modelo.gguf" --capas-gpu 0
+```
+
+Descarga **tú mismo** un modelo GGUF de una fuente legítima y revisa licencia, procedencia, tamaño y RAM necesaria. El modelo debe caber en memoria y su plantilla de chat debe ser compatible con llama.cpp. Los pesos no se incluyen en el repositorio ni se instalan automáticamente. Con `CEREBRO_HOME` puedes guardar los modelos en tu SSD, pero la ruta GGUF se pasa explícitamente.
+
+**Límite de esta primera integración:** el modo GGUF es conversación local independiente (`/salir` para terminar); los comandos de proyectos, PDF, laboratorio y memoria continúan en el chat NumPy. No se conectan todavía las herramientas al motor GGUF ni se conceden permisos de ejecución. Los motores PyTorch del proyecto siguen siendo opcionales y entrenados desde cero, no equivalentes a un modelo preentrenado generalista.
 
 ## 🧠 Cerebro V2: entrenamiento, motores y SSD portátil
 
