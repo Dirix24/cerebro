@@ -30,6 +30,10 @@ AYUDA = """Comandos:
   /github-estado dueño/repo consulta repositorio público, solo lectura
   /github-errores dueño/repo lista incidencias públicas abiertas
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
+  /enseñar-habilidad nombre || 0:1; 1:3; 2:5    aprende una regla afín
+  /usar-habilidad nombre || número             aplica la regla a otra entrada
+  /corregir-habilidad nombre || ejemplos       revisa una habilidad guardada
+  /encadenar-habilidades primera, segunda || número   combina reglas aprendidas
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
   /progreso                 registra la precisión y su evolución
@@ -360,6 +364,29 @@ class Conversacion:
         cmd = partes[0].lower()
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
+
+        if cmd in ("/enseñar-habilidad", "/usar-habilidad", "/corregir-habilidad", "/encadenar-habilidades"):
+            from pathlib import Path
+            import sqlite3
+            from core.habilidades import apply, chain, teach
+            ruta = Path(config.raiz_datos()) / "data" / "habilidades.sqlite3"
+            nombre, separador, datos = resto.partition("||")
+            if not separador:
+                return f"Uso: {cmd} nombre || datos", False
+            try:
+                if cmd == "/usar-habilidad":
+                    resultado, revision, fuera = apply(ruta, nombre, datos)
+                    aviso = " Fuera del rango de ejemplos: es una extrapolación." if fuera else ""
+                    return f"Regla aprendida (revisión {revision}): {resultado}.{aviso}", False
+                if cmd == "/encadenar-habilidades":
+                    pasos = chain(ruta, nombre.split(","), datos)
+                    return "\n".join(
+                        f"{regla} (revisión {revision}) → {valor}" + (" [extrapolación]" if fuera else "")
+                        for regla, valor, revision, fuera in pasos
+                    ), False
+                return teach(ruta, nombre, datos, revise=cmd == "/corregir-habilidad"), False
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                return f"No pude completar la habilidad: {exc}", False
 
         if cmd == "/razonar":
             from pathlib import Path

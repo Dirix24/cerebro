@@ -558,3 +558,23 @@ reproducibles](docs/REASONING_BASELINE.md).
 El código original de Cerebro y los pesos procedimentales de Reasoning V3
 se distribuyen bajo la [licencia MIT](LICENSE). Los materiales y dependencias
 de terceros conservan sus condiciones y atribuciones.
+
+### Aprendizaje local de habilidades
+
+Puedes enseñar una regla numérica a Cerebro durante una conversación. Los dos
+primeros ejemplos determinan una regla afín y los demás deben confirmarla.
+Cerebro conserva la regla entre sesiones, acepta correcciones explícitas y
+marca cuándo aplica una regla fuera del rango observado.
+
+```text
+/enseñar-habilidad doble || 0:0; 2:4; 4:8
+/enseñar-habilidad suma-uno || 0:1; 4:5; 8:9
+/usar-habilidad doble || 3
+/encadenar-habilidades doble, suma-uno || 3
+/corregir-habilidad doble || 0:0; 2:4; 5:10
+```
+
+El encadenamiento del ejemplo produce 6 y luego 7. Se usan fracciones
+exactas. El alcance es una familia de reglas numéricas, almacenadas
+localmente en SQLite. Este modo no modifica los pesos neuronales ni convierte
+conversaciones o páginas externas en instrucciones de entrenamiento.

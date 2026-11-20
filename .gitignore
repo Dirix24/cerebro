@@ -19,3 +19,7 @@ data/aprendizaje_internet/
 
 # Base de conocimientos personal local
 data/conocimiento.sqlite3*
+
+# Habilidades y mediciones locales
+data/habilidades.sqlite3*
+data/actividad_neuronal.jsonl
