@@ -93,7 +93,8 @@ _NO_SON_NOMBRES = {"un", "una", "el", "la", "tu", "yo", "muy", "bien", "pequeño
 
 
 class Conversacion:
-    def __init__(self, modelo, memoria, agente, info_checkpoint=None, seed=None):
+    modo_local = False
+    def __init__(self, modelo, memoria, agente, info_checkpoint=None, seed=None, modo_local=False):
         self.modelo = modelo
         self.memoria = memoria
         self.agente = agente
@@ -104,6 +105,7 @@ class Conversacion:
         import numpy as np
         self.rng = np.random.default_rng(seed)
         self.pregunta_repaso = None
+        self.modo_local = modo_local
 
     # -- entrada principal ------------------------------------------------------------
 
@@ -139,6 +141,55 @@ class Conversacion:
             resultado = "Correcto" if correcto else "Incorrecto"
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
+
+        sencillas = {
+            "ok": "De acuerdo. ¿Qué quieres hacer ahora?",
+            "vale": "De acuerdo. ¿Qué quieres hacer ahora?",
+            "de acuerdo": "De acuerdo. ¿Qué quieres hacer ahora?",
+            "gracias": "De nada.",
+            "muchas gracias": "De nada.",
+            "hola": "Hola. Puedo ayudarte con cálculos, fuentes locales y habilidades que me enseñes.",
+            "buenas": "Hola. ¿En qué te ayudo?",
+        }
+        saludo = entrada.casefold().rstrip(" .!¡")
+        if saludo in sencillas:
+            return sencillas[saludo], False
+
+        # Las peticiones de aprendizaje tienen sintaxis explícita y no ejecutan texto libre.
+        nombre = r"[\w-]+"
+        numero = r"[+-]?\d{1,9}(?:[.,]\d{1,6})?"
+        solicitud = re.fullmatch(
+            rf"(?:usa|aplica) (?:la habilidad )?({nombre})(?: y (?:luego|después) ({nombre}))? "
+            rf"(?:a|con) ({numero})[.!]?", entrada, re.IGNORECASE,
+        )
+        if solicitud:
+            primera, segunda, valor = solicitud.groups()
+            comando = (f"/encadenar-habilidades {primera}, {segunda}" if segunda
+                       else f"/usar-habilidad {primera}")
+            return self._comando(f"{comando} || {valor}")
+        leccion = re.fullmatch(
+            rf"(enséñate|aprende|corrige) (?:la habilidad )?({nombre}) con estos ejemplos: (.+)",
+            entrada, re.IGNORECASE,
+        )
+        if leccion:
+            accion, habilidad, ejemplos = leccion.groups()
+            comando = "/corregir-habilidad" if accion.casefold() == "corrige" else "/enseñar-habilidad"
+            return self._comando(f"{comando} {habilidad} || {ejemplos}")
+
+        dato_ensenado = re.fullmatch(r"aprende esta respuesta: *(.+?) *\|\| *(.+)", entrada, re.IGNORECASE)
+        if dato_ensenado:
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Necesito permiso WRITE para guardar la respuesta.", False
+            import sqlite3
+            from core.conocimiento import guardar, respuesta_exacta
+            pregunta, respuesta = dato_ensenado.groups()
+            try:
+                guardar(pregunta.strip(), respuesta.strip(), "Declarado por el usuario")
+                if not respuesta_exacta(pregunta):
+                    return "Guardé la respuesta, pero hay versiones distintas. Me abstendré de elegir una.", False
+                return "Guardé la respuesta con tu atribución. Puedes preguntármela en otra sesión.", False
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return f"No pude guardar la respuesta: {exc}", False
 
         # La visualización se puede solicitar hablando, sin memorizar comandos.
         if re.search(r"\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\b",
@@ -225,6 +276,15 @@ class Conversacion:
             from core.consulta_exploracion import respuesta_documental
             return respuesta_documental(peticion_docs.group(1)), False
 
+        if self.modo_local:
+            import sqlite3
+            from core.conocimiento import respuesta_exacta
+            try:
+                dato = respuesta_exacta(entrada)
+            except (OSError, ValueError, sqlite3.Error):
+                dato = None
+            if dato:
+                return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
         # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
         from core.respuestas_con_fuentes import (
             concepto_definicion, responder_definicion, respuesta_clara,
@@ -233,14 +293,13 @@ class Conversacion:
         if concepto_definicion(entrada):
             _registrar_actividad("investigando", "consulta")
             dato = responder_definicion(entrada)
-            if not dato:
+            if not dato and not self.modo_local:
                 # Solo se consulta el tema público de una definición, nunca
                 # recuerdos, archivos locales ni el historial del usuario.
                 dato = consultar_internet_si_falta(entrada)
             respuesta = (respuesta_clara(dato[0]) + "\nFuente: " + dato[1] if dato else
-                         "No encontré una definición fiable en mis fuentes locales "
-                         "ni pude obtenerla de Wikipedia. Puedes añadir una ficha "
-                         "con /aprender-ficha.")
+                         "No encontré una definición fiable. Puedes aportar una fuente local "
+                         "o guardar una tarjeta con /aprender-ficha.")
             self.memoria.agregar_contexto("usuario", entrada)
             self.memoria.agregar_contexto("ia", respuesta)
             _registrar_actividad("consolidado", "respuesta")
@@ -257,7 +316,7 @@ class Conversacion:
             if resultados:
                 return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
             return "No encontré información en el corpus local.", False
-        if ruta == "conocimiento":
+        if ruta == "conocimiento" and not self.modo_local:
             _registrar_actividad("investigando", "consulta")
             from core.conocimiento import buscar as buscar_conocimiento
             resultados = buscar_conocimiento(entrada, limite=1)
@@ -288,6 +347,10 @@ class Conversacion:
             self.memoria.agregar_contexto("ia", respuesta)
             _registrar_actividad("consolidado", "respuesta")
             return respuesta, False
+        if self.modo_local:
+            return ("No tengo una respuesta fiable con mis datos locales. Puedo calcular, "
+                    "buscar en el corpus o aplicar una habilidad que me enseñes. "
+                    "Escribe /ayuda para ver ejemplos."), False
         resultado = self.responder_modelo(entrada)
         _registrar_actividad("consolidado", "respuesta")
         return resultado, False
@@ -455,6 +518,8 @@ class Conversacion:
                                   ensure_ascii=False, indent=2), False
             except (OSError, ValueError) as exc:
                 return f"Recordatorios: {exc}", False
+        if cmd in ("/github-errores", "/github-estado") and getattr(self, "modo_local", False):
+            return "GitHub no está disponible en el modo local.", False
         if cmd == "/github-errores":
             import json
             from core.github_local import incidencias_publicas

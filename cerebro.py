@@ -31,24 +31,17 @@ def _torch_disponible(python):
 
 
 def iniciar_automatico():
-    """Prepara el entorno local una vez y activa los servicios compatibles."""
+    """Abre el asistente local con los pesos existentes."""
     try:
         import numpy  # noqa: F401
+        python = sys.executable
     except ImportError:
-        entorno = RAIZ / ".venv"
-        python = entorno / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        if not python.is_file():
-            print("Creando entorno aislado de Cerebro...", flush=True)
-            venv.EnvBuilder(with_pip=True).create(str(entorno))
-        print("Instalando dependencias del motor local...", flush=True)
-        codigo = _ejecutar([str(python), "-m", "pip", "install", "-r", str(RAIZ / "requirements.txt")])
-        if codigo:
-            return codigo
-        return _ejecutar([str(python), str(RAIZ / "cerebro.py"), "todo"])
-    entorno = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    if entorno.is_file() and Path(sys.executable).resolve() != entorno.resolve():
-        return _ejecutar([str(entorno), str(RAIZ / "cerebro.py"), "todo"])
-    return ejecutar_todo()
+        entorno = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        if not entorno.is_file():
+            print("Falta NumPy en el entorno activo. Usa un entorno que ya lo tenga instalado.", file=sys.stderr)
+            return 1
+        python = str(entorno)
+    return _ejecutar([python, str(RAIZ / "main.py"), "--local"])
 
 
 def preparar_modelo_inicial():

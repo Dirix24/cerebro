@@ -45,7 +45,7 @@ La instalación no crea un servicio del sistema. El proceso de aprendizaje diari
 |---|---|
 | `python3 cerebro.py instalar` | Instala dependencias básicas de Cerebro |
 | `python3 cerebro.py instalar --avanzado` | Instala también PyTorch opcional |
-| `python3 cerebro.py iniciar` | Arranque integrado con chat y aprendizaje |
+| `python3 cerebro.py iniciar` | Asistente local con los pesos existentes, sin entrenamiento automático |
 | `python3 cerebro.py todo` | Inicia chat, índice y aprendizaje usando dependencias ya disponibles |
 | `python3 cerebro.py chat` | Abre solo el chat NumPy |
 | `python3 cerebro.py diagnostico` | Consulta estado de checkpoints, índice y batería |
@@ -578,3 +578,14 @@ El encadenamiento del ejemplo produce 6 y luego 7. Se usan fracciones
 exactas. El alcance es una familia de reglas numéricas, almacenadas
 localmente en SQLite. Este modo no modifica los pesos neuronales ni convierte
 conversaciones o páginas externas en instrucciones de entrenamiento.
+
+En el modo local puedes decir `Aprende doble con estos ejemplos: 0:0; 2:4; 4:8`
+y después `Usa doble con 3`. Con dos habilidades enseñadas, prueba
+`Aplica doble y después suma-uno a 3`. El chat indica cuando una respuesta
+carece de respaldo local. `cerebro.py todo` sigue siendo la acción explícita
+para el flujo experimental de investigación y entrenamiento en segundo plano.
+
+También puedes escribir `Aprende esta respuesta: ¿Qué es mi laboratorio? ||
+Es mi espacio de pruebas.` y preguntar `Que es mi laboratorio?`. Cerebro
+muestra la atribución al usuario y se abstiene si hay respuestas guardadas
+que discrepan para la misma consulta.

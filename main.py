@@ -34,6 +34,7 @@ def cargar_modelo(ruta=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Cerebro - chat local")
+    ap.add_argument("--local", action="store_true", help="usa respuestas verificables y fuentes locales")
     ap.add_argument("--estacion-terminal", action="store_true", help="abrir estación neuronal en terminal sin modelo")
     ap.add_argument("--ojos", action="store_true", help="rostro animado en terminal; cámara apagada")
     ap.add_argument("--diagnostico-memoria", action="store_true", help="estadísticas locales sin mostrar recuerdos")
@@ -109,7 +110,7 @@ def main():
               f"val {meta.get('val_bpb', float('nan')):.3f} bpb)")
 
     conv = Conversacion(modelo, AdvancedMemoryManager(), ControlledAgent(),
-                        info_checkpoint=meta, seed=args.semilla)
+                        info_checkpoint=meta, seed=args.semilla, modo_local=args.local)
 
     if args.una_vez is not None:
         respuesta, _ = conv.procesar(args.una_vez)
