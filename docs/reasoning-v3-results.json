@@ -1,0 +1,224 @@
+{
+  "seed": 3210,
+  "steps": 2400,
+  "selected_step": 2400,
+  "batch": 32,
+  "evaluation_interval": 300,
+  "learning_rate": 0.001,
+  "device": "CPU Intel Core i7-4500U",
+  "threads": 2,
+  "torch": "2.15.0+cpu",
+  "checkpoint_sha256": "25440710f5626735a6ba8430818b019a56f0e80a999e6300ee71c2cb099adc76",
+  "validation_history": [
+    {
+      "step": 300,
+      "loss": 0.59833,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 9,
+          "final": 28,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 3,
+          "final": 3,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 600,
+      "loss": 0.49873,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 6,
+          "final": 30,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 5,
+          "final": 5,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 900,
+      "loss": 0.50296,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 7,
+          "final": 32,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 5,
+          "final": 5,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 1200,
+      "loss": 0.422,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 19,
+          "final": 45,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 5,
+          "final": 5,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 1500,
+      "loss": 0.48925,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 18,
+          "final": 46,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 8,
+          "final": 8,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 1800,
+      "loss": 0.39626,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 28,
+          "final": 53,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 8,
+          "final": 8,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 2100,
+      "loss": 0.30236,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 43,
+          "final": 65,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 8,
+          "final": 8,
+          "empty": 0
+        }
+      }
+    },
+    {
+      "step": 2400,
+      "loss": 0.2255,
+      "validation": {
+        "A": {
+          "n": 128,
+          "verified": 71,
+          "final": 79,
+          "empty": 0
+        },
+        "L": {
+          "n": 8,
+          "verified": 8,
+          "final": 8,
+          "empty": 0
+        }
+      }
+    }
+  ],
+  "training": {
+    "seconds": 26.87,
+    "parameters": 33632,
+    "peak_rss_mib": 332.4,
+    "input_tokens_total": 844800,
+    "supervised_tokens_total": 307200
+  },
+  "held_out_test": {
+    "original": {
+      "A": {
+        "n": 128,
+        "verified": 0,
+        "final": 0,
+        "empty": 0
+      },
+      "L": {
+        "n": 16,
+        "verified": 0,
+        "final": 0,
+        "empty": 0
+      }
+    },
+    "random": {
+      "A": {
+        "n": 128,
+        "verified": 0,
+        "final": 0,
+        "empty": 0
+      },
+      "L": {
+        "n": 16,
+        "verified": 0,
+        "final": 0,
+        "empty": 0
+      }
+    },
+    "trained": {
+      "A": {
+        "n": 128,
+        "verified": 11,
+        "final": 14,
+        "empty": 0
+      },
+      "L": {
+        "n": 16,
+        "verified": 16,
+        "final": 16,
+        "empty": 0
+      }
+    },
+    "paired_vs_random": {
+      "improved": 27,
+      "regressed": 0,
+      "two_sided_p": 1.4901161193847656e-08
+    },
+    "paired_vs_original": {
+      "improved": 27,
+      "regressed": 0,
+      "two_sided_p": 1.4901161193847656e-08
+    },
+    "average_ms_per_case": {
+      "original_serial": 11.256039874991883,
+      "random_batched": 0.2331933472229745,
+      "trained_batched": 0.21219929861773482
+    }
+  }
+}

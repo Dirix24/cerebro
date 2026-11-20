@@ -20,6 +20,7 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /razonar A2+3*4            dos pasos verificados con el modelo experimental V3
   /origen                   identidad histórica declarada del creador
   /configurar-creador nombre establece creador una sola vez
   /exportar-legado ruta     exporta identidad pública, sin datos privados
@@ -359,6 +360,17 @@ class Conversacion:
         cmd = partes[0].lower()
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
+
+        if cmd == "/razonar":
+            from pathlib import Path
+            from reasoning_v3 import solve
+            checkpoint = Path(__file__).resolve().parent / "checkpoints" / "reasoning-v3.pt"
+            try:
+                return solve(resto, checkpoint), False
+            except ImportError:
+                return "Cerebro V3 requiere PyTorch local (torch>=2.6).", False
+            except (ValueError, OSError, RuntimeError) as exc:
+                return f"Cerebro V3: {exc}", False
 
         if cmd == "/mis-documentos":
             if "READ" not in config.PERMISOS_AGENTE:

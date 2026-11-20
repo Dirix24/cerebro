@@ -540,3 +540,21 @@ consulta mis documentos inteligencia artificial
 La consulta se hace **exclusivamente en el índice privado local** `data/exploracion_local.sqlite3`; no se envían consultas ni archivos a Internet. Muestra fragmentos de los documentos y la ruta de origen, marcados como coincidencias **no verificadas**. El índice se actualiza en cada exploración y puede quedar desactualizado si cambian los archivos. Para evitar divulgar información personal por accidente, la búsqueda se activa únicamente con estas expresiones o con el comando explícito, no en cualquier pregunta. Este cambio **no** conecta todavía esos textos al entrenamiento de pesos ni comprueba contradicciones.
 
 Pruebas: `python3 -m pytest -q tests/test_consulta_exploracion.py`.
+
+## Reasoning V3 experimental
+
+La rama `feature/cerebro-reasoning-v3` incluye un Transformer propio entrenado
+desde cero y un checkpoint optativo para el comando `/razonar` con PyTorch
+local. Prueba `/razonar L1|0^1` para lógica booleana o `/razonar A2+3*4`
+para aritmética módulo 10. Las operaciones se aplican de izquierda a derecha.
+Cerebro comprueba la propuesta y se abstiene si algún paso falla.
+
+El experimento verificó ambos pasos en 16/16 casos de lógica y 11/128 de
+aritmética con combinaciones reservadas. Consulta los [resultados y comandos
+reproducibles](docs/REASONING_BASELINE.md).
+
+## Licencia
+
+El código original de Cerebro y los pesos procedimentales de Reasoning V3
+se distribuyen bajo la [licencia MIT](LICENSE). Los materiales y dependencias
+de terceros conservan sus condiciones y atribuciones.

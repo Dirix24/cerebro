@@ -45,6 +45,9 @@ jobs:
           python -m pytest -q tests/test_conocimiento.py tests/test_aprendizaje_internet.py tests/test_entrenamiento_guiado.py tests/test_capacidades_locales.py tests/test_herramientas_texto.py tests/test_repaso_local.py tests/test_historial_local.py tests/test_ejemplos_aprobados.py tests/test_exportar_ejemplos.py tests/test_monitor_neuronal.py tests/test_aprendizaje_semanal.py
       - name: Pruebas de componentes
         run: python -m pytest -q tests/test_nuevas_capacidades.py tests/test_cerebro_torch.py tests/test_local_search.py
+      - name: Causalidad, reanudación y chat de Reasoning V3
+        if: matrix.arquitectura == 'avanzada'
+        run: python -m pytest -q tests/test_reasoning_v3.py
       - name: Entrenamiento propio de prueba
         run: |
           python cerebro_torch.py --corpus data/corpus.txt --perfil diminuto --arquitectura ${{ matrix.arquitectura }} --pasos 2 --batch 1 --acumulacion 2 --guardar-cada 1 --salida checkpoints/smoke-${{ matrix.arquitectura }}.pt --dispositivo cpu
