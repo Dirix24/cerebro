@@ -24,7 +24,7 @@ def test_chat_cli_accepts_multiline_input_and_uses_learned_skills(tmp_path):
     result = subprocess.run(
         [sys.executable, "cerebro.py", "iniciar"], cwd=root,
         env={**os.environ, "CEREBRO_HOME": str(tmp_path), "OPENBLAS_NUM_THREADS": "1"},
-        input=("ok\nAprende doble con estos ejemplos: 0:0; 2:4; 4:8\n"
+        input=("ok\n2mas 2\nque es japon\n¿y su capital?\nAprende doble con estos ejemplos: 0:0; 2:4; 4:8\n"
                "Aprende suma-uno con estos ejemplos: 0:1; 4:5; 8:9\n"
                "Aplica doble y después suma-uno a 3\n"
                "Aprende esta respuesta: ¿Qué es el banco de pruebas? || Es nuestro entorno de simulación.\n"
@@ -34,6 +34,8 @@ def test_chat_cli_accepts_multiline_input_and_uses_learned_skills(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert "De acuerdo" in result.stdout
+    assert "2 + 2 = 4" in result.stdout
+    assert "La capital de Japón es Tokio" in result.stdout
     assert "doble (revisión 1) → 6" in result.stdout
     assert "suma-uno (revisión 1) → 7" in result.stdout
     assert "Fuente: Declarado por el usuario" in result.stdout

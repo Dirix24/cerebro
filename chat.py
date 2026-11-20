@@ -94,6 +94,7 @@ _NO_SON_NOMBRES = {"un", "una", "el", "la", "tu", "yo", "muy", "bien", "pequeño
 
 class Conversacion:
     modo_local = False
+    tema_local = None
     def __init__(self, modelo, memoria, agente, info_checkpoint=None, seed=None, modo_local=False):
         self.modelo = modelo
         self.memoria = memoria
@@ -120,6 +121,7 @@ class Conversacion:
             _registrar_actividad("analizando", "mensaje")
         except OSError:
             _registrar_actividad = lambda *_args: None
+        tema_anterior, self.tema_local = self.tema_local, None
         if entrada.startswith("/"):
             return self._comando(entrada)
 
@@ -153,6 +155,8 @@ class Conversacion:
         }
         saludo = entrada.casefold().rstrip(" .!¡")
         if saludo in sencillas:
+            if saludo not in ("hola", "buenas"):
+                self.tema_local = tema_anterior
             return sencillas[saludo], False
 
         # Las peticiones de aprendizaje tienen sintaxis explícita y no ejecutan texto libre.
@@ -285,6 +289,12 @@ class Conversacion:
                 dato = None
             if dato:
                 return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
+        if self.modo_local:
+            from core.temas_locales import responder_tema
+            respuesta, self.tema_local = responder_tema(entrada, tema_anterior)
+            if respuesta is not None:
+                return respuesta, False
+
         # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
         from core.respuestas_con_fuentes import (
             concepto_definicion, responder_definicion, respuesta_clara,

@@ -589,3 +589,12 @@ También puedes escribir `Aprende esta respuesta: ¿Qué es mi laboratorio? ||
 Es mi espacio de pruebas.` y preguntar `Que es mi laboratorio?`. Cerebro
 muestra la atribución al usuario y se abstiene si hay respuestas guardadas
 que discrepan para la misma consulta.
+
+### Conversación local con contexto
+
+En `cerebro.py iniciar`, prueba `2mas 2`, `dos más dos` o `cuánto es 2 por 6`.
+Para probar el catálogo inicial, escribe `que es japon` y en el siguiente
+turno `¿y su capital?`. El modo local cita la fuente y también reconoce
+preguntas básicas sobre Portugal. Este catálogo es pequeño y el tema solo se
+conserva durante la sesión. Las consultas ajenas al catálogo siguen usando el
+conocimiento local existente o una respuesta de incertidumbre.
