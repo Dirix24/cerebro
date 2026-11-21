@@ -281,3 +281,20 @@ def test_lanzador_local_conserva_un_solo_chat_web(nucleo):
         servidor.shutdown()
         hilo.join(timeout=2)
         servidor.server_close()
+
+
+def test_comando_escritorio_lanza_acompanante_sin_terminal(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+    from universe import lanzador
+
+    monkeypatch.setenv("DISPLAY", ":99")
+    monkeypatch.setattr(lanzador, "carpeta", lambda: tmp_path)
+    monkeypatch.setattr(sys, "argv", ["cerebro", "escritorio"])
+    with patch.object(lanzador.subprocess, "Popen") as abrir:
+        assert lanzador.main() == 0
+        abrir.assert_called_once()
+        comando, = abrir.call_args.args
+        assert comando == [sys.executable, "-m", "universe.lanzador", "_escritorio"]
+        assert abrir.call_args.kwargs["start_new_session"]
+        assert abrir.call_args.kwargs["stdin"] == subprocess.DEVNULL

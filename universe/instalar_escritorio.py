@@ -72,6 +72,13 @@ def main():
     ap.add_argument("--sin-autoinicio", action="store_true", help="no registrar el acompañante al iniciar sesión")
     args = ap.parse_args()
     instalar(automatico=not args.sin_autoinicio)
+    if not args.sin_autoinicio:
+        from universe.lanzador import lanzar_acompanante
+
+        try:
+            lanzar_acompanante()
+        except OSError as exc:
+            print(f"No se pudo iniciar el acompañante: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":

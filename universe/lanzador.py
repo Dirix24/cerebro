@@ -154,7 +154,7 @@ def _lanzar_proceso(comando):
 def lanzar_acompanante():
     if not _hay_escritorio():
         return False
-    return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "escritorio"])
+    return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "_escritorio"])
 
 
 def lanzar_estudio():
@@ -458,13 +458,16 @@ def main():
     if modo == "_nucleo":
         nucleo()
         return 0
-    if modo not in {"terminal", "escritorio", "chat", "studio", "universe", "apagar"}:
+    if modo not in {"terminal", "escritorio", "chat", "studio", "universe", "apagar", "_escritorio"}:
         print("Uso: cerebro [terminal|escritorio|chat|studio|universe|apagar]")
         return 0 if modo in {"-h", "--help"} else 2
     try:
         if modo == "apagar":
             apagar()
         elif modo == "escritorio":
+            if not lanzar_acompanante():
+                raise RuntimeError("Se necesita una sesión gráfica para abrir el acompañante.")
+        elif modo == "_escritorio":
             with (carpeta() / "avatar.lock").open("a") as cerrojo:
                 try:
                     fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
