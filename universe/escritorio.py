@@ -6,7 +6,8 @@ import re
 from time import monotonic, sleep
 
 from agent.control_ventanas import buscar, etiquetas, interpretar
-from core import aplicaciones_linux, documentos_usuario, ventanas_x11
+from agent.demostracion_escritorio import Demostraciones
+from core import aplicaciones_linux, documentos_usuario, energia_linux, ventanas_x11
 
 
 CATEGORIA = "documento_escritorio"
@@ -15,10 +16,24 @@ _RECHAZAR = {"no", "no gracias", "no lo recuerdes", "cancelar", "cancela"}
 _ABRIR = r"(abre|abreme|abrir|abri|abra|habre|habreme)"
 _DOCUMENTO = r"(?:(?:el|mi|un)\s+)?documento"
 _VERBOS = {"enfoca": ("Enfoqué", "enfocar"), "minimiza": ("Minimicé", "minimizar"),
-           "maximiza": ("Maximicé", "maximizar"), "restaura": ("Restauré", "restaurar")}
+           "maximiza": ("Maximicé", "maximizar"), "restaura": ("Restauré", "restaurar"),
+           "izquierda": ("Coloqué a la izquierda", "colocar a la izquierda"),
+           "derecha": ("Coloqué a la derecha", "colocar a la derecha")}
 _NAVEGADOR = {"el navegador", "navegador", "el navegador web", "navegador web"}
 _CATEGORIAS = {"calculadora": "Calculator", "gestor de archivos": "FileManager", "editor de codigo": "IDE"}
 
+
+_ENERGIA = {
+    "apagar": r"apaga(?:me)? (?:(?:mi|el) )?(?:ordenador|equipo|portatil)",
+    "reiniciar": r"reinicia (?:(?:mi|el) )?(?:ordenador|equipo|portatil)",
+    "suspender": r"suspende(?: (?:mi |el )?(?:ordenador|equipo|portatil))?|ponlo a dormir",
+    "bloquear": r"bloquea (?:mi |la )?pantalla",
+    "cerrar sesión": r"cierra (?:mi |la )?sesion",
+}
+
+def _accion_energia(orden):
+    orden = orden.removesuffix(" cuando te confirme")
+    return next((accion for accion, patron in _ENERGIA.items() if re.fullmatch(patron, orden)), None)
 
 
 class Escritorio:
@@ -28,12 +43,14 @@ class Escritorio:
         self.enlaces = OrderedDict()
         self.ultimas_aplicaciones = OrderedDict()
         self.ultimas_ventanas = OrderedDict()
+        self.demostraciones = Demostraciones(self)
 
     def limpiar(self):
         self.pendientes.clear()
         self.enlaces.clear()
         self.ultimas_aplicaciones.clear()
         self.ultimas_ventanas.clear()
+        self.demostraciones.activas.clear()
 
     def _guardar_pendiente(self, cliente, **datos):
         self.pendientes[cliente] = (monotonic() + 300, datos)
@@ -96,6 +113,9 @@ class Escritorio:
                     if len(candidatas) == 1:
                         ventana = candidatas[0]
                         self._recordar_contexto(self.ultimas_ventanas, cliente, ventana)
+                        self.demostraciones.registrar(cliente, "abrir", app["id"])
+                        if avance is not None:
+                            avance[-1] = "verificado"
                         return f'{app["nombre"]} abrió la ventana «{ventana["titulo"]}».'
                     sleep(.12)
             return f'{app["nombre"]} aceptó la solicitud de apertura.'
@@ -112,10 +132,58 @@ class Escritorio:
         hecho, infinitivo = _VERBOS[accion]
         if verificado:
             self._recordar_contexto(self.ultimas_ventanas, cliente, ventana)
+            if ventana["clase"] and ventana["clase"] != "N/A":
+                self.demostraciones.registrar(cliente, accion, ventana["clase"])
             if avance is not None:
-                avance.append(True)
+                avance.append("verificado")
             return f'{hecho} «{titulo}».'
         return f'Solicité {infinitivo} «{titulo}», pero el gestor no confirmó el cambio.'
+
+    def repetir_demostracion(self, pasos, cliente):
+        resultados = []
+        for indice, paso in enumerate(pasos, 1):
+            self._autorizar()
+            accion, objetivo = paso["accion"], paso["objetivo"]
+            avance = []
+            try:
+                if accion == "abrir":
+                    app = next((a for a in aplicaciones_linux.listar() if a["id"] == objetivo), None)
+                    respuesta = (self._aplicacion(app, cliente, avance) if app
+                                 else "La aplicación enseñada ya no está disponible.")
+                else:
+                    ventanas = [v for v in ventanas_x11.listar() if v["clase"] == objetivo]
+                    respuesta = (self._ventana(cliente, accion, ventanas[0], avance) if len(ventanas) == 1
+                                 else "La ventana enseñada cambió o hay varias coincidencias.")
+            except RuntimeError as exc:
+                respuesta = str(exc)
+            resultados.append(f"{indice}. {respuesta}")
+            if avance != ["verificado"]:
+                resultados.append("Detuve la demostración. Revisa la aplicación antes de volver a enseñarme este paso.")
+                break
+        return "\n".join(resultados)
+
+    def _impedimentos_energia(self, accion):
+        motivos = energia_linux.impedimentos(accion)
+        if accion != "bloquear" and any(
+                tarea["estado"] in {"en cola", "en ejecución"} for tarea in self.nucleo.consultar_tareas()):
+            motivos.append("Cerebro tiene tareas en cola o en ejecución.")
+        if accion in {"apagar", "reiniciar", "cerrar sesión"}:
+            abiertas = ventanas_x11.listar()
+            if abiertas:
+                motivos.append("Hay ventanas abiertas. Comprueba y guarda tu trabajo antes de cerrar la sesión.")
+        return motivos
+
+    def _energia(self, accion, cliente):
+        self._autorizar()
+        self._autorizar_escritura()
+        try:
+            motivos = self._impedimentos_energia(accion)
+        except RuntimeError as exc:
+            return f"No pude comprobar si es posible {accion}. {exc}"
+        if motivos:
+            return f"No está disponible {accion} ahora.\n" + "\n".join(f"• {m}" for m in motivos)
+        self._guardar_pendiente(cliente, energia=accion)
+        return f"Responde «Confirmar {accion}» para ejecutar la acción o «Cancelar»."
 
     def _controlar(self, texto, normal, cliente, avance=None):
         from universe.consultas import destino_desktop, desea_studio
@@ -278,9 +346,13 @@ class Escritorio:
     def _secuencia(self, pasos, cliente):
         respuestas = []
         self.pendientes.pop(cliente, None)
+        if any(_accion_energia(paso) for paso in pasos[:-1]):
+            return "La solicitud de energía o bloqueo debe ser el último paso."
         for indice, paso in enumerate(pasos):
             avance = []
-            respuesta = self._controlar(paso, documentos_usuario._normalizar(paso), cliente, avance)
+            energia = _accion_energia(paso)
+            respuesta = self._energia(energia, cliente) if energia else self._controlar(
+                paso, documentos_usuario._normalizar(paso), cliente, avance)
             respuestas.append(respuesta or f"No pude ejecutar «{paso}» como acción de escritorio.")
             if not avance:
                 resto = pasos[indice + 1:]
@@ -354,7 +426,7 @@ class Escritorio:
             try:
                 ventanas = ventanas_x11.listar()
                 escritorio = f"X11 respondió con {len(ventanas)} ventanas."
-                faltan = [programa for programa in ("xprop", "xdotool") if not which(programa)]
+                faltan = [programa for programa in ("xprop", "xdotool", "xwininfo", "xrandr") if not which(programa)]
                 if faltan:
                     escritorio += " Faltan utilidades de control: " + ", ".join(faltan) + "."
                 if not self.nucleo.agente.tiene_permisos("WRITE"):
@@ -368,7 +440,7 @@ class Escritorio:
             return {"respuesta": (f"{inventario}\nBúsqueda local en {len(documentos_usuario.carpetas())} carpetas autorizadas."
                                   f"\n{escritorio}"
                                   f"\nExtracción de PDF: {lectura_pdf}. Aperturas aún sin verificar en esta consulta."
-                                  f"\nConsultas públicas: {red}. Aprendizaje por demostración: pendiente.")}
+                                  f"\nConsultas públicas: {red}. Demostraciones disponibles para aperturas y cambios de ventanas verificados.")}
         self._autorizar()
         self.pendientes.pop(cliente, None)
         if primero.herramienta == "buscar_contenido":
@@ -447,6 +519,31 @@ class Escritorio:
     def consultar(self, pregunta, cliente):
         texto = re.sub(r"^cerebro(?:[,\s]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
         normal = documentos_usuario._normalizar(texto)
+        demostracion = self.demostraciones.consultar(normal, cliente)
+        if demostracion is not None:
+            return demostracion
+        accion_energia = _accion_energia(normal)
+        if accion_energia:
+            self.pendientes.pop(cliente, None)
+            return self._energia(accion_energia, cliente)
+        if re.fullmatch(r"enciende (?:mi |el )?(?:ordenador|equipo|portatil)", normal):
+            self._autorizar()
+            diagnostico = energia_linux.diagnosticar_activacion()
+            return (f"{diagnostico}\nPara despertar o encender el equipo hace falta un emisor externo autorizado. "
+                    "El firmware, el estado de energía y la red determinan si Wake-on-LAN funcionará. "
+                    "Esta instalación carece de un emisor configurado.")
+        if re.fullmatch(r"apaga(?: (?:mi |el )?(?:ordenador|equipo|portatil))? cuando .+", normal):
+            self.pendientes.pop(cliente, None)
+            return "El apagado diferido requiere una tarea identificada y todavía no está disponible."
+        if re.fullmatch(r"(?:pon|coloca) (?:las )?dos ventanas (?:una al lado de la otra|lado a lado)", normal):
+            self._autorizar()
+            self.pendientes.pop(cliente, None)
+            ventanas = ventanas_x11.listar()[:20]
+            if len(ventanas) < 2:
+                return "Se necesitan dos ventanas abiertas."
+            self._guardar_pendiente(cliente, colocar=ventanas)
+            opciones = "\n".join(f"{i}. {v['titulo']}" for i, v in enumerate(ventanas, 1))
+            return "Indica dos números en orden de izquierda a derecha, por ejemplo «1 y 2».\n" + opciones
         orden = re.fullmatch(rf"{_ABRIR}\s+{_DOCUMENTO}\s+(.+)", normal)
         olvidar = re.fullmatch(rf"olvida\s+{_DOCUMENTO}\s+(.+)", normal)
         repetir = re.fullmatch(r"(?:abrelo|vuelve a abrirlo)(?: otra vez| de nuevo)?", normal)
@@ -497,9 +594,9 @@ class Escritorio:
                     if apps else "El escritorio no devolvió aplicaciones visibles.")
 
         separador = rf"(?:,\s*(?:(?:y|e)\s+)?|\s+(?:y luego|y despues|y|e|despues)\s+)"
-        inicio = rf"(?:{_ABRIR[1:-1]}|cierra|minimiza|maximiza|enfoca(?:me)?|restaura|pon|cambia a)"
+        inicio = rf"(?:{_ABRIR[1:-1]}|cierra|minimiza|maximiza|enfoca(?:me)?|restaura|pon|mueve|coloca|cambia a|apaga|reinicia|suspende|bloquea)"
         pasos = re.split(separador + rf"(?={inicio}\s)", normal)
-        if 1 < len(pasos) <= 8 and all(interpretar(paso) or re.fullmatch(
+        if 1 < len(pasos) <= 8 and all(_accion_energia(paso) or interpretar(paso) or re.fullmatch(
                 rf"{_ABRIR} [\w .()+-]{{2,100}}", paso) for paso in pasos):
             return self._secuencia(pasos, cliente)
 
@@ -519,6 +616,39 @@ class Escritorio:
         if confirmacion in _RECHAZAR:
             self.pendientes.pop(cliente)
             return "De acuerdo. Cancelé la operación pendiente."
+        accion = datos.get("energia")
+        if accion and confirmacion == "confirmar " + documentos_usuario._normalizar(accion):
+            self._autorizar()
+            self._autorizar_escritura()
+            self.pendientes.pop(cliente)
+            try:
+                motivos = self._impedimentos_energia(accion)
+                if motivos:
+                    return "Cancelé la solicitud.\n" + "\n".join(f"• {m}" for m in motivos)
+                verificado = energia_linux.solicitar(accion)
+            except RuntimeError as exc:
+                return f"No pude completar la solicitud de {accion}. {exc}"
+            if accion == "bloquear":
+                return ("El protector de pantalla de XFCE se activó tras la orden de bloqueo." if verificado
+                        else "XFCE recibió la orden de bloqueo. La activación no se pudo confirmar.")
+            return f"El sistema aceptó la solicitud de {accion}."
+        if "colocar" in datos:
+            seleccion = re.fullmatch(r"(\d{1,2}) (?:y )?(\d{1,2})", confirmacion)
+            if seleccion:
+                indices = [int(numero) - 1 for numero in seleccion.groups()]
+                ventanas = datos["colocar"]
+                if indices[0] == indices[1] or any(not 0 <= i < len(ventanas) for i in indices):
+                    return "Elige dos números distintos de la lista."
+                self._autorizar()
+                self.pendientes.pop(cliente)
+                elegidas = [ventanas[i] for i in indices]
+                estados = ventanas_x11.colocar_juntas(*elegidas)
+                respuestas = []
+                for lado, ventana, verificado in zip(("izquierda", "derecha"), elegidas, estados):
+                    hecho, infinitivo = _VERBOS[lado]
+                    respuestas.append(f'{hecho} «{ventana["titulo"]}».' if verificado else
+                                      f'No pude verificar si se logró {infinitivo} «{ventana["titulo"]}».')
+                return "\n".join(respuestas)
         if "resumen" in datos and confirmacion == "confirmar guardar resumen":
             from secrets import token_hex
 

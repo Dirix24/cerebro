@@ -71,6 +71,12 @@ Puedes acotar la búsqueda por extensión con «Busca documentos ODT de física�
 
 El control de ventanas requiere X11, `wmctrl`, `xdotool` y `xprop`. En Wayland se necesita un adaptador del compositor.
 
+Puedes decir «Mueve esta ventana a la izquierda» o «Pon las dos ventanas una al lado de la otra». Para colocar dos, elige sus números en orden de izquierda a derecha. Cerebro utiliza el área útil del monitor de la primera ventana y verifica cada posición en X11.
+
+«Bloquea la pantalla», «Suspende el equipo», «Apaga el ordenador», «Reinicia el ordenador» y «Cierra mi sesión» piden confirmación en el mismo chat. En MX Linux las solicitudes de apagado, reinicio y suspensión se comprueban mediante login1. Cerebro revisa las tareas en curso y los inhibidores de login1 donde corresponda. Si hay ventanas abiertas, aplaza el apagado, reinicio o cierre de sesión. «Enciende el ordenador» consulta la capacidad de Wake-on-LAN cuando `ethtool` está disponible. La activación requiere un emisor externo autorizado.
+
+Para enseñar una rutina de escritorio, escribe «Empezar demostración Diseño», da las órdenes una a una y termina con «Guardar demostración». Luego usa «Repite la demostración Diseño». Cerebro guarda aperturas y cambios de ventana que haya podido verificar. La demostración se limita a las órdenes de Cerebro y no captura la pantalla. Si una aplicación desaparece o hay varias ventanas que coinciden, la repetición se detiene.
+
 **Modo táctil experimental.** En el panel local selecciona tu cámara y autorízala. **Ver cámara** muestra los puntos detectados y pausa el puntero. **Dibujar figura** permite trazar un contorno con una pinza. **Convertir a 3D** le da grosor y **Guardar OBJ** exporta la malla. **Pausar** libera la cámara.
 
 Requiere X11, `xdotool`, Tk, OpenCV y MediaPipe. Se comprobó MediaPipe 0.10.32 con Python 3.13. Para preparar un entorno propio:

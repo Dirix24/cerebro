@@ -12,6 +12,8 @@ _CONTROLES = (
     ("minimiza", r"minimiza (.+)"),
     ("maximiza", r"maximiza (.+)"),
     ("restaura", r"restaura (.+)"),
+    ("izquierda", r"(?:mueve|coloca|pon) (.+) a la izquierda"),
+    ("derecha", r"(?:mueve|coloca|pon) (.+) a la derecha"),
 )
 _LISTAR = r"(?:muestra(?:me)?|lista|enumera) (?:todas )?(?:las )?ventanas(?: abiertas)?"
 
