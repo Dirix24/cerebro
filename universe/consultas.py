@@ -16,7 +16,7 @@ from zipfile import ZipFile
 from core.actividad_neuronal import publicar
 
 CANAL = "https://feeds.bbci.co.uk/mundo/rss.xml"
-DOCUMENTOS = {".txt", ".md", ".csv", ".json", ".pdf", ".docx", ".vtt", ".srt", ".py"}
+DOCUMENTOS = {".txt", ".md", ".csv", ".json", ".pdf", ".docx", ".vtt", ".srt", ".py", ".obj"}
 VIDEOS = {".mp4": "mov", ".mov": "mov", ".mkv": "matroska", ".webm": "matroska"}
 PRIVADO = re.compile(r"\b(?:mi|mis|m[ií]o|m[ií]a|contrase[ñn]a|clave|archivo|documento|correo|recuerdo|tel[eé]fono)\b",
                      re.IGNORECASE)
@@ -108,10 +108,10 @@ def investigacion_externa(nucleo, pregunta):
     comando, _, argumentos = pregunta.partition(" ")
     comando = comando.casefold()
     repo = re.fullmatch(r"(?:explora|inspecciona|analiza|investiga|revisa) "
-                        r"(?:(?:el )?repositorio )?(https://github\.com/[^\s]+|[\w.-]+/[\w.-]+)",
-                        pregunta, re.I)
+                        r"(?:(?:el )?repositorio (https://github\.com/[^\s]+|[\w.-]+/[\w.-]+)"
+                        r"|(https://github\.com/[^\s]+))", pregunta, re.I)
     if repo:
-        comando, argumentos = "/github-explorar", repo[1]
+        comando, argumentos = "/github-explorar", repo[1] or repo[2]
     web = re.fullmatch(r"(?:busca|investiga) en la web\s+(.+)", pregunta, re.I)
     if web:
         comando, argumentos = "/web", web[1]
@@ -185,16 +185,31 @@ def consulta_directa(nucleo, pregunta, modo=None):
         return ("Puedo generar funciones sencillas de Python, inspeccionar funciones e importaciones de tus archivos "
                 "y comprobar su sintaxis en Studio. Prueba «Revisa src/ejemplo.py» o "
                 "«Escribe una función en Python para sumar dos números».")
-    if re.fullmatch(r"(?:guarda|recuerda) (?:lo aprendido|un resumen) (?:de este archivo|del archivo)", pregunta, re.I):
+    aprender_modelo = re.fullmatch(r"aprende de (?:este|el) modelo(?: 3d)?[.!]?", pregunta, re.I)
+    if aprender_modelo or re.fullmatch(
+        r"(?:guarda|recuerda) (?:lo aprendido|un resumen) (?:de este archivo|del archivo)", pregunta, re.I
+    ):
         if "WRITE" not in nucleo.agente.permisos_concedidos:
             raise PermissionError("Falta el permiso de escritura para guardar en memoria.")
         nombre = nucleo.archivo_en_contexto
         if not nombre:
             return "Primero adjunta un archivo y deja que lo analice."
+        if aprender_modelo and Path(nombre).suffix.lower() != ".obj":
+            return "Adjunta un archivo OBJ para aprender sus medidas."
         try:
-            resumen = analizar_ruta(nucleo, nombre, explicar=True)
             clave = "archivo_" + Path(nombre).name
-            cantidad = nucleo.memoria.importar_recuerdos({clave: resumen[:3600]})
+            if Path(nombre).suffix.lower() == ".obj":
+                from core.modelos_3d import analizar_obj
+                medidas = analizar_obj(nucleo.ruta(nombre, lectura=True))
+                clave = "modelo3d_" + medidas["sha256"][:32]
+                recuerdo = {"archivo": nombre, **medidas}
+                anterior = nucleo.memoria.recuperar_largo_plazo(clave)
+                if isinstance(anterior, dict) and anterior.get("sha256") == medidas["sha256"]:
+                    return f"Las medidas de este modelo ya estaban guardadas en «{clave}»."
+                cantidad = nucleo.memoria.importar_recuerdos({clave: recuerdo})
+            else:
+                resumen = analizar_ruta(nucleo, nombre, explicar=True)
+                cantidad = nucleo.memoria.importar_recuerdos({clave: resumen[:3600]})
         except (OSError, ValueError, SyntaxError, subprocess.SubprocessError, ElementTree.ParseError) as exc:
             return f"No pude guardar ese análisis: {exc}"
         if cantidad:
@@ -217,7 +232,7 @@ def consulta_directa(nucleo, pregunta, modo=None):
     if re.fullmatch(r"¿?qu[eé] (?:hora es|d[ií]a es hoy|fecha es hoy)\??", pregunta, re.I):
         return "Fecha y hora del equipo: " + datetime.now().astimezone().strftime("%d/%m/%Y %H:%M %Z")
     medio = re.fullmatch(r"(?:lee|resume|analiza|revisa)\s+(?:(?:el|la|este|esta)\s+)?"
-                         r"(?:(?:documento|archivo|v[ií]deo|c[oó]digo)\s*:?\s+)?"
+                         r"(?:(?:documento|archivo|v[ií]deo|c[oó]digo|modelo(?: 3d)?)\s*:?\s+)?"
                          r"([\w ./-]+\.[a-zA-Z0-9]{2,5})", pregunta, re.I)
     if medio:
         try:
@@ -297,6 +312,16 @@ def analizar_ruta(nucleo, nombre, *, explicar=False):
     if not ruta.is_file():
         raise ValueError("Adjunta el archivo primero o ponlo en el espacio de trabajo de Studio.")
     sufijo = ruta.suffix.lower()
+    if sufijo == ".obj":
+        from core.modelos_3d import analizar_obj, resumir_malla
+        medidas = analizar_obj(ruta)
+        publicar("recuperando", "herramienta")
+        texto = f"Modelo 3D · {nombre}\n\n" + resumir_malla(medidas)
+        if explicar:
+            texto += ("\n\nLa caja envolvente mide cuánto ocupa el modelo en cada eje. "
+                      "Las unidades físicas dependen del programa que creó el OBJ. "
+                      "Las caras con referencias repetidas pueden ser degeneradas.")
+        return texto
     if sufijo == ".py":
         hallazgos = analizar(_leer_texto(ruta))
         publicar("razonando", "herramienta")

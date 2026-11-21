@@ -18,7 +18,8 @@ ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/htm
              "/app.js": ("app.js", "text/javascript"), "/escena.js": ("escena.js", "text/javascript")}
 
 
-def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None):
+def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
+                   abrir_terminal=None, mostrar_acompanante=None):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -101,6 +102,19 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
         def operar(self, ruta, escribir, datos, consulta):
             if ruta == "/api/apagar" and escribir and permitir_cierre:
                 return {"cerrando": True}
+            if ruta == "/api/escritorio" and escribir:
+                accion = datos.get("accion")
+                if accion == "terminal":
+                    ejecutar = abrir_terminal
+                elif accion == "acompanante":
+                    ejecutar = mostrar_acompanante
+                else:
+                    raise ValueError("Acción de escritorio desconocida.")
+                if ejecutar is None or nucleo.solo_lectura:
+                    raise PermissionError("Abre el chat con el lanzador local de Cerebro para usar esta acción.")
+                if not ejecutar():
+                    raise RuntimeError("No pude encontrar una sesión gráfica o un emulador de terminal.")
+                return {"solicitado": True}
             if ruta == "/api/interfaz":
                 if escribir:
                     return nucleo.interfaz(datos["id"], datos["modo"], datos["visible"], datos.get("enfocar", False))

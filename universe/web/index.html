@@ -9,14 +9,19 @@
 </head>
 <body>
   <header>
-    <div class="marca"><span class="isotipo" aria-hidden="true">◉</span> Cerebro <b>Universe</b></div>
+    <div class="marca"><span class="isotipo" aria-hidden="true">◉</span> Cerebro <b id="marca-modo">Universe</b></div>
     <nav aria-label="Interfaces">
       <button data-tab="studio" aria-pressed="true">Studio</button>
       <button data-tab="universe" aria-pressed="false">Universe</button>
       <button data-tab="canvas" aria-pressed="false">Canvas</button>
       <button data-tab="body" aria-pressed="false">Body</button>
     </nav>
-    <div class="acciones"><button id="ir-universe">Núcleo Universe</button><output id="conexion">Desconectado</output></div>
+    <div class="acciones accesos-escritorio">
+      <button id="abrir-terminal" type="button">Abrir terminal</button>
+      <button id="mostrar-acompanante" type="button">Mostrar acompañante</button>
+      <button id="ir-universe" type="button">Núcleo Universe</button>
+    </div>
+    <output id="conexion">Desconectado</output>
   </header>
   <main>
     <form id="acceso" class="panel acceso">
@@ -26,7 +31,7 @@
     </form>
     <p id="aviso" role="status" aria-live="polite"></p>
     <section id="studio" hidden>
-      <div class="titulo"><div><h1 id="titulo-interfaz">Studio</h1><p id="inicio-chat">¿Qué quieres investigar hoy?</p></div><output id="identidad"></output></div>
+      <div class="titulo"><div><h1 id="titulo-interfaz">Studio</h1><p id="inicio-chat">Pregunta, investiga o analiza un archivo.</p></div><output id="identidad"></output></div>
       <div class="studio">
         <aside class="panel explorador">
           <h2>Archivos</h2>
@@ -35,6 +40,10 @@
         </aside>
         <section class="panel conversacion" aria-labelledby="titulo-chat">
           <h2 id="titulo-chat">Conversación</h2>
+          <div class="acciones inicio-sugerencias" id="sugerencias-chat" hidden>
+            <button type="button" data-chat="Noticias de hoy">Noticias de hoy</button>
+            <button type="button" data-chat="Explora el repositorio Dirix24/cerebro">Explorar Cerebro en GitHub</button>
+          </div>
           <div id="mensajes" role="log" aria-label="Mensajes"></div>
           <video id="video-adjunto" controls preload="metadata" playsinline hidden aria-label="Vídeo local adjunto"></video>
           <form id="chat" class="fila">
@@ -42,7 +51,7 @@
           </form>
           <div class="acciones"><button data-chat="¿Qué sabes hacer?">Capacidades</button>
             <label class="boton" for="adjunto">Adjuntar archivo</label>
-            <input id="adjunto" type="file" accept=".txt,.md,.csv,.json,.pdf,.docx,.py,.mp4,.mov,.mkv,.webm,.srt,.vtt" hidden>
+            <input id="adjunto" type="file" accept=".txt,.md,.csv,.json,.pdf,.docx,.py,.mp4,.mov,.mkv,.webm,.srt,.vtt,.obj" hidden>
             <button id="exportar">Exportar recuerdos</button><label class="boton" for="importar">Importar</label>
             <input id="importar" type="file" accept=".json,application/json" hidden>
           </div>

@@ -131,7 +131,7 @@ class Nucleo:
         from core.historial_local import guardar
         # Los comandos de identidad, memoria y archivos pueden contener datos privados.
         if not pregunta.startswith("/") and respuesta and not re.match(
-            r"(?i)¿?(?:recuerda que|guarda (?:esta memoria|lo aprendido|un resumen)|recuerda (?:lo aprendido|un resumen)|inserta|extrae|exporta|lee|resume|analiza|"
+            r"(?i)¿?(?:aprende de (?:este|el) modelo|recuerda que|guarda (?:esta memoria|lo aprendido|un resumen)|recuerda (?:lo aprendido|un resumen)|inserta|extrae|exporta|lee|resume|analiza|"
             r"revisa|expl[ií]ca(?:me|lo)?|hazme preguntas|corrige mi respuesta|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
         ):
             try:
@@ -185,6 +185,19 @@ class Nucleo:
                 categoria = entrada.get("categoria", "general")
                 if isinstance(categoria, str):
                     categorias.setdefault(categoria, []).append("memoria:" + clave)
+                valor = entrada.get("valor")
+                if (clave.startswith("modelo3d_") and isinstance(valor, dict)
+                        and valor.get("formato") == "malla-obj-v1"):
+                    from core.modelos_3d import resumir_malla
+                    try:
+                        detalle = resumir_malla(valor)
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    nodos.append({"id": "malla:" + clave, "tipo": "aprendizaje",
+                                  "titulo": Path(str(valor.get("archivo", clave))).name,
+                                  "detalle": detalle, "origen": "Medición local de un OBJ",
+                                  "fecha": entrada.get("fecha"),
+                                  "vinculos": ["memoria:" + clave]})
         for categoria, relacionados in categorias.items():
             if len(relacionados) > 1:
                 nodos.append({"id": "categoria:" + categoria, "tipo": "relaciones", "titulo": categoria,
