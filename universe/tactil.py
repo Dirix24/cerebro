@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 from core.gestos_tactiles import Gestos
-from universe.paleta import ACENTO, FONDO, TEXTO
+from universe.paleta import ACENTO, BORDE, FONDO, PANEL, SELECCION, TEXTO
 
 
 def camaras():
@@ -110,6 +110,14 @@ def abrir():
     raiz.configure(bg=FONDO)
     raiz.attributes("-topmost", True)
     raiz.resizable(False, False)
+    estilo = ttk.Style(raiz)
+    estilo.theme_use("clam")
+    estilo.configure(".", background=PANEL, foreground=TEXTO, fieldbackground=PANEL,
+                     bordercolor=BORDE, lightcolor=BORDE, darkcolor=BORDE)
+    estilo.map("TButton", background=[("active", SELECCION)])
+    estilo.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", TEXTO)])
+    raiz.option_add("*TCombobox*Listbox.background", PANEL)
+    raiz.option_add("*TCombobox*Listbox.foreground", TEXTO)
     opciones = camaras()
     valor = tk.StringVar(value="Cámara apagada")
     eventos = SimpleQueue()

@@ -1,11 +1,14 @@
 """Estudio nativo para el núcleo de Cerebro, con un HUD inspirado en ARUS."""
 from base64 import b64encode
 from contextlib import suppress
+from io import StringIO
+import keyword
 from pathlib import Path
 import re
 from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
+import tokenize
 from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Listbox, StringVar, Text, Tk, TclError
 from tkinter import filedialog, messagebox, ttk
 from urllib.parse import quote
@@ -84,6 +87,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     archivo_proyecto = None
     original_proyecto = None
     propuestas = []
+    cambios_aplicados = []
+    resaltado_pendiente = None
     propuesta_elegida = StringVar()
 
     def pedir(operacion, datos=None):
@@ -195,6 +200,34 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     vistas_editor.add(pagina_validaciones, text="Validaciones")
     ttk.Entry(pagina_editor, textvariable=ruta).pack(fill=X, pady=(0, 5))
     editor = campo_texto(pagina_editor, codigo=True)
+    colores_sintaxis = {"clave": "#78C4FF", "cadena": "#ADD79A", "comentario": "#8995A8", "numero": "#F3C88C"}
+    for etiqueta, color in colores_sintaxis.items():
+        editor.tag_configure(etiqueta, foreground=color)
+
+    def colorear():
+        nonlocal resaltado_pendiente
+        resaltado_pendiente = None
+        for etiqueta in colores_sintaxis:
+            editor.tag_remove(etiqueta, "1.0", END)
+        if not ruta.get().lower().endswith(".py"):
+            return
+        fuente = editor.get("1.0", "end-1c")
+        tipos = {tokenize.STRING: "cadena", tokenize.NUMBER: "numero", tokenize.COMMENT: "comentario"}
+        with suppress(tokenize.TokenError, IndentationError, SyntaxError):
+            for token in tokenize.generate_tokens(StringIO(fuente).readline):
+                etiqueta = ("clave" if token.type == tokenize.NAME and keyword.iskeyword(token.string)
+                            else tipos.get(token.type))
+                if etiqueta:
+                    editor.tag_add(etiqueta, f"{token.start[0]}.{token.start[1]}", f"{token.end[0]}.{token.end[1]}")
+
+    def programar_resaltado(_evento=None):
+        nonlocal resaltado_pendiente
+        if resaltado_pendiente is not None:
+            app.after_cancel(resaltado_pendiente)
+        resaltado_pendiente = app.after(130, colorear)
+
+    editor.bind("<KeyRelease>", programar_resaltado)
+    ruta.trace_add("write", lambda *_: programar_resaltado())
     barra_editor = ttk.Frame(pagina_editor)
     barra_editor.pack(fill=X)
     validaciones = campo_texto(pagina_validaciones)
@@ -205,6 +238,9 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     elegir_cambio.pack(fill=X, pady=(0, 6))
     diff = campo_texto(pagina_cambios, codigo=True)
     diff.configure(state="disabled")
+    diff.tag_configure("anadido", foreground="#ADD79A")
+    diff.tag_configure("quitado", foreground="#FFADB8")
+    diff.tag_configure("bloque", foreground=ACENTO)
     acciones_cambio = ttk.Frame(pagina_cambios)
     acciones_cambio.pack(fill=X)
     acciones_proyecto = ttk.Frame(codigo)
@@ -269,6 +305,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             vistas_editor.select(pagina_editor)
             mostrar(editor, datos["texto"])
             editor.edit_modified(False)
+            programar_resaltado()
 
         publicar(lambda: proyecto("leer", nombre=nombre, esperada=abierto_en) if abierto_en else pedir("archivo?nombre=" + quote(nombre)), copiar)
 
@@ -338,13 +375,19 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             mostrar(editor, "")
             editor.edit_modified(False)
             cargar_propuestas([])
+            cambios_aplicados.clear()
             estado.set("Proyecto abierto" + (" · inventario limitado" if datos["limitado"] else ""))
 
         publicar(lambda: proyecto("abrir", carpeta=carpeta, confirmar=True), abierto)
 
     def mostrar_diff(_evento=None):
         indice = elegir_cambio.current()
-        mostrar(diff, propuestas[indice]["diff"] if indice >= 0 else "")
+        contenido = propuestas[indice]["diff"] if indice >= 0 else ""
+        mostrar(diff, contenido)
+        for numero, linea in enumerate(contenido.splitlines(), 1):
+            etiqueta = ({"+": "anadido", "-": "quitado", "@": "bloque"}).get(linea[:1])
+            if etiqueta:
+                diff.tag_add(etiqueta, f"{numero}.0", f"{numero}.end")
 
     def cargar_propuestas(candidatas):
         propuestas[:] = candidatas
@@ -393,6 +436,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             nonlocal archivo_proyecto, original_proyecto
             if archivo_proyecto == datos["archivo"]:
                 archivo_proyecto = original_proyecto = None
+            cambios_aplicados.append(propuesta)
             cargar_propuestas([item for item in propuestas if item["id"] != propuesta["id"]])
             estado.set("Cambio aplicado. Vuelve a abrir el archivo para editarlo y ejecuta las pruebas.")
 
@@ -421,6 +465,27 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         if re.fullmatch(r"(?:cerebro[, ]+)?(?:analiza|revisa) (?:este |el )?proyecto"
                         r"(?: y (?:corrige|arregla) (?:sus |los )?errores)?[.!]?", texto, re.I):
             analizar_proyecto()
+            return
+
+        if re.fullmatch(r"(?:cerebro[, ]+)?abre el archivo (?:que est[aá] )?(?:seleccionado|en el explorador)[.!]?",
+                        texto, re.I):
+            if lista.curselection():
+                cargar_archivo()
+                estado.set("Abriendo el archivo seleccionado…")
+            else:
+                estado.set("Selecciona un archivo en el explorador.")
+            return
+        if re.fullmatch(r"(?:cerebro[, ]+)?corrige el error (?:que aparece )?en validaciones[.!]?", texto, re.I):
+            analizar_proyecto()
+            return
+        if re.fullmatch(r"(?:cerebro[, ]+)?ens[eé][ñn]ame qu[eé] cambiaste[.!?]?", texto, re.I):
+            if cambios_aplicados:
+                mostrar_mensaje("Cerebro", "Cambios aplicados en el proyecto de esta ventana:\n" +
+                                "\n".join(propuesta["diff"] for propuesta in cambios_aplicados[-3:]))
+                estado.set("Mostrando los últimos cambios aplicados.")
+            else:
+                mostrar_mensaje("Cerebro", "Todavía no apliqué propuestas en este proyecto.")
+                estado.set("Núcleo conectado")
             return
 
         revision = revision_chat
@@ -582,6 +647,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             api(sesion, "interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
         app.after_cancel(temporizador_cola)
         app.after_cancel(temporizador_pulso)
+        if resaltado_pendiente is not None:
+            app.after_cancel(resaltado_pendiente)
         app.destroy()
 
     boton(barra_archivos, "Actualizar", actualizar_archivos)
