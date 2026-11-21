@@ -172,11 +172,17 @@ class Escritorio:
                                   f"\nConsultas públicas: {red}. Aprendizaje por demostración: pendiente.")}
         self._autorizar()
         self.pendientes.pop(cliente, None)
-        criterios = dict(primero.argumentos)
-        reciente = criterios.pop("reciente", False)
-        caminos, limitado = documentos_usuario.buscar_filtrado(**criterios)
-        tipo = criterios["tipo"]
-        nombre = (tipo + " " + criterios.get("nombre", "")).strip()
+        if primero.herramienta == "buscar_contenido":
+            caminos, limitado = documentos_usuario.buscar_por_contenido(**primero.argumentos)
+            criterios, reciente, nombre = {}, False, "documento por contenido"
+            if not caminos:
+                aviso = "Revisión parcial por límites de cantidad o tamaño." if limitado else ""
+                return {"respuesta": "No encontré el texto en los TXT y Markdown revisados. " + aviso}
+        else:
+            criterios = dict(primero.argumentos)
+            reciente = criterios.pop("reciente", False)
+            caminos, limitado = documentos_usuario.buscar_filtrado(**criterios)
+            nombre = (criterios["tipo"] + " " + criterios.get("nombre", "")).strip()
         if any(paso.herramienta == "resumir_pdf" for paso in resto):
             from subprocess import SubprocessError
             from universe.consultas import _extracto, _leer_texto

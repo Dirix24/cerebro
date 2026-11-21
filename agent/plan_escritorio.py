@@ -47,6 +47,11 @@ def elaborar(pregunta):
     if normal in {"que puedes hacer en mi ordenador", "que puedes hacer en mi equipo"}:
         return [Paso("capacidades", {})]
 
+    contenido = re.fullmatch(r"busca (?:en el contenido de (?:mis |los )?documentos|archivos que contengan)"
+                              r"[: ]+(.+)", normal)
+    if contenido:
+        return [Paso("buscar_contenido", {"termino": contenido[1]})]
+
     resumen = re.fullmatch(r"busca (?:mis )?pdfs? de ([\w .()-]{1,100}), abre el mas reciente, "
                            r"(?:hazme un resumen|resumelo) y guardalo en una carpeta", normal)
     if resumen:

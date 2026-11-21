@@ -74,12 +74,12 @@ TIPOS = {
 }
 
 
-def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None):
+def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None, *, extensiones=None):
     """Consulta metadatos dentro de ámbitos existentes, con inventario acotado."""
     from datetime import datetime, time, timedelta
     from difflib import SequenceMatcher
 
-    extensiones = TIPOS[tipo]
+    extensiones = TIPOS[tipo] if extensiones is None else TIPOS[tipo] & extensiones
     tema = _normalizar(nombre)
     if tema and not re.fullmatch(r"[\w .()-]{1,130}", tema):
         raise ValueError("Escribe parte del nombre del archivo, sin rutas.")
@@ -127,3 +127,26 @@ def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None):
             break
     resultados.sort(key=lambda dato: (-dato[0], -dato[1], str(dato[2])))
     return [ruta for _, _, ruta in resultados[:12]], limitado or len(resultados) > 12
+
+
+def buscar_por_contenido(termino, hogar=None):
+    """Busca texto explícito en un conjunto acotado de TXT y Markdown autorizados."""
+    objetivo = _normalizar(termino.strip())
+    if len(objetivo) < 3 or len(objetivo) > 120:
+        raise ValueError("Indica entre 3 y 120 caracteres para buscar en el contenido.")
+    rutas, limitado = buscar_filtrado("documentos", hogar=hogar, extensiones={".txt", ".md"})
+    resultados = []
+    for ruta in rutas:
+        if not permitido(ruta, hogar):
+            continue
+        try:
+            with ruta.open("rb") as archivo:
+                datos = archivo.read(64 * 1024 + 1)
+        except OSError:
+            limitado = True
+            continue
+        if len(datos) > 64 * 1024:
+            limitado = True
+        if objetivo in _normalizar(datos[:64 * 1024].decode("utf-8", errors="replace")):
+            resultados.append(ruta)
+    return resultados, limitado

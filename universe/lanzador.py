@@ -45,6 +45,12 @@ def carpeta():
     return ruta
 
 
+class ErrorAPI(RuntimeError):
+    def __init__(self, codigo, mensaje):
+        super().__init__(mensaje)
+        self.codigo = codigo
+
+
 def api(sesion, ruta, datos=None, tiempo=25):
     if not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{1,5}", sesion["url"]):
         raise ValueError("Dirección de sesión inválida.")
@@ -56,7 +62,7 @@ def api(sesion, ruta, datos=None, tiempo=25):
         with CLIENTE_LOCAL.open(solicitud, timeout=tiempo) as respuesta:
             return json.load(respuesta)
     except HTTPError as exc:
-        raise RuntimeError(json.load(exc).get("error", "Cerebro devolvió un error.")) from exc
+        raise ErrorAPI(exc.code, json.load(exc).get("error", "Cerebro devolvió un error.")) from exc
     except IncompleteRead as exc:
         raise ConnectionError("El núcleo se desconectó antes de enviar la respuesta completa.") from exc
 

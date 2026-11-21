@@ -3,6 +3,7 @@ from base64 import b64encode
 from contextlib import suppress
 from io import StringIO
 import keyword
+import json
 from pathlib import Path
 import re
 from queue import Empty, SimpleQueue
@@ -13,10 +14,36 @@ from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Listbox, StringVar, Text, Tk, 
 from tkinter import filedialog, messagebox, ttk
 from urllib.parse import quote
 
-from universe.lanzador import api, abrir, lanzar_acompanante, lanzar_terminal
+from universe.lanzador import ErrorAPI, api, abrir, carpeta, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
 from universe.paleta import ACENTO, ACTIVO, BORDE, EDITOR, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
+
+
+def pedir_con_reconexion(sesion, cerrojo, operacion, datos=None, tiempo=25):
+    """Reconecta lecturas a la sesión publicada. Las escrituras nunca se reintentan."""
+    with cerrojo:
+        anterior = sesion.copy()
+    try:
+        return api(anterior, operacion, datos, tiempo=tiempo)
+    except (OSError, ErrorAPI) as error:
+        if isinstance(error, ErrorAPI) and error.codigo != 401:
+            raise
+        with cerrojo:
+            nueva = sesion.copy()
+            if nueva == anterior:
+                try:
+                    nueva = json.loads((carpeta() / "sesion.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    raise error
+                if (not isinstance(nueva, dict) or nueva == anterior
+                        or not isinstance(nueva.get("url"), str) or not isinstance(nueva.get("token"), str)):
+                    raise error
+                api(nueva, "conversacion-activa", tiempo=2)
+                sesion.update(nueva)
+        if datos is not None:
+            raise RuntimeError("El núcleo cambió de sesión. Comprueba el estado antes de repetir la acción.") from error
+        return api(nueva, operacion, tiempo=tiempo)
 
 
 def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
@@ -76,6 +103,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     tareas_en_curso = set()
     identificador = token_hex(12)
     presencia = Lock()
+    cerrojo_sesion = Lock()
     visible = True
     generacion = 0
     revision_chat = 0
@@ -91,8 +119,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     resaltado_pendiente = None
     propuesta_elegida = StringVar()
 
-    def pedir(operacion, datos=None):
-        return api(sesion, operacion, datos)
+    def pedir(operacion, datos=None, tiempo=25):
+        return pedir_con_reconexion(sesion, cerrojo_sesion, operacion, datos, tiempo)
 
     def proyecto(accion, *, esperada=None, **datos):
         return pedir("proyecto", {"cliente": identificador, "accion": accion,
@@ -590,7 +618,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         def enviar_presencia():
             with presencia:
                 if turno == generacion:
-                    api(sesion, "interfaz", {"id": identificador, "modo": "studio",
+                    pedir("interfaz", {"id": identificador, "modo": "studio",
                                              "visible": se_ve, "enfocar": enfocar}, tiempo=2)
 
         publicar(enviar_presencia)
@@ -625,7 +653,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                     return pedir("conversaciones")
                 return None
 
-            publicar(consultar_chat, lambda datos: mostrar_chat(datos) if datos else None)
+            def sincronizado(datos):
+                if datos is not None:
+                    mostrar_chat(datos)
+                    estado.set("Núcleo conectado")
+
+            publicar(consultar_chat, sincronizado)
         if tareas_en_curso:
             def mostrar_tareas(datos):
                 for tarea in datos:
@@ -654,7 +687,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         generacion += 1
         with presencia, suppress(OSError, RuntimeError):
-            api(sesion, "interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
+            pedir("interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
         app.after_cancel(temporizador_cola)
         app.after_cancel(temporizador_pulso)
         if resaltado_pendiente is not None:

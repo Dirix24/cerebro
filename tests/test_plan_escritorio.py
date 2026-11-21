@@ -92,3 +92,20 @@ def test_solo_analiza_enlaces_wikipedia_y_recuerda_por_cliente(nucleo, monkeypat
     assert parse_qs(urlsplit(consultas[0]).query)["titles"] == ["Óptica"]
     assert "no se consultó" in nucleo.conversar("Analiza este enlace https://example.org")["respuesta"]
     assert len(consultas) == 1
+
+
+def test_busqueda_por_contenido_es_explicitamente_local(nucleo, tmp_path):
+    documentos = tmp_path / "Documentos"
+    (documentos / "notas.md").write_text("Presupuesto aéreo confirmado")
+    (documentos / "otro.txt").write_text("Texto de otro tema")
+    secreto = tmp_path / "fuera.txt"
+    secreto.write_text("Presupuesto aéreo")
+    (documentos / "enlace.txt").symlink_to(secreto)
+    orden = "Busca en el contenido de mis documentos: presupuesto aereo"
+    respuesta = nucleo.conversar(orden)["respuesta"]
+    assert "notas.md" in respuesta
+    assert "fuera.txt" not in respuesta and "enlace.txt" not in respuesta
+    assert "confirmado" not in respuesta
+    nucleo.agente.permisos_concedidos.discard("READ")
+    with pytest.raises(PermissionError):
+        nucleo.conversar(orden)

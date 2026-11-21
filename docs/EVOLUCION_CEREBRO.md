@@ -71,7 +71,7 @@ El núcleo recibe la orden de cualquiera de las cuatro interfaces y prepara paso
 - Búsqueda de YouTube en el navegador predeterminado. Apertura de enlaces HTTP y HTTPS. El análisis de páginas usa el extracto de artículos públicos de Wikipedia en español. Los enlaces recientes se guardan en el contexto en memoria de cada cliente. El resultado visible se sincroniza en el chat activo entre las cuatro interfaces durante la sesión, con confirmaciones vinculadas a la interfaz de origen.
 - Plan PDF comprobable: buscar el más reciente, solicitar su apertura y extraer un resumen. La autorización final permite escribir un archivo nuevo en el espacio de Studio. Cerebro vuelve a leerlo para comprobar el contenido.
 
-Quedan pendientes el catálogo de paquetes y accesibilidad, la búsqueda por contenido, los resultados de YouTube dentro de Cerebro, el control de reproducción y la enseñanza supervisada por demostración. Los procedimientos futuros deberán registrar autorización, acciones, resultado observado y una forma de detenerse ante cambios de versión o interfaz.
+La búsqueda de contenido se inició con TXT y Markdown autorizados y límites de cantidad y tamaño. Quedan pendientes el catálogo de paquetes y accesibilidad, ampliar la lectura a otros formatos, los resultados de YouTube dentro de Cerebro, el control de reproducción y la enseñanza supervisada por demostración. Los procedimientos futuros deberán registrar autorización, acciones, resultado observado y una forma de detenerse ante cambios de versión o interfaz.
 
 ## Primera entrega: repositorios e investigación pública
 

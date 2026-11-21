@@ -64,7 +64,7 @@ En XFCE/X11, «Minimiza esta ventana» y «Cierra LibreOffice» consultan las ve
 
 Prueba «Abre YouTube y busca un tutorial de Blender» para abrir los resultados en el navegador. «Abre este enlace» utiliza la última URL explícita del cliente. «Analiza este enlace» admite artículos públicos de Wikipedia en español. Estos pasos requieren conexión autorizada.
 
-«Búscame todos mis PDF», «Encuentra las fotos de vacaciones» y «Busca los vídeos que descargué esta semana» consultan metadatos en Documentos y Descargas. Los filtros temporales usan la fecha de modificación. «Abre Blender y busca mi último proyecto» solicita la apertura del `.blend` más reciente a su aplicación asociada. La aplicación puede aceptar la solicitud aunque Cerebro todavía no haya confirmado la ventana o la reproducción.
+«Búscame todos mis PDF», «Encuentra las fotos de vacaciones» y «Busca los vídeos que descargué esta semana» consultan metadatos en Documentos y Descargas. Los filtros temporales usan la fecha de modificación. Para buscar dentro de TXT y Markdown, usa «Busca en el contenido de mis documentos: presupuesto». Se revisan hasta doce archivos y hasta 64 KiB por archivo. «Abre Blender y busca mi último proyecto» solicita la apertura del `.blend` más reciente a su aplicación asociada. La aplicación puede aceptar la solicitud aunque Cerebro todavía no haya confirmado la ventana o la reproducción.
 
 Para generar un archivo, prueba «Busca mis PDF de física, abre el más reciente, hazme un resumen y guárdalo en una carpeta». Tras revisar el resultado, escribe **Confirmar guardar resumen** en la misma interfaz. El archivo se guarda en `resumenes/` dentro del espacio de Studio.
 
