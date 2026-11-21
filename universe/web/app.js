@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const botonesTab = [...document.querySelectorAll("[data-tab]")];
 let token = "";
 let vista = "studio";
+let cambioVista = 0;
 let nodos = [];
 let formas = [];
 let trazo = null;
@@ -46,6 +47,14 @@ function boton(texto, accion) {
 function grafoActivo() { grafico.activar(vista === "universe" && $("activar-grafo").checked); }
 
 async function mostrar(tab) {
+  const cambio = ++cambioVista;
+  if (tab === "canvas" && !canvasCargado) {
+    const dibujo = await api("canvas");
+    if (cambio !== cambioVista) return;
+    formas = dibujo.formas;
+    canvasCargado = true;
+    redibujar();
+  }
   vista = tab;
   for (const elemento of botonesTab) {
     const activo = elemento.dataset.tab === tab;
@@ -53,11 +62,6 @@ async function mostrar(tab) {
     $(elemento.dataset.tab).hidden = !activo;
   }
   grafoActivo();
-  if (tab === "canvas" && !canvasCargado) {
-    formas = (await api("canvas")).formas || [];
-    canvasCargado = true;
-    redibujar();
-  }
   await sondear();
 }
 
