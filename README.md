@@ -12,9 +12,9 @@ python3 main.py --ojos
 
 > **Diseñado y desarrollado con asistencia de inteligencia artificial (IA).** Cerebro es un proyecto experimental impulsado por su creador, con colaboración de IA en el diseño de la arquitectura, programación, documentación y pruebas. Esta declaración describe el proceso de desarrollo, **no** significa que Cerebro sea una IA general ni que se haya diseñado a sí mismo.
 
-**Cerebro** es un proyecto de inteligencia artificial local en Python: combina un Transformer propio NumPy, motores Transformer opcionales basados en PyTorch, búsqueda de información, memoria, herramientas deterministas y entrenamiento experimental. **No utiliza modelos preentrenados de terceros, Ollama, GGUF de otras IA ni APIs de IA para generar respuestas.** Wikipedia se utiliza como fuente de textos, no como motor de IA.
+**Cerebro** es un proyecto de inteligencia artificial local en Python: combina un Transformer propio NumPy, motores Transformer opcionales basados en PyTorch, búsqueda de información, memoria, herramientas deterministas y entrenamiento experimental. **La conversación usa pesos propios y herramientas locales.** Wikipedia y otros conectores aportan información. Las funciones opcionales de voz y seguimiento de manos usan Vosk y MediaPipe, respectivamente.
 
-**Estado:** versión **experimental**, desarrollada en una rama de integración. Algunas pruebas automáticas han pasado, pero el arranque integral, la desinstalación en el equipo de destino, la calidad de las respuestas y el entrenamiento de larga duración **todavía requieren verificación**. No se debe confundir «módulo integrado en el repositorio» con «motor entrenado y disponible automáticamente dentro del chat».
+**Estado:** versión **experimental**. Las cuatro interfaces, la apertura de documentos y el flujo de proyectos se han probado en MX Linux con XFCE. El alcance de las respuestas, la portabilidad a otros escritorios y el entrenamiento prolongado siguen en evaluación.
 
 ## 🚀 Instalación y primer arranque
 
@@ -63,7 +63,47 @@ Prueba «Explora el repositorio Dirix24/cerebro» o `/github-leer Dirix24/cerebr
 
 ## Cerebro en MX Linux
 
-Ejecuta `./instalar` una vez. En adelante escribe `cerebro` o elige Terminal, Escritorio, Chat o Studio en el menú de aplicaciones. Las cuatro entradas usan el mismo núcleo. [Guía de interfaces, investigación y adjuntos](docs/INTERFACES_MX.md).
+Ejecuta `./instalar` una vez. Después abre Cerebro desde el menú de aplicaciones o usa estos comandos.
+
+| Interfaz | Comando | Uso |
+| --- | --- | --- |
+| Terminal | `cerebro terminal` | Conversación y herramientas desde la consola. Usa `/nuevo-chat`, `/chats` y `/eliminar-chat`. |
+| Chat web | `cerebro chat` | Consultas, adjuntos y gestión de conversaciones. |
+| Acompañante | `cerebro escritorio` | Esfera flotante con texto, dictado y lectura opcionales. |
+| Studio | `cerebro studio` | Explorador, editor, validaciones, diffs y Universe. |
+
+Las cuatro interfaces tienen tema negro con acentos azules y comparten el núcleo, los recuerdos y las conversaciones. **Nuevo chat** conserva las conversaciones anteriores. El gestor **Todos los chats** permite recuperar una conversación, marcar varias y eliminarlas tras confirmar. Por ejemplo, escribe «Guarda esta memoria: proyecto = Atlas» en la esfera y consulta `/recuerdo proyecto` desde Studio. [Guía de interfaces y permisos](docs/INTERFACES_MX.md) · [Voz local](docs/VOZ_LOCAL.md)
+
+### Trabajar con proyectos y documentos
+
+1. En Studio nativo, pulsa **Abrir proyecto**, elige una carpeta y autoriza el acceso. Puedes buscar archivos en el explorador y editar Python con resaltado.
+2. Pulsa **Analizar** o escribe «Cerebro, analiza este proyecto y corrige sus errores». La revisión detecta errores de sintaxis y, cuando puede verificar la corrección de una cabecera a la que le faltan dos puntos, muestra un diff en **Cambios**. Confirma cada propuesta que quieras aplicar.
+3. Pulsa **Pruebas** para ejecutar `unittest` en el proyecto y ver su resultado en **Validaciones**. Las pruebas ejecutan código con los permisos de tu usuario. Usa esta acción con proyectos de confianza.
+
+Puedes adjuntar PDF de texto, TXT, Markdown, DOCX y código. Por ejemplo, pregunta «¿Qué dice el PDF adjunto sobre el presupuesto?». Cerebro devuelve pasajes del archivo e indica el alcance de la lectura. La extracción de PDF usa `pdftotext` de `poppler-utils` y no incluye OCR. [Flujo de proyectos y adjuntos](docs/INTERFACES_MX.md)
+
+### Aplicaciones, ventanas y documentos personales
+
+- «Abre Blender» busca la aplicación en el catálogo de GIO. «Minimiza esta ventana» y «Cierra LibreOffice» funcionan en X11 con `wmctrl`, `xdotool` y `xprop`. El cierre requiere confirmación. El control de ventanas de Wayland sigue pendiente.
+- «Abre mi documento de matemáticas» busca por nombre en Documentos y Descargas y lo abre con su aplicación predeterminada. Si aparecen varias coincidencias, elige una. «Sí, recuérdalo» guarda la selección para otras sesiones y «Olvida el documento de matemáticas» la elimina. Puedes desactivar el acceso a documentos personales con `CEREBRO_SIN_DOCUMENTOS=1` al iniciar el núcleo.
+- «Abre el navegador e investiga la fotosíntesis» combina la apertura del navegador con una consulta pública si Internet está habilitado. Para iniciar sin red, usa `CEREBRO_SIN_INTERNET=1`. [Guía de escritorio](docs/INTERFACES_MX.md)
+
+### Modo táctil y figuras 3D
+
+En X11, abre **Modo táctil** con `cerebro tactil` o escribe «Activa el modo táctil». Selecciona una entrada y confirma **Activar cámara**. **Ver cámara** muestra los puntos detectados en las manos y pausa el control del puntero. Las imágenes se procesan en memoria. **Pausar** libera la cámara.
+
+Pulsa **Dibujar figura**, mantén la pinza entre pulgar e índice mientras trazas un contorno y separa los dedos al terminar. **Convertir a 3D** extruye el contorno para darle grosor. Puedes girar la pieza en el panel y guardarla como **OBJ** para abrirla en Blender. **Usar puntero** vuelve al escritorio.
+
+El modo es opcional y requiere `xdotool`, OpenCV, MediaPipe Tasks y el archivo oficial `hand_landmarker.task`. Una forma de instalarlo en un entorno separado desde la raíz del repositorio es:
+
+```bash
+python3 -m venv .cerebro-env/tactil
+.cerebro-env/tactil/bin/python -m pip install 'mediapipe==0.10.32'
+CEREBRO_MODELO_MANOS=/ruta/absoluta/hand_landmarker.task \
+  .cerebro-env/tactil/bin/python -m universe.lanzador tactil
+```
+
+MediaPipe 0.10.32 se comprobó en MX Linux con Python 3.13 y X11. El entorno debe tener Tk disponible. [Modelo y documentación de MediaPipe](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker#models) · [Guía del modo táctil](docs/INTERFACES_MX.md)
 
 ## Cerebro Universe
 
@@ -71,7 +111,7 @@ Ejecuta `./instalar` una vez. En adelante escribe `cerebro` o elige Terminal, Es
 python3 cerebro.py universe
 ```
 
-Abre la dirección que aparece en la terminal para usar Studio, Universe, Canvas y Body con el mismo núcleo. Consulta los [perfiles, la auditoría de integración y las pruebas](docs/UNIVERSE.md).
+Abre la dirección que aparece en la terminal para usar Studio, Universe, Canvas y Body con el mismo núcleo. En Universe de Studio nativo, **Analizar** revisa los registros de evaluación, correcciones y entrenamientos y propone próximos pasos. El entrenamiento del modelo alumno se ejecuta por separado. Consulta los [perfiles, la auditoría de integración y las pruebas](docs/UNIVERSE.md).
 
 ## 🧩 Todos los comandos de la aplicación
 
