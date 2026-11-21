@@ -6,6 +6,7 @@ import re
 from time import monotonic, sleep
 
 from agent.control_ventanas import buscar, etiquetas, interpretar
+from agent import coordinador_hibrido
 from agent.demostracion_escritorio import Demostraciones
 from core import aplicaciones_linux, documentos_usuario, energia_linux, ventanas_x11
 
@@ -194,6 +195,8 @@ class Escritorio:
         if archivo:
             self._autorizar()
             archivos = documentos_usuario.buscar(archivo[1])
+            if avance is not None and archivos:
+                avance.append("verificado")
             return ("Archivos encontrados:\n" + "\n".join(f"• {ruta.relative_to(Path.home())}" for ruta in archivos)
                     if archivos else "No encontré ese archivo en las carpetas autorizadas.")
         if avance is not None and apertura and destino_desktop(texto) == "youtube":
@@ -550,9 +553,29 @@ class Escritorio:
         except (OSError, ValueError, KeyError, TypeError):
             return "No pude leer el artículo de Wikipedia."
 
+    def _proponer_plan(self, objetivo, cliente):
+        self._autorizar()
+        if not self.nucleo.profesor.configurado:
+            return "El profesor local está desactivado."
+        if len(objetivo) > 350:
+            return "Describe el objetivo del plan en hasta 350 caracteres."
+        self.pendientes.pop(cliente, None)
+        try:
+            plan = coordinador_hibrido.validar_plan(self.nucleo.profesor.planificar_escritorio(objetivo))
+        except (RuntimeError, ValueError) as exc:
+            return f"No pude preparar un plan verificable. {exc}"
+        coordinador_hibrido.disponible(self.nucleo, plan)
+        self._guardar_pendiente(cliente, plan_profesor=plan)
+        texto = "\n".join(f"{i}. {coordinador_hibrido.representar(*paso)}" for i, paso in enumerate(plan, 1))
+        return ("Propuesta del profesor local. Todavía no se ejecutó ningún paso.\n" + texto
+                + "\nResponde «Confirmar plan de escritorio» o «Cancelar».")
+
     def consultar(self, pregunta, cliente):
         texto = re.sub(r"^cerebro(?:[,\s]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
         normal = documentos_usuario._normalizar(texto)
+        propuesta = coordinador_hibrido.PREGUNTA_PLAN.fullmatch(texto)
+        if propuesta:
+            return self._proponer_plan(propuesta[1], cliente)
         if re.fullmatch(r"abre (?:la )?imagen (?:de la tierra )?que descargaste", normal):
             from core.imagenes_publicas import CATALOGO
 
@@ -662,6 +685,11 @@ class Escritorio:
         if confirmacion in _RECHAZAR:
             self.pendientes.pop(cliente)
             return "De acuerdo. Cancelé la operación pendiente."
+        if "plan_profesor" in datos and confirmacion == "confirmar plan de escritorio":
+            self._autorizar()
+            plan = datos["plan_profesor"]
+            coordinador_hibrido.disponible(self.nucleo, plan)
+            return self._secuencia([coordinador_hibrido.representar(*paso) for paso in plan], cliente)
         accion = datos.get("energia")
         if accion and confirmacion == "confirmar " + documentos_usuario._normalizar(accion):
             self._autorizar()

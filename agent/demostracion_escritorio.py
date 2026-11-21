@@ -7,6 +7,15 @@ from time import monotonic
 
 CATEGORIA = "demostracion_escritorio"
 ACCIONES = frozenset({"abrir", "enfoca", "maximiza", "minimiza", "restaura", "izquierda", "derecha"})
+_EJERCICIOS = {
+    "abrir": ("Quieres iniciar una aplicación instalada.", "abrir aplicación"),
+    "enfoca": ("La ventana ya está abierta y quieres ponerla al frente.", "enfocar ventana"),
+    "maximiza": ("Quieres ampliar una ventana para ocupar el área disponible.", "maximizar ventana"),
+    "minimiza": ("Quieres ocultar una ventana manteniéndola abierta.", "minimizar ventana"),
+    "restaura": ("Quieres devolver una ventana maximizada a su tamaño habitual.", "restaurar ventana"),
+    "izquierda": ("Quieres llevar una ventana al lado izquierdo del monitor.", "colocar a la izquierda"),
+    "derecha": ("Quieres llevar una ventana al lado derecho del monitor.", "colocar a la derecha"),
+}
 _MAX_PASOS = 12
 _NOMBRE = r"[\w -]{1,48}"
 
@@ -37,7 +46,8 @@ class Demostraciones:
                     "Puedes usar «Cancelar demostración» en cualquier momento.")
         inicio = re.fullmatch(rf"empezar demostracion ({_NOMBRE})", orden)
         repetir = re.fullmatch(rf"(?:repite la demostracion ({_NOMBRE})|repite lo que te ensene|ahora hazlo tu)", orden)
-        if not (inicio or repetir or orden in {"guardar demostracion", "cancelar demostracion"}):
+        revisar = re.fullmatch(rf"(revisa la demostracion|genera ejercicios de la demostracion) ({_NOMBRE})", orden)
+        if not (inicio or repetir or revisar or orden in {"guardar demostracion", "cancelar demostracion"}):
             return None
         if orden == "cancelar demostracion":
             self.activas.pop(cliente, None)
@@ -59,11 +69,11 @@ class Demostraciones:
             return ("Demostración iniciada durante 10 minutos. Puedo guardar hasta 12 aperturas y cambios de "
                     "ventana verificados que me pidas desde este chat. Escribe «Guardar demostración» al terminar.")
         memoria.cargar_memoria()
-        if repetir:
+        if repetir or revisar:
             activa = self.activas.get(cliente)
-            if activa and activa.caduca >= monotonic():
+            if repetir and activa and activa.caduca >= monotonic():
                 return "Guarda o cancela la demostración activa antes de reproducir otra."
-            nombre = repetir[1]
+            nombre = repetir[1] if repetir else revisar[2]
             if nombre is None:
                 nombres = [clave.partition(":")[2] for clave, dato in memoria.long_term_memory.items()
                            if isinstance(dato, dict) and dato.get("categoria") == CATEGORIA]
@@ -79,6 +89,17 @@ class Demostraciones:
                     or any(not isinstance(p, dict) or not isinstance(p.get("accion"), str) or p["accion"] not in ACCIONES
                            or not isinstance(p.get("objetivo"), str) or not 0 < len(p["objetivo"]) <= 240 for p in pasos)):
                 return "No encontré una demostración válida con ese nombre."
+            if revisar:
+                if revisar[1] == "revisa la demostracion":
+                    return "\n".join(f"{i}. {p['accion']} · {p['objetivo']}"
+                                     for i, p in enumerate(pasos, 1))
+                ejercicios = []
+                for i, accion in enumerate(dict.fromkeys(p["accion"] for p in pasos), 1):
+                    contexto, referencia = _EJERCICIOS[accion]
+                    ejercicios.append(f"{i}. {contexto} ¿Qué herramienta usarías? Referencia: {referencia}.")
+                ejercicios.append("¿Qué permiso comprueba el agente antes de repetir una acción del procedimiento? "
+                                  "Referencia: READ.")
+                return "Ejercicios para revisión. Los objetivos originales se omiten.\n" + "\n".join(ejercicios)
             return self.escritorio.repetir_demostracion(pasos, cliente)
         self.escritorio._autorizar_escritura()
         activa = self.activas.get(cliente)

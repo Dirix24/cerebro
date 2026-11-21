@@ -26,6 +26,7 @@ from core import competencias
 from core.entorno_portatil import detectar_entorno
 from core.legado_identidad import leer_origen
 from core.profesor_local import GIB, ProfesorLocal, diagnostico as diagnostico_profesor
+from core.especialista_escritorio import Especialista
 from core.repaso_espaciado import cargar
 from memory.advanced_memory import AdvancedMemoryManager
 from universe.cazel import construir_orden, parsear_ayuda
@@ -54,7 +55,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None, especialista=None):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -66,6 +67,8 @@ class Nucleo:
         self.estudio.mkdir(mode=0o700, exist_ok=True)
         self.agente = agente if agente is not None else ControlledAgent()
         self.profesor = profesor if profesor is not None else ProfesorLocal.desde_entorno()
+        self.especialista = especialista if especialista is not None else Especialista.cargar(
+            self.raiz / "learning" / "especialista.npz", modelo)
         self.memoria = AdvancedMemoryManager()
         self.chat = Conversacion(modelo, self.memoria, self.agente, info_checkpoint=meta, modo_local=True)
         self.internet = internet
@@ -80,6 +83,7 @@ class Nucleo:
         self.archivo_en_contexto = None
         self.proyectos_studio = {}
         self.ejercicios_recientes = OrderedDict()
+        self.dialogos_profesor = OrderedDict()
         self.conversaciones = Conversaciones(conversaciones_dir or self.raiz / "data")
         if self.agente.tiene_permisos("READ"):
             self._recuperar_contexto(self.historial()["turnos"])
@@ -98,7 +102,7 @@ class Nucleo:
         return Nucleo(self.perfil, cuota=self.cuota, modelo=self.chat.modelo, internet=self.internet,
                       solo_lectura=self.solo_lectura, meta=self.chat.info,
                       investigar_auto=self.investigar_auto, documentos_usuario=self.documentos_usuario,
-                      conversaciones_dir=carpeta, agente=self.agente, profesor=self.profesor)
+                      conversaciones_dir=carpeta, agente=self.agente, profesor=self.profesor, especialista=self.especialista)
 
     def exigir_permisos(self, *permisos):
         if self.solo_lectura and "WRITE" in permisos:
@@ -283,6 +287,8 @@ class Nucleo:
         self.memoria.limpiar_corto_plazo()
         self.chat.tema_local = None
         self.chat.pregunta_repaso = None
+        with self.cerrojo:
+            self.dialogos_profesor.clear()
         self.escritorio.limpiar()
         self.archivo_en_contexto = None
 
@@ -323,13 +329,23 @@ class Nucleo:
             ensenanza = self._consultar_competencias(intencion, cliente)
             if ensenanza is not None:
                 return ensenanza
+        if not comando and intencion in {"que puedo hacer", "que puedes hacer", "capacidades reales"}:
+            from core.capacidades_escritorio import inspeccionar
+            capacidades = inspeccionar(self)
+            texto = "\n".join(f"{c['capacidad']}: {c['estado']}. {c['evidencia']}" for c in capacidades)
+            return {"respuesta": texto, "capacidades": capacidades}
+        consulta_especialista = re.fullmatch(r"(?:clasifica|detecta) la intencion(?: de)?[: ]+(.+)", intencion)
+        if not comando and consulta_especialista:
+            self.exigir_permisos("READ")
+            return self._sugerir_intencion(consulta_especialista[1]) or {
+                "respuesta": "El alumno se abstiene: faltan pruebas suficientes para proponer una intención."}
         if not comando and re.fullmatch(r"(?:estado del profesor|profesor local|que profesor recomiendas)", intencion):
             self.exigir_permisos("READ")
             ficha = diagnostico_profesor(self.raiz)
             recomendacion = ficha["recomendacion"]
             disponible = ficha["ram_disponible_bytes"]
             memoria = f"{disponible / GIB:.1f} GiB disponibles" if disponible is not None else "RAM disponible sin medir"
-            estado = "Puerto local configurado" if self.profesor.configurado else "Profesor desactivado"
+            estado = "Profesor local configurado" if self.profesor.configurado else "Profesor desactivado"
             detalle = (f"Candidato para probar en CPU: {recomendacion['modelo']} ({recomendacion['licencia']})."
                        if recomendacion else "Los recursos medidos no permiten recomendar un modelo del catálogo.")
             return {"respuesta": f"{estado}. {memoria}. {detalle}", "profesor": ficha}
@@ -427,12 +443,35 @@ class Nucleo:
                     origen = ("consulta_memoria" if respuesta in {"No tengo recuerdos sobre ese tema.",
                                                                   "Permiso READ requerido."}
                               else "memoria")
-                if tema and self.profesor.configurado and respuesta.startswith((
-                        "No tengo una respuesta fiable", "No encontré una definición")):
+                falta_respuesta = respuesta.startswith((
+                    "No tengo una respuesta fiable", "No encontré una definición"))
+                if (falta_respuesta and not comando
+                        and re.search(r"\b(?:archivo|fichero|documento)\b", intencion)
+                        and self.agente.tiene_permisos("READ")):
+                    sugerencia = self._sugerir_intencion(pregunta)
+                    if sugerencia is not None:
+                        return {**sugerencia, "compartir_temporal": True}
+                conversacion = (not comando and explicacion is None and 2 <= len(pregunta) <= 700
+                                and not re.match(r"^(?:abre|cierra|borra|elimina|instala|ejecuta|apaga|reinicia)\b",
+                                                 intencion))
+                explicita = bool(re.match(r"^(?:cuentame |conversa conmigo sobre |dialoga conmigo sobre )", intencion))
+                if (falta_respuesta or explicita) and self.profesor.configurado and (tema or conversacion):
                     self.exigir_permisos("READ")
                     publicar("razonando", "profesor_local")
+                    clave_dialogo = (cliente, self.conversaciones.activa())
                     try:
-                        explicada = self.profesor.explicar(tema)
+                        if tema:
+                            explicada = self.profesor.explicar(tema)
+                        else:
+                            with self.cerrojo:
+                                contexto = self.dialogos_profesor.get(clave_dialogo, ())
+                            explicada = self.profesor.conversar(pregunta, contexto)
+                        with self.cerrojo:
+                            previos = self.dialogos_profesor.get(clave_dialogo, ())
+                            self.dialogos_profesor[clave_dialogo] = (*previos, (pregunta, explicada))[-2:]
+                            self.dialogos_profesor.move_to_end(clave_dialogo)
+                            if len(self.dialogos_profesor) > 64:
+                                self.dialogos_profesor.popitem(last=False)
                     except RuntimeError as exc:
                         respuesta += "\nProfesor local: " + str(exc)
                     else:
@@ -448,6 +487,18 @@ class Nucleo:
         from universe.consultas import desea_studio
         return {"respuesta": respuesta, **({"origen": origen} if origen else {}),
                 **({"abrir": "studio"} if desea_studio(pregunta) else {})}
+
+    def _sugerir_intencion(self, texto):
+        if self.especialista is None:
+            return None
+        from agent.coordinador_hibrido import ACCIONES
+        etiqueta = self.especialista.sugerir(texto)
+        if etiqueta not in ACCIONES:
+            return None
+        verbo, permisos = ACCIONES[etiqueta]
+        return {"respuesta": f"El alumno propone «{verbo}». Indica el objetivo en una orden directa. "
+                             f"La herramienta exige {', '.join(permisos)}.",
+                "origen": "alumno_especialista", "intencion": etiqueta, "permisos": list(permisos)}
 
     def _consultar_competencias(self, intencion, cliente):
         tema = re.fullmatch(r"(ejercicio de|explica ejercicio de|revisa al alumno en) (.+)", intencion)
@@ -523,6 +574,12 @@ class Nucleo:
         progreso = competencias.historial(self.raiz)
         informe["competencias"] = progreso[:2]
         informe["resumen_competencias"] = competencias.resumen(progreso[0] if progreso else None)
+        informe["especialista"] = self.especialista.informe if self.especialista else None
+        if self.especialista:
+            medidas = self.especialista.informe["certificado"]
+            etiquetas = ", ".join(self.especialista.informe["umbrales"]) or "ninguna"
+            informe["resumen_competencias"] += (f"\nIntenciones admitidas del alumno: {etiquetas}. "
+                                                f"Abstenciones: {medidas['abstenciones']}/{medidas['total']}.")
         return informe
 
     def evaluar_alumno(self):
@@ -551,11 +608,26 @@ class Nucleo:
         self.exigir_permisos("READ")
         self.memoria.cargar_memoria()
         nodos = []
+        if self.especialista:
+            informe = self.especialista.informe
+            for etiqueta, ficha in informe["certificado"]["materias"].items():
+                estado = "puede sugerir" if etiqueta in informe["umbrales"] else "se abstiene"
+                nodos.append({"id": f"competencia-neuronal:{etiqueta}", "tipo": "razonamiento",
+                              "titulo": f"Intención neuronal: {etiqueta}",
+                              "detalle": f"{estado} · {ficha['aciertos']}/{ficha['total']} aciertos · "
+                                         f"{ficha['falsos_positivos']} falsos positivos",
+                              "origen": "Evaluación reservada del cabezal del alumno"})
         categorias = {}
         for clave, entrada in list(self.memoria.long_term_memory.items())[-120:]:
             if isinstance(entrada, dict):
                 categoria = entrada.get("categoria", "general")
                 valor = entrada.get("valor")
+                if categoria == "demostracion_escritorio" and isinstance(valor, list):
+                    nodos.append({"id": "procedimiento:" + sha256(clave.encode()).hexdigest()[:24],
+                                  "tipo": "aprendizaje", "titulo": "Procedimiento: " + clave.partition(":")[2],
+                                  "detalle": f"{len(valor)} pasos autorizados guardados",
+                                  "origen": "Demostración autorizada", "fecha": entrada.get("fecha")})
+                    continue
                 if categoria == CATEGORIA_DOCUMENTO and isinstance(valor, dict):
                     identificador = sha256(clave.encode()).hexdigest()[:24]
                     nodos.append({"id": "documento:" + identificador, "tipo": "aprendizaje",
@@ -607,7 +679,7 @@ class Nucleo:
                 for i, pregunta, respuesta, fuente in con.execute(
                     "SELECT id,pregunta,respuesta,fuente FROM hechos ORDER BY id DESC LIMIT 60"
                 ):
-                    nodos.append({"id": f"ficha:{i}", "tipo": "inactividad", "titulo": pregunta,
+                    nodos.append({"id": f"ficha:{i}", "tipo": "conocimiento", "titulo": pregunta,
                                   "detalle": respuesta[:600], "origen": fuente, "grupo": "Fuente registrada"})
         for i, ficha in enumerate(cargar(self.raiz / "data" / "repaso_espaciado.json")[:40]):
             nodos.append({"id": f"repaso:{i}", "tipo": "conocimiento", "titulo": ficha["pregunta"],

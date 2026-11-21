@@ -14,6 +14,16 @@ llama-server -m /ruta/al/modelo.gguf --host 127.0.0.1 --port 8080 -c 1024 -t 2 -
 
 Arranca una nueva sesión del núcleo de Cerebro con `CEREBRO_PROFESOR_PUERTO=8080`. Si las rutas locales no resuelven «Explícame …», Cerebro puede enviar el tema al profesor. La respuesta indica su origen. El adaptador limita cada consulta a una explicación de 96 tokens y una conexión de hasta 18 segundos de espera de socket. Envía solo el tema y recibe texto. El profesor carece de acceso a las herramientas y las solicitudes de herramientas en su salida se rechazan. [Documentación del servidor de llama.cpp](https://github.com/ggml-org/llama.cpp/tree/master/tools/server)
 
+## Coordinación híbrida
+
+Las órdenes conocidas y las herramientas deterministas tienen prioridad. Un profesor local configurado se ocupa de la conversación que queda sin resolver y de las solicitudes expresas. Solo mantiene hasta dos turnos recientes de esa conversación. Los textos del modelo se muestran como respuesta. Un plan de escritorio solo se prepara mediante una petición expresa, pasa por un esquema de acciones de escritorio y necesita «Confirmar plan de escritorio». El agente vuelve a comprobar permisos, nombres y resultados. Un cierre conserva la confirmación independiente. [Esquemas JSON del servidor llama.cpp](https://github.com/ggml-org/llama.cpp/blob/b12600/tools/server/README.md)
+
+Para iniciar el motor bajo demanda, usa `CEREBRO_PROFESOR_MOTOR=/ruta/llama-server` y `CEREBRO_PROFESOR_MODELO=/ruta/qwen.gguf` en una sesión nueva. El agente arranca el motor existente en CPU con dos hilos y contexto 1.024, y lo cierra a los 45 segundos de inactividad. El puerto fijo de un servidor previamente autorizado sigue admitiéndose mediante `CEREBRO_PROFESOR_PUERTO`. Ninguna modalidad descarga componentes.
+
+`entrenar_especialista.py --salida HOGAR/learning/especialista.npz --ejecutar` genera un cabezal separado vinculado por SHA-256 a los pesos del alumno. Usa embeddings congelados y rasgos de caracteres. El cabezal solo sugiere una acción admitida en validación y en el banco reservado. En el piloto, búsqueda obtuvo 4/12 casos cubiertos, sin falsos positivos. El sistema se abstuvo en 72/76 casos, incluidos los 16 fuera de dominio. Las demás clases quedaron deshabilitadas. Los permisos provienen del registro de acciones, nunca de la predicción. La sugerencia se puede consultar con «Clasifica la intención de: …».
+
+«¿Qué puedo hacer?» consulta disponibilidad de GIO, X11, carpetas y navegador, con permisos vigentes. «Revisa la demostración NOMBRE» muestra pasos guardados. «Genera ejercicios de la demostración NOMBRE» prepara ejemplos para revisión omitiendo los objetivos originales. Universe distingue las competencias neuronales, las fichas de conocimiento y los procedimientos autorizados.
+
 ## Competencias y ejercicios verificables
 
 - «Ejercicio de matemáticas» propone una práctica. También admite español, programación, razonamiento y herramientas. El profesor elige una variante numérica y Cerebro construye el ejercicio y su referencia de forma determinista.

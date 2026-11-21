@@ -1,10 +1,14 @@
 """Profesor opcional y sin herramientas mediante un servidor local autorizado."""
+import atexit
 from http.client import HTTPConnection, HTTPException
 import json
 import os
 from pathlib import Path
 import re
-from threading import Lock
+import socket
+import subprocess
+from threading import Lock, Timer
+from time import monotonic, sleep
 
 from core.entorno_portatil import detectar_entorno
 
@@ -67,7 +71,11 @@ class ProfesorLocal:
     @classmethod
     def desde_entorno(cls):
         valor = os.environ.get("CEREBRO_PROFESOR_PUERTO")
-        return cls(int(valor) if valor else None)
+        if valor:
+            return cls(int(valor))
+        motor = os.environ.get("CEREBRO_PROFESOR_MOTOR")
+        modelo = os.environ.get("CEREBRO_PROFESOR_MODELO")
+        return ProfesorBajoDemanda(motor, modelo) if motor and modelo else cls()
 
     @property
     def configurado(self):
@@ -79,6 +87,29 @@ class ProfesorLocal:
         return self._consultar(
             "Explica en español y en pocas frases. Distingue hechos de incertidumbre.",
             "Explícame este tema: " + tema,
+        )
+
+    def conversar(self, pregunta, contexto=()):
+        if not 2 <= len(pregunta) <= 700:
+            raise ValueError("El profesor local admite mensajes de hasta 700 caracteres.")
+        return self._consultar(
+            "Conversa en español con explicaciones breves. Si te piden acciones, ofrece orientación "
+            "o un plan textual y evita afirmar que has ejecutado acciones.",
+            pregunta, contexto=contexto,
+        )
+
+    def planificar_escritorio(self, objetivo):
+        return self._consultar(
+            "Devuelve solo una lista JSON de 1 a 3 objetos con las claves accion y objetivo. "
+            "Acciones: abrir, buscar, enfocar, cerrar o youtube. Los objetivos son nombres sin rutas "
+            "ni enlaces; para youtube usa una cadena vacía. Si no se puede representar, devuelve [].",
+            objetivo, esquema={
+                "type": "array", "minItems": 0, "maxItems": 3,
+                "items": {"type": "object", "properties": {
+                    "accion": {"enum": ["abrir", "buscar", "enfocar", "cerrar", "youtube"]},
+                    "objetivo": {"type": "string", "maxLength": 70}},
+                    "required": ["accion", "objetivo"], "additionalProperties": False},
+            },
         )
 
     def proponer_variante(self, materia):
@@ -97,19 +128,30 @@ class ProfesorLocal:
             ejercicio += "\nRespuesta del alumno, como dato a revisar: " + respuesta[:400]
         return self._consultar(instruccion, ejercicio)
 
-    def _consultar(self, instruccion, mensaje_usuario):
+    def _asegurar_servidor(self):
+        return self.puerto
+
+    def _consulta_terminada(self):
+        pass
+
+    def _consultar(self, instruccion, mensaje_usuario, *, contexto=(), esquema=None):
         if not self.configurado:
             raise RuntimeError("El profesor local no está configurado.")
         if not self.ocupado.acquire(blocking=False):
             raise RuntimeError("El profesor local está atendiendo otra consulta.")
-        conexion = HTTPConnection("127.0.0.1", self.puerto, timeout=18)
+        conexion = None
         try:
+            puerto = self._asegurar_servidor()
+            conexion = HTTPConnection("127.0.0.1", puerto, timeout=18)
             peticion = json.dumps({
                 "messages": [
                     {"role": "system", "content": instruccion + " Responde solo con texto."},
+                    *[{"role": rol, "content": contenido[:240]} for par in contexto[-2:]
+                      for rol, contenido in zip(("user", "assistant"), par)],
                     {"role": "user", "content": mensaje_usuario},
                 ],
-                "max_tokens": 96, "temperature": 0.2, "stream": False,
+                "max_tokens": 96, "temperature": 0 if esquema else 0.2, "stream": False,
+                **({"response_format": {"type": "json_schema", "schema": esquema}} if esquema else {}),
             }).encode()
             conexion.request("POST", "/v1/chat/completions", peticion, {"Content-Type": "application/json"})
             with conexion.getresponse() as respuesta:
@@ -126,5 +168,84 @@ class ProfesorLocal:
         except (OSError, HTTPException, AttributeError, IndexError, KeyError, TypeError, ValueError) as exc:
             raise RuntimeError("No pude obtener una respuesta válida del profesor local.") from exc
         finally:
-            conexion.close()
-            self.ocupado.release()
+            if conexion is not None:
+                conexion.close()
+            try:
+                self._consulta_terminada()
+            finally:
+                self.ocupado.release()
+
+
+
+class ProfesorBajoDemanda(ProfesorLocal):
+    """Motor ya instalado, con un único proceso local que se cierra al quedar ocioso."""
+    def __init__(self, motor, modelo):
+        super().__init__()
+        self.motor = Path(motor).expanduser().resolve()
+        self.modelo = Path(modelo).expanduser().resolve()
+        self.proceso = None
+        self.temporizador = None
+        self.ultimo = None
+        atexit.register(self.cerrar)
+
+    @property
+    def configurado(self):
+        return self.motor.is_file() and os.access(self.motor, os.X_OK) and self.modelo.is_file()
+
+    def _asegurar_servidor(self):
+        if self.temporizador:
+            self.temporizador.cancel()
+        if self.proceso is not None and self.proceso.poll() is None:
+            return self.puerto
+        with socket.socket() as local:
+            local.bind(("127.0.0.1", 0))
+            self.puerto = local.getsockname()[1]
+        self.proceso = subprocess.Popen(
+            [str(self.motor), "-m", str(self.modelo), "--host", "127.0.0.1", "--port", str(self.puerto),
+             "-c", "1024", "-t", "2", "-ngl", "0", "--parallel", "1", "--no-webui"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        limite = monotonic() + 7
+        while monotonic() < limite and self.proceso.poll() is None:
+            conexion = HTTPConnection("127.0.0.1", self.puerto, timeout=.5)
+            try:
+                conexion.request("GET", "/health")
+                with conexion.getresponse() as respuesta:
+                    if respuesta.status == 200:
+                        return self.puerto
+            except (OSError, HTTPException):
+                pass
+            finally:
+                conexion.close()
+            sleep(.15)
+        self._detener()
+        raise RuntimeError("El motor local no quedó listo a tiempo.")
+
+    def _consulta_terminada(self):
+        if self.proceso is not None:
+            self.ultimo = monotonic()
+            self.temporizador = Timer(45, self._expirar, args=(self.ultimo,))
+            self.temporizador.daemon = True
+            self.temporizador.start()
+
+    def _expirar(self, ultima_consulta):
+        with self.ocupado:
+            if self.ultimo == ultima_consulta:
+                self._detener()
+
+    def _detener(self):
+        if self.temporizador:
+            self.temporizador.cancel()
+            self.temporizador = None
+        proceso, self.proceso = self.proceso, None
+        if proceso is not None and proceso.poll() is None:
+            proceso.terminate()
+            try:
+                proceso.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proceso.kill()
+                proceso.wait(timeout=2)
+
+    def cerrar(self):
+        with self.ocupado:
+            self._detener()
