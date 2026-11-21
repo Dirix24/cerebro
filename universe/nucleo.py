@@ -75,6 +75,7 @@ class Nucleo:
         self.cerrojo_interfaz = RLock()
         self.interfaces = {}
         self.archivo_en_contexto = None
+        self.proyectos_studio = {}
         self.conversaciones = Conversaciones(self.raiz / "data")
         self._recuperar_contexto(self.historial()["turnos"])
         self.latencias = deque(maxlen=100)
@@ -128,6 +129,74 @@ class Nucleo:
             activa = max(self.interfaces.values(), key=lambda dato: dato[2],
                          default=("escritorio", ahora, ahora))
             return {"activa": activa[0]}
+
+    def operar_proyecto(self, datos):
+        from core.proyecto_studio import ProyectoStudio
+
+        cliente = datos.get("cliente")
+        if not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente):
+            raise ValueError("Identificador de Studio inválido.")
+        permisos = self.agente.permisos_concedidos
+        if self.solo_lectura or "READ" not in permisos:
+            raise PermissionError("Se requiere permiso de lectura para trabajar con proyectos.")
+        accion = datos.get("accion")
+        if accion == "abrir":
+            if datos.get("confirmar") is not True:
+                raise PermissionError("Autoriza la carpeta elegida en Studio.")
+            proyecto = ProyectoStudio(datos.get("carpeta"))
+            if cliente not in self.proyectos_studio and len(self.proyectos_studio) >= 32:
+                self.proyectos_studio.pop(next(iter(self.proyectos_studio)))
+            self.proyectos_studio[cliente] = proyecto
+            return {**proyecto.listar(), "carpeta": str(proyecto.raiz)}
+        proyecto = self.proyectos_studio.get(cliente)
+        if proyecto is None:
+            raise ValueError("Abre y autoriza una carpeta de proyecto en esta ventana.")
+        if datos.get("carpeta_esperada") != str(proyecto.raiz):
+            raise ValueError("La carpeta activa cambió. Vuelve a seleccionar el proyecto.")
+        if proyecto.raiz.resolve() != proyecto.raiz or not proyecto.raiz.is_dir():
+            raise PermissionError("La carpeta original dejó de estar disponible.")
+        nombre = datos.get("nombre")
+        if accion == "listar":
+            return proyecto.listar()
+        if accion == "leer":
+            return {"texto": proyecto.leer(nombre)}
+        if accion == "analizar":
+            return proyecto.analizar()
+        if accion == "validar":
+            ast.parse(proyecto.leer(nombre), filename=nombre)
+            return {"salida": "Sintaxis Python válida."}
+        if accion in {"guardar", "aplicar", "pruebas"}:
+            if "WRITE" not in permisos or datos.get("confirmar") is not True:
+                raise PermissionError("Esta acción requiere permiso de escritura y confirmación.")
+            if accion == "guardar":
+                proyecto.guardar(nombre, datos.get("texto"), datos.get("original"))
+                return {"archivo": nombre}
+            if accion == "aplicar":
+                return proyecto.aplicar(datos.get("id"))
+            if sum(t["estado"] in {"en cola", "en ejecución"} for t in self.tareas) >= 4:
+                raise ValueError("Ya hay cuatro tareas en curso.")
+            tarea = {"id": os.urandom(6).hex(), "accion": "pruebas", "estado": "en cola", "salida": ""}
+            self.tareas.append(tarea)
+            self.ejecutor.submit(self._probar_proyecto, tarea, proyecto, cliente)
+            return {"id": tarea["id"]}
+        raise ValueError("Acción de proyecto desconocida.")
+
+    def _probar_proyecto(self, tarea, proyecto, cliente):
+        from core.proyecto_studio import ejecutar_pruebas
+
+        with self.cerrojo:
+            if (self.solo_lectura or not {"READ", "WRITE"} <= self.agente.permisos_concedidos
+                    or self.proyectos_studio.get(cliente) is not proyecto):
+                tarea.update(estado="error", salida="La autorización del proyecto cambió.")
+                return
+            tarea["estado"] = "en ejecución"
+        try:
+            correcto, salida = ejecutar_pruebas(proyecto.raiz)
+        except (OSError, ValueError) as exc:
+            correcto, salida = False, str(exc)
+        with self.cerrojo:
+            tarea.update(estado="terminada" if correcto else "error", salida=salida)
+        publicar("consolidado" if correcto else "error", "herramienta")
 
     @property
     def ruta_historial(self):
@@ -200,7 +269,7 @@ class Nucleo:
         # Los comandos de identidad, memoria y archivos pueden contener datos privados.
         if not pregunta.startswith("/") and respuesta and not re.match(
             r"(?i)¿?(?:(?:busca|encuentra)(?:me)? (?:(?:un|el|mi) )?documento|aprende de (?:este|el) modelo|recuerda que|guarda (?:esta memoria|lo aprendido|un resumen)|recuerda (?:lo aprendido|un resumen)|inserta|extrae|exporta|lee|resume|analiza|"
-            r"revisa|expl[ií]ca(?:me|lo)?|hazme preguntas|corrige mi respuesta|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
+            r"qu[eé] dice (?:el|este) (?:documento|archivo|pdf)|revisa|expl[ií]ca(?:me|lo)?|hazme preguntas|corrige mi respuesta|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
         ):
             try:
                 guardar(self.ruta_historial, "usuario", pregunta[:2000])

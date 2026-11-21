@@ -2,6 +2,7 @@
 from base64 import b64encode
 from contextlib import suppress
 from pathlib import Path
+import re
 from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
@@ -78,9 +79,19 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     chat_activo = None
     revision_visible = None
     chats_guardados = []
+    proyecto_activo = None
+    proyecto_titulo = StringVar(value="Espacio de Studio")
+    archivo_proyecto = None
+    original_proyecto = None
+    propuestas = []
+    propuesta_elegida = StringVar()
 
     def pedir(operacion, datos=None):
         return api(sesion, operacion, datos)
+
+    def proyecto(accion, *, esperada=None, **datos):
+        return pedir("proyecto", {"cliente": identificador, "accion": accion,
+                                 "carpeta_esperada": esperada, **datos})
 
     def publicar(trabajo, terminado=lambda _: None):
         def hacer():
@@ -152,6 +163,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cuerpo.add(chat, weight=3)
 
     ttk.Label(archivos, text="EXPLORADOR", style="Seccion.TLabel").pack(anchor="w", pady=(0, 7))
+    ttk.Label(archivos, textvariable=proyecto_titulo, wraplength=190).pack(anchor="w", pady=(0, 6))
     ttk.Label(archivos, text="Filtrar archivos · Ctrl+P").pack(anchor="w", pady=(0, 4))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
     buscador.pack(fill=X, pady=(0, 7))
@@ -176,6 +188,16 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     barra_editor.pack(fill=X)
     validaciones = campo_texto(pagina_validaciones)
     validaciones.configure(state="disabled")
+    pagina_cambios = ttk.Frame(vistas_editor, padding=6)
+    vistas_editor.add(pagina_cambios, text="Cambios")
+    elegir_cambio = ttk.Combobox(pagina_cambios, textvariable=propuesta_elegida, state="readonly")
+    elegir_cambio.pack(fill=X, pady=(0, 6))
+    diff = campo_texto(pagina_cambios, codigo=True)
+    diff.configure(state="disabled")
+    acciones_cambio = ttk.Frame(pagina_cambios)
+    acciones_cambio.pack(fill=X)
+    acciones_proyecto = ttk.Frame(codigo)
+    acciones_proyecto.pack(fill=X)
 
     ttk.Label(chat, text="CONVERSACIÓN", style="Seccion.TLabel").pack(anchor="w", pady=(0, 6))
     selector = ttk.Combobox(chat, state="readonly", width=16)
@@ -214,7 +236,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         def cargar(datos):
             inventario[:] = datos["archivos"]
             filtrar_archivos()
-        publicar(lambda: pedir("archivos"), cargar)
+        esperado = proyecto_activo
+        publicar(lambda: proyecto("listar", esperada=esperado) if esperado else pedir("archivos"), cargar)
 
     def cargar_archivo(_evento=None):
         seleccionado = lista.curselection()
@@ -224,13 +247,19 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         nombre = lista.get(seleccionado[0])
 
+        abierto_en = proyecto_activo
+
         def copiar(datos):
+            nonlocal archivo_proyecto, original_proyecto
+            if proyecto_activo != abierto_en:
+                return
+            archivo_proyecto, original_proyecto = nombre, datos["texto"]
             ruta.set(nombre)
             vistas_editor.select(pagina_editor)
             mostrar(editor, datos["texto"])
             editor.edit_modified(False)
 
-        publicar(lambda: pedir("archivo?nombre=" + quote(nombre)), copiar)
+        publicar(lambda: proyecto("leer", nombre=nombre, esperada=abierto_en) if abierto_en else pedir("archivo?nombre=" + quote(nombre)), copiar)
 
     def guardar():
         nombre = ruta.get().strip()
@@ -239,23 +268,137 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             estado.set("Escribe una ruta para el archivo, como src/ejemplo.py.")
             return
 
+        abierto_en = proyecto_activo
+        if abierto_en:
+            if nombre != archivo_proyecto or original_proyecto is None:
+                estado.set("Abre primero el archivo desde el explorador.")
+                return
+            if not messagebox.askyesno("Guardar en el proyecto", f"¿Guardar en «{nombre}»?", parent=app):
+                return
+        original = original_proyecto
+
         def guardado(_):
+            nonlocal original_proyecto
+            if proyecto_activo != abierto_en:
+                return
+            if abierto_en:
+                original_proyecto = contenido
             if editor.get("1.0", "end-1c") == contenido:
                 editor.edit_modified(False)
             estado.set("Archivo guardado: " + nombre)
             actualizar_archivos()
-        publicar(lambda: pedir("archivo", {"nombre": nombre, "texto": contenido}), guardado)
+        publicar(lambda: proyecto("guardar", nombre=nombre, texto=contenido, original=original, confirmar=True, esperada=abierto_en)
+                 if abierto_en else pedir("archivo", {"nombre": nombre, "texto": contenido}), guardado)
 
     def revisar():
         nombre = ruta.get().strip()
         if not nombre or editor.edit_modified():
             estado.set("Guarda el archivo antes de validar su sintaxis.")
             return
+        if proyecto_activo:
+            esperado = proyecto_activo
+            vistas_editor.select(pagina_validaciones)
+            publicar(lambda: proyecto("validar", nombre=nombre, esperada=esperado),
+                     lambda dato: mostrar(validaciones, dato["salida"] + "\n", anexar=True))
+            return
         publicar(lambda: pedir("tarea", {"accion": "sintaxis", "nombre": nombre}),
                   lambda dato: tareas_en_curso.add(dato["id"]))
         vistas_editor.select(pagina_validaciones)
         mostrar(validaciones, "Validando «" + nombre + "»…\n", anexar=True)
         estado.set("Validación solicitada.")
+
+    def abrir_proyecto():
+        if editor.edit_modified() and not messagebox.askyesno("Cambios sin guardar", "¿Cambiar de proyecto?", parent=app):
+            return
+        carpeta = filedialog.askdirectory(title="Elegir carpeta de proyecto", mustexist=True, parent=app)
+        if not carpeta:
+            return
+        if not messagebox.askyesno("Autorizar proyecto", f"¿Permitir a Cerebro inspeccionar «{carpeta}»?", parent=app):
+            return
+
+        def abierto(datos):
+            nonlocal proyecto_activo, archivo_proyecto, original_proyecto
+            proyecto_activo = datos["carpeta"]
+            proyecto_titulo.set(Path(proyecto_activo).name)
+            inventario[:] = datos["archivos"]
+            filtrar_archivos()
+            ruta.set("")
+            archivo_proyecto = original_proyecto = None
+            mostrar(editor, "")
+            editor.edit_modified(False)
+            cargar_propuestas([])
+            estado.set("Proyecto abierto" + (" · inventario limitado" if datos["limitado"] else ""))
+
+        publicar(lambda: proyecto("abrir", carpeta=carpeta, confirmar=True), abierto)
+
+    def mostrar_diff(_evento=None):
+        indice = elegir_cambio.current()
+        mostrar(diff, propuestas[indice]["diff"] if indice >= 0 else "")
+
+    def cargar_propuestas(candidatas):
+        propuestas[:] = candidatas
+        elegir_cambio.configure(values=[item["archivo"] for item in propuestas])
+        if propuestas:
+            elegir_cambio.current(0)
+        else:
+            propuesta_elegida.set("")
+        mostrar_diff()
+
+    def analizar_proyecto():
+        if not proyecto_activo:
+            estado.set("Abre primero una carpeta de proyecto.")
+            return
+        base = proyecto_activo
+
+        def analizado(datos):
+            if base != proyecto_activo:
+                return
+            lineas = [f"Revisé {datos['revisados']} archivos Python.",
+                      *datos["hallazgos"], f"Propuestas verificadas por sintaxis: {len(datos['propuestas'])}."]
+            if datos["limitado"]:
+                lineas.append("El inventario o la revisión alcanzó el límite.")
+            if datos["propuestas"]:
+                lineas.append("Revisa el diff en Cambios y elige qué aplicar. Después puedes ejecutar las pruebas.")
+            mostrar_mensaje("Cerebro", "\n".join(lineas))
+            cargar_propuestas(datos["propuestas"])
+            vistas_editor.select(pagina_cambios)
+            estado.set("Inspección terminada.")
+
+        publicar(lambda: proyecto("analizar", esperada=base), analizado)
+
+    def aplicar_cambio():
+        indice = elegir_cambio.current()
+        if indice < 0:
+            return
+        propuesta = propuestas[indice]
+        esperado = proyecto_activo
+        if editor.edit_modified():
+            estado.set("Guarda o descarta las ediciones abiertas antes de aplicar el diff.")
+            return
+        if not messagebox.askyesno("Aplicar cambio", f"¿Aplicar el diff a «{propuesta['archivo']}»?", parent=app):
+            return
+
+        def aplicado(datos):
+            nonlocal archivo_proyecto, original_proyecto
+            if archivo_proyecto == datos["archivo"]:
+                archivo_proyecto = original_proyecto = None
+            cargar_propuestas([item for item in propuestas if item["id"] != propuesta["id"]])
+            estado.set("Cambio aplicado. Vuelve a abrir el archivo para editarlo y ejecuta las pruebas.")
+
+        publicar(lambda: proyecto("aplicar", id=propuesta["id"], confirmar=True, esperada=esperado), aplicado)
+
+    def probar_proyecto():
+        if not proyecto_activo:
+            estado.set("Abre primero una carpeta de proyecto.")
+            return
+        if not messagebox.askyesno("Ejecutar pruebas",
+                                   f"¿Ejecutar unittest en «{proyecto_activo}»? Las pruebas ejecutan código del proyecto.",
+                                   parent=app):
+            return
+        esperado = proyecto_activo
+        vistas_editor.select(pagina_validaciones)
+        mostrar(validaciones, "Ejecutando unittest…\n", anexar=True)
+        publicar(lambda: proyecto("pruebas", confirmar=True, esperada=esperado), lambda dato: tareas_en_curso.add(dato["id"]))
 
     def enviar(texto=None):
         texto = (entrada.get() if texto is None else texto).strip()
@@ -264,6 +407,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         entrada.set("")
         mostrar_mensaje("Tú", texto)
         estado.set("Procesando…")
+        if re.fullmatch(r"(?:cerebro[, ]+)?(?:analiza|revisa) (?:este |el )?proyecto"
+                        r"(?: y (?:corrige|arregla) (?:sus |los )?errores)?[.!]?", texto, re.I):
+            analizar_proyecto()
+            return
 
         revision = revision_chat
         activa = chat_activo
@@ -427,6 +574,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         app.destroy()
 
     boton(barra_archivos, "Actualizar", actualizar_archivos)
+    boton(acciones_proyecto, "Abrir proyecto", abrir_proyecto)
+    boton(acciones_proyecto, "Analizar", analizar_proyecto)
+    boton(acciones_proyecto, "Pruebas", probar_proyecto)
+    boton(acciones_cambio, "Aplicar propuesta", aplicar_cambio, "Principal.TButton")
+    elegir_cambio.bind("<<ComboboxSelected>>", mostrar_diff)
     boton(barra_editor, "Guardar · Ctrl+S", guardar, "Principal.TButton")
     boton(barra_editor, "Validar Python", revisar)
     boton(barra_chat, "Enviar", enviar, "Principal.TButton")

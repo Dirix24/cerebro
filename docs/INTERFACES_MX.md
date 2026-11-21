@@ -34,6 +34,14 @@ Las cuatro entradas se conectan al mismo servicio autenticado en loopback. Compa
 
 Al adjuntar desde Chat o Studio, Cerebro analiza el archivo automáticamente. Después puedes decir «Explícame» para ver los pasajes principales y los temas detectados. «Guarda lo aprendido de este archivo» guarda el análisis en la memoria compartida. El último archivo analizado se conserva en el núcleo mientras está en ejecución. El análisis admite adjuntos de hasta 16 MiB, dentro de la cuota del espacio de trabajo. El navegador reproduce localmente los vídeos compatibles con sus códecs. Están pendientes el OCR de documentos escaneados, la interpretación visual de escenas y la transcripción propia de audio. Las operaciones aritméticas y las deducciones usan reglas comprobables. El modelo propio sigue teniendo un rendimiento limitado en conversación y programación general.
 
+### Proyectos Python en Studio nativo
+
+Pulsa **Abrir proyecto**, elige una carpeta de trabajo y confirma el acceso. El explorador muestra rutas relativas de archivos de texto y permite filtrarlas. Abre un archivo para editarlo. Studio pide confirmación al guardar en el proyecto y comprueba que el archivo siga coincidiendo con la versión que abriste.
+
+Escribe «Cerebro, analiza este proyecto y corrige sus errores» o pulsa **Analizar**. Studio revisa la sintaxis de Python y muestra los diagnósticos. Para una cabecera con dos puntos ausentes, ofrece un diff si el archivo corregido puede analizarse completo. **Aplicar propuesta** requiere una confirmación por archivo. **Pruebas** ejecuta el descubrimiento de `unittest` tras confirmar y muestra el resultado en **Validaciones**. Usa esa acción con proyectos de confianza, ya que ejecuta código con los permisos del usuario.
+
+Para consultar un adjunto, adjúntalo y espera el análisis. Puedes preguntar «¿Qué dice el PDF adjunto sobre el presupuesto?». Cerebro devuelve pasajes del archivo con coincidencias y el alcance de la extracción. Los PDF escaneados necesitan OCR fuera de este flujo.
+
 ### Memoria y conversación compartidas
 
 Prueba «Guarda esta memoria: proyecto = Atlas» en una interfaz y `/recuerdo proyecto` en otra. Las cuatro usan la misma memoria persistente. Si cambias de chat, el contexto inmediato pasa a la conversación elegida y los recuerdos guardados siguen disponibles. Chat web, Studio y la esfera se actualizan cuando otro cliente añade turnos al historial compartido. En Terminal, `/historial` muestra los intercambios guardados más recientes.

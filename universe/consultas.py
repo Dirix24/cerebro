@@ -211,6 +211,31 @@ def consulta_directa(nucleo, pregunta, modo=None):
     investigacion = investigacion_externa(nucleo, pregunta)
     if investigacion is not None:
         return investigacion
+    ayuda_studio = re.fullmatch(r"(?:cerebro[, ]+)?(?:expl[ií]came|explica) (?:para qu[eé] sirve )?"
+                                 r"(?:cada parte de |la interfaz de )?studio[?.]?", pregunta, re.I)
+    if ayuda_studio:
+        return ("Explorador: abre una carpeta autorizada y filtra sus archivos. Editor: lee y guarda texto. "
+                "Validaciones: muestra sintaxis y resultados de unittest. Cambios: compara una propuesta "
+                "con el archivo original antes de aplicarla. Conversación: consulta al núcleo y analiza adjuntos. "
+                "Universe: explora recuerdos y relaciones. Terminal abre la consola de Cerebro.")
+    pregunta_adjunta = re.fullmatch(
+        r"¿?qu[eé] dice (?:el|este) (?:documento|archivo|pdf)(?: adjunto)? (?:sobre|acerca de) (.+?)\??",
+        pregunta, re.I)
+    if pregunta_adjunta:
+        nombre = nucleo.archivo_en_contexto
+        if not nombre:
+            return "Adjunta y analiza un documento primero."
+        if "READ" not in nucleo.agente.permisos_concedidos:
+            raise PermissionError("Falta el permiso de lectura para consultar el adjunto.")
+        try:
+            ruta = nucleo.ruta(nombre, lectura=True)
+            if ruta.suffix.lower() not in {".pdf", ".txt", ".md", ".docx", ".csv", ".json", ".py"}:
+                return "El archivo actual no admite consultas de texto."
+            return buscar_pasajes(ruta, nombre, pregunta_adjunta[1])
+        except (ValueError, OSError, BadZipFile, KeyError, subprocess.SubprocessError, ElementTree.ParseError) as exc:
+            return f"No pude consultar el documento: {exc}"
+    if re.fullmatch(r"(?:analiza|explica) el documento que acabo de adjuntar[.!]?", pregunta, re.I):
+        pregunta = "Explícame"
     explicacion = re.fullmatch(r"¿?(?:expl[ií]ca(?:me|lo)?|res[uú]me(?:lo)?|qu[eé] dice)"
                               r"(?: (?:m[aá]s|esto|eso|el (?:archivo|documento|v[ií]deo)|qu[eé] dice))?[?.]?",
                               pregunta, re.I)
@@ -336,6 +361,40 @@ def _leer_texto(ruta):
         return archivo.read(160000).decode("utf-8", errors="replace")
 
 
+def _alcance_texto(ruta):
+    extension = ruta.suffix.lower()
+    if extension == ".pdf":
+        return "Texto extraíble de las primeras 12 páginas, hasta 160 000 bytes. Sin OCR."
+    if extension == ".docx":
+        return "Texto del cuerpo principal del documento."
+    return "Hasta los primeros 160 000 bytes de texto UTF-8."
+
+
+def buscar_pasajes(ruta, nombre, tema):
+    import unicodedata
+
+    def palabras(texto):
+        normal = "".join(c for c in unicodedata.normalize("NFD", texto.casefold())
+                         if not unicodedata.combining(c))
+        return set(re.findall(r"\w{3,}", normal)) - {"del", "los", "las", "una", "sobre", "para", "cual",
+                                                      "que", "como", "menciona", "dice", "archivo"}
+
+    buscadas = palabras(tema[:200])
+    texto = _leer_texto(ruta)
+    fragmentos = re.split(r"(?<=[.?!])\s+|\n\s*\n|\f", texto)
+    candidatos = []
+    for fragmento in fragmentos:
+        fragmento = " ".join(fragmento.split())
+        puntos = len(buscadas & palabras(fragmento))
+        if puntos:
+            candidatos.append((puntos, fragmento[:420]))
+    candidatos.sort(key=lambda item: -item[0])
+    if not candidatos:
+        return f"{nombre} · {_alcance_texto(ruta)}\nNo encontré un pasaje que coincida con el tema."
+    citas = "\n".join("• " + frase for _, frase in candidatos[:3])
+    return f"{nombre} · {_alcance_texto(ruta)}\nPasajes encontrados\n{citas}"
+
+
 def _extracto(texto):
     from core.estudio_local import resumir
     texto = " ".join(texto.split())
@@ -346,6 +405,8 @@ def _extracto(texto):
 
 def analizar_ruta(nucleo, nombre, *, explicar=False):
     from core.analizador_codigo_local import analizar
+    if "READ" not in nucleo.agente.permisos_concedidos:
+        raise PermissionError("Falta el permiso de lectura para analizar el archivo.")
     ruta = nucleo.ruta(nombre, lectura=True)
     if not ruta.is_file():
         raise ValueError("Adjunta el archivo primero o ponlo en el espacio de trabajo de Studio.")
@@ -408,6 +469,6 @@ def analizar_ruta(nucleo, nombre, *, explicar=False):
         from core.estudio_local import palabras_clave, resumir
         palabras = palabras_clave(texto[:8000], limite=6)
         puntos = resumir(" ".join(texto[:8000].split()), max_frases=4)
-        return (f"Qué dice {nombre}\n\nPasajes principales\n{puntos or 'No hay texto legible.'}"
+        return (f"Qué dice {nombre}\n{_alcance_texto(ruta)}\n\nPasajes principales\n{puntos or 'No hay texto legible.'}"
                 + ("\n\nTemas del archivo: " + ", ".join(palabras) if palabras else ""))
-    return nombre + "\nExtracto del texto disponible\n\n" + _extracto(texto)
+    return nombre + "\n" + _alcance_texto(ruta) + "\nExtracto del texto disponible\n\n" + _extracto(texto)

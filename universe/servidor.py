@@ -89,7 +89,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                         Thread(target=self.server.shutdown, daemon=True).start()
             except PermissionError as exc:
                 self.enviar(403, {"error": str(exc)})
-            except (ValueError, RuntimeError, RecursionError) as exc:
+            except (ValueError, RuntimeError, RecursionError, SyntaxError) as exc:
                 self.enviar(400, {"error": str(exc)})
             except KeyError:
                 self.enviar(404, {"error": "Operación inexistente."})
@@ -158,6 +158,10 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                         return {"serie": listar_puertos()}
                     raise KeyError(ruta)
             with nucleo.cerrojo:
+                if escribir and ruta == "/api/proyecto":
+                    if abrir_estudio is None:
+                        raise PermissionError("Los proyectos requieren el lanzador de escritorio local.")
+                    return nucleo.operar_proyecto(datos)
                 if escribir:
                     acciones = {
                         "/api/chat": lambda: self.responder_chat(datos),
