@@ -1,0 +1,11 @@
+"""Identidad visual de las interfaces nativas de Cerebro."""
+
+FONDO = "#080B10"
+PANEL = "#10141C"
+EDITOR = "#0C1017"
+ACTIVO = "#168BFF"
+ACENTO = "#53B9FF"
+TEXTO = "#E6EDF7"
+SECUNDARIO = "#8995A8"
+BORDE = "#252D39"
+SELECCION = "#13273D"

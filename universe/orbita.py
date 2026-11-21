@@ -3,17 +3,19 @@ from math import cos, sin, tau
 from time import monotonic
 from tkinter import Canvas
 
+from universe.paleta import FONDO, SECUNDARIO
+
 
 class Orbita(Canvas):
     """Anillos, pulsos y nodos decorativos animados mientras el panel está visible."""
 
     def __init__(self, padre):
-        super().__init__(padre, width=330, height=112, bg="#090e18", highlightthickness=0)
+        super().__init__(padre, width=330, height=112, bg=FONDO, highlightthickness=0)
         self._inicio = monotonic()
         self._turno = None
         self._procesando = False
         self._etiqueta = self.create_text(17, 95, text="Disponible", anchor="w",
-                                          fill="#aec6e5", font=("TkDefaultFont", 9))
+                                          fill=SECUNDARIO, font=("TkDefaultFont", 9))
         self.bind("<Configure>", lambda _evento: self._dibujar(monotonic() - self._inicio))
         self.bind("<Map>", self._reanudar)
         self.bind("<Unmap>", self._pausar)

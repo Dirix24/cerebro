@@ -207,7 +207,7 @@ def test_boton_terminal_usa_un_emulador_y_un_comando_fijos(monkeypatch):
     assert lanzador.lanzar_terminal()
     assert ejecuciones == [[
         "/usr/bin/xfce4-terminal", "--disable-server", "--title=Cerebro · Terminal", "--execute",
-        lanzador.sys.executable, "-m", "universe.lanzador", "terminal",
+        "/usr/bin/env", "CEREBRO_TERMINAL_PROPIA=1", lanzador.sys.executable, "-m", "universe.lanzador", "terminal",
     ]]
 
 

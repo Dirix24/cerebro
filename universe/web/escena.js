@@ -35,7 +35,7 @@ export function escena(canvas, elegir) {
     if (rotar && !arrastre && ultimo) giro += Math.min(35, ahora - ultimo) * .00014;
     ultimo = ahora;
     const centro = proyectar({x: 0, y: 0, z: 0}, ancho, alto);
-    contexto.strokeStyle = "#334b5a";
+    contexto.strokeStyle = "#252D39";
     for (const radio of [1.1, 1.38]) {
       contexto.beginPath();
       for (let i = 0; i <= 64; i++) {
@@ -49,22 +49,22 @@ export function escena(canvas, elegir) {
     }
     const radioNucleo = 19 * zoom;
     const halo = contexto.createRadialGradient(centro.x, centro.y, 0, centro.x, centro.y, radioNucleo * 2.1);
-    halo.addColorStop(0, "#dbfff0");
-    halo.addColorStop(.25, "#61e4c8");
-    halo.addColorStop(.48, "#2e878c88");
-    halo.addColorStop(1, "#2e878c00");
+    halo.addColorStop(0, "#e0f5ff");
+    halo.addColorStop(.25, "#53B9FF");
+    halo.addColorStop(.48, "#168bff88");
+    halo.addColorStop(1, "#168bff00");
     contexto.fillStyle = halo;
     contexto.beginPath();
     contexto.arc(centro.x, centro.y, radioNucleo * 2.1, 0, Math.PI * 2);
     contexto.fill();
-    contexto.strokeStyle = "#91e3d29a";
+    contexto.strokeStyle = "#53b9ff9a";
     contexto.beginPath();
     contexto.arc(centro.x, centro.y, radioNucleo, 0, Math.PI * 2);
     contexto.stroke();
     visibles = objetos.map(objeto => ({...objeto, ...proyectar(objeto, ancho, alto)}))
       .sort((a, b) => b.z - a.z);
     const porId = new Map(visibles.map(nodo => [nodo.nodo.id, nodo]));
-    contexto.strokeStyle = "#a2894390";
+    contexto.strokeStyle = "#45658c90";
     for (const origen of visibles) {
       for (const id of origen.nodo.vinculos || []) {
         const destino = porId.get(id);

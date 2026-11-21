@@ -12,12 +12,7 @@ from urllib.parse import quote
 from universe.lanzador import api, abrir, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
-FONDO = "#090e18"
-PANEL = "#121c2c"
-TEXTO = "#e8f3ff"
-ACENTO = "#79bdff"
-MUTED = "#a9bed8"
-BORDE = "#2a3b58"
+from universe.paleta import ACENTO, ACTIVO, BORDE, EDITOR, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
 
 
 def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
@@ -31,29 +26,42 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     app.configure(bg=FONDO)
     estilo = ttk.Style(app)
     estilo.theme_use("clam")
-    estilo.configure(".", background=FONDO, foreground=TEXTO, fieldbackground=PANEL)
-    estilo.configure("TButton", background="#15233a", foreground=TEXTO, padding=(10, 6),
-                     borderwidth=0, bordercolor=FONDO, lightcolor=FONDO, darkcolor=FONDO)
-    estilo.configure("TNotebook", background=FONDO, borderwidth=0)
-    estilo.configure("TNotebook.Tab", background="#15233a", foreground=TEXTO, padding=(13, 7))
-    estilo.map("TNotebook.Tab", background=[("selected", "#193154")],
+    estilo.configure(".", background=FONDO, foreground=TEXTO, fieldbackground=PANEL,
+                     bordercolor=BORDE, lightcolor=BORDE, darkcolor=BORDE, focuscolor=ACTIVO,
+                     troughcolor=EDITOR, selectbackground=SELECCION, selectforeground=TEXTO)
+    estilo.configure("TButton", background=PANEL, padding=(8, 5), borderwidth=1, relief="flat")
+    estilo.map("TButton", background=[("active", SELECCION)])
+    estilo.configure("TNotebook", background=FONDO, borderwidth=0, padding=0, tabmargins=(0, 0, 0, 3))
+    estilo.configure("TNotebook.Tab", background=PANEL, borderwidth=1, padding=(12, 6), foreground=SECUNDARIO,
+                     lightcolor=PANEL, darkcolor=PANEL, bordercolor=BORDE)
+    estilo.map("TNotebook.Tab", background=[("selected", SELECCION), ("active", PANEL)],
+               bordercolor=[("selected", ACTIVO), ("!selected", BORDE)],
+               lightcolor=[("selected", SELECCION), ("!selected", PANEL)],
+               darkcolor=[("selected", SELECCION), ("!selected", PANEL)],
                foreground=[("selected", ACENTO)])
-    estilo.map("TButton", background=[("active", "#224165")])
-    estilo.configure("Titulo.TLabel", font=("TkDefaultFont", 17, "bold"), foreground=ACENTO)
-    estilo.configure("TEntry", fieldbackground=PANEL, foreground=TEXTO, insertcolor=TEXTO,
-                     bordercolor="#2a3b58", lightcolor=PANEL, darkcolor=PANEL)
-    estilo.configure("TPanedwindow", background=FONDO, sashwidth=6)
-    estilo.configure("Principal.TButton", background="#205083", foreground="#edf8ff")
-    estilo.map("Principal.TButton", background=[("active", "#2b659d")])
-    estilo.configure("Eliminar.TButton", foreground="#ffadb8")
+    estilo.configure("Titulo.TLabel", font=("TkDefaultFont", 17, "bold"), foreground=TEXTO)
+    estilo.configure("TEntry", fieldbackground=EDITOR, insertcolor=TEXTO, padding=4)
+    estilo.map("TEntry", bordercolor=[("focus", ACTIVO)])
+    estilo.configure("TPanedwindow", background=BORDE)
+    estilo.configure("Sash", sashthickness=5, gripcount=0, background=BORDE)
+    for orientacion in ("Vertical", "Horizontal"):
+        barra = orientacion + ".TScrollbar"
+        estilo.configure(barra, background=BORDE, troughcolor=EDITOR, bordercolor=EDITOR,
+                         darkcolor=BORDE, lightcolor=BORDE, arrowcolor=SECUNDARIO, arrowsize=9,
+                         borderwidth=1, gripcount=0)
+        estilo.map(barra, background=[("active", SELECCION)], arrowcolor=[("active", ACENTO)])
+    estilo.configure("Principal.TButton", background=ACTIVO, foreground=FONDO)
+    estilo.map("Principal.TButton", background=[("active", ACENTO)])
+    estilo.configure("Eliminar.TButton", foreground="#ffaab6")
     estilo.configure("Seccion.TLabel", foreground=ACENTO, font=("TkDefaultFont", 10, "bold"))
-    estilo.configure("Estado.TLabel", background=PANEL, foreground=MUTED)
+    estilo.configure("Estado.TLabel", background=PANEL, foreground=SECUNDARIO)
     estilo.configure("TCombobox", fieldbackground=PANEL, background=PANEL, foreground=TEXTO,
-                     arrowcolor=ACENTO, bordercolor=BORDE)
-    estilo.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", TEXTO)])
+                     arrowcolor=ACENTO, bordercolor=BORDE, padding=4)
+    estilo.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", TEXTO)],
+               bordercolor=[("focus", ACTIVO)])
     app.option_add("*TCombobox*Listbox.background", PANEL)
     app.option_add("*TCombobox*Listbox.foreground", TEXTO)
-    app.option_add("*TCombobox*Listbox.selectBackground", "#205083")
+    app.option_add("*TCombobox*Listbox.selectBackground", SELECCION)
 
     estado = StringVar(value="Conectando con Cerebro…")
     ruta = StringVar()
@@ -89,11 +97,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     def campo_texto(padre, *, codigo=False, altura=10):
         marco = ttk.Frame(padre)
         marco.pack(fill=BOTH, expand=True)
-        campo = Text(marco, bg=PANEL, fg=TEXTO, insertbackground=ACENTO, relief="flat",
+        campo = Text(marco, bg=EDITOR if codigo else PANEL, fg=TEXTO, insertbackground=ACENTO, relief="flat",
                      padx=10, pady=9, wrap="none" if codigo else "word",
                      width=18, height=altura, highlightthickness=1, highlightbackground=BORDE,
-                     highlightcolor=ACENTO, selectbackground="#205083",
-                     font=("TkFixedFont", 11) if codigo else ("TkDefaultFont", 10))
+                     highlightcolor=ACENTO, selectbackground=SELECCION,
+                     font="TkFixedFont" if codigo else "TkDefaultFont")
         desplazamiento = ttk.Scrollbar(marco, command=campo.yview)
         desplazamiento.pack(side=RIGHT, fill=Y)
         campo.configure(yscrollcommand=desplazamiento.set)
@@ -146,7 +154,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     ttk.Label(archivos, text="Filtrar archivos · Ctrl+P").pack(anchor="w", pady=(0, 4))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
     buscador.pack(fill=X, pady=(0, 7))
-    lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#193154", selectforeground=ACENTO,
+    lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground=SELECCION, selectforeground=ACENTO,
                     relief="flat", highlightthickness=0, exportselection=False)
     desplazamiento_archivos = ttk.Scrollbar(archivos, command=lista.yview)
     lista.configure(yscrollcommand=desplazamiento_archivos.set)
@@ -174,7 +182,18 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     barra_conversaciones = ttk.Frame(chat)
     barra_conversaciones.pack(fill=X, pady=(0, 4))
     salida = campo_texto(chat)
-    salida.configure(state="disabled")
+    salida.configure(state="disabled", spacing2=3)
+    salida.tag_configure("Tú", foreground=TEXTO, font=("TkDefaultFont", 10, "bold"), spacing1=10)
+    salida.tag_configure("Cerebro", foreground=ACENTO, font=("TkDefaultFont", 10, "bold"), spacing1=10)
+    salida.tag_configure("mensaje", spacing3=9, lmargin1=4, lmargin2=4)
+
+    def mostrar_mensaje(autor, texto):
+        salida.configure(state="normal")
+        salida.insert("end-1c", autor + "\n", autor)
+        salida.insert("end-1c", texto.strip() + "\n", "mensaje")
+        salida.configure(state="disabled")
+        salida.see(END)
+
     consulta = ttk.Entry(chat, textvariable=entrada)
     consulta.pack(fill=X, pady=(6, 1))
     barra_chat = ttk.Frame(chat)
@@ -242,7 +261,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         if not texto or chat_activo is None:
             return
         entrada.set("")
-        mostrar(salida, "\nTú · " + texto + "\n", anexar=True)
+        mostrar_mensaje("Tú", texto)
         estado.set("Procesando…")
 
         revision = revision_chat
@@ -251,7 +270,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         def respondido(dato):
             if revision != revision_chat:
                 return
-            mostrar(salida, "Cerebro · " + dato["respuesta"] + "\n", anexar=True)
+            mostrar_mensaje("Cerebro", dato["respuesta"])
             estado.set("Núcleo conectado")
 
         publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador, "conversacion": activa}), respondido)
@@ -267,10 +286,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         revision_chat += 1
         chat_activo = datos["activa"]
-        mostrar(salida, "\n".join(
-            f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}"
-            for turno in datos["turnos"]
-        ) + "\n")
+        mostrar(salida, "")
+        for turno in datos["turnos"]:
+            mostrar_mensaje("Tú" if turno["rol"] == "usuario" else "Cerebro", turno["texto"])
+
 
     def gestionar_chat(borrar=False):
         if chat_activo is None:

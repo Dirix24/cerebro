@@ -11,12 +11,21 @@ import secrets
 from shutil import get_terminal_size, which
 import subprocess
 import sys
-from textwrap import indent
+from textwrap import fill, indent
 from threading import Event, Thread
 from time import monotonic, sleep
 from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from webbrowser import open as abrir_web
+
+
+_LOGOTIPO = (
+    " ███  ████  ████  ████  ████  ████   ███ ",
+    "██    ██    ██ ██ ██    ██ ██ ██ ██ ██ ██",
+    "██    ████  ████  ████  ████  ████  ██ ██",
+    "██    ██    ██ ██ ██    ██ ██ ██ ██ ██ ██",
+    " ███  ████  ██ ██ ████  ████  ██ ██  ███ ",
+)
 
 
 class SoloLoopback(HTTPRedirectHandler):
@@ -174,7 +183,8 @@ def lanzar_terminal():
     if not _hay_escritorio():
         return False
     if programa := which("xfce4-terminal"):
-        prefijo = [programa, "--disable-server", "--title=Cerebro · Terminal", "--execute"]
+        prefijo = [programa, "--disable-server", "--title=Cerebro · Terminal", "--execute",
+                   "/usr/bin/env", "CEREBRO_TERMINAL_PROPIA=1"]
     elif programa := which("x-terminal-emulator"):
         prefijo = [programa, "-e"]
     else:
@@ -222,14 +232,27 @@ def terminal(sesion):
     }
 
     def cabecera():
+        if color and os.environ.get("CEREBRO_TERMINAL_PROPIA") == "1":
+            print("\033]11;#080B10\007\033]10;#E6EDF7\007", end="")
         ancho = min(68, get_terminal_size((68, 24)).columns)
-        separador = formato("─" * ancho, "38;5;24")
-        print(separador)
-        print(formato("  C E R E B R O   /   TERMINAL  ", "1;38;5;81;48;5;233"))
-        print(formato("  " + str(Path.cwd()), "38;5;109"))
-        print(separador)
-        print("  Chats   /nuevo-chat  /chats  /historial  /eliminar-chat")
-        print("  Vistas  /studio  /web     Sesión  /ayuda  /salir")
+        print()
+        if sys.stdout.isatty() and ancho >= max(map(len, _LOGOTIPO)) + 4:
+            for fila in _LOGOTIPO:
+                print(formato("  " + fila.ljust(ancho - 2), "38;5;39;48;5;16"))
+        else:
+            print(formato("CEREBRO", "1;38;5;39;48;5;16"))
+        with contextlib.suppress(OSError, RuntimeError):
+            estado = api(sesion, "estado", tiempo=2)
+            modelo = "modelo propio" if estado.get("parametros") else "herramientas locales"
+            red = "red habilitada" if estado.get("internet") else "sin internet"
+            estado_visible = fill(f"Núcleo conectado · {modelo} · {red}", width=ancho,
+                                  subsequent_indent="  ", break_long_words=False, break_on_hyphens=False)
+            print(estado_visible.replace("Núcleo conectado", formato("Núcleo conectado", "1;38;5;81"), 1))
+        print(formato("─" * ancho, "38;5;24"))
+        for accesos_visibles in ("Chats: /nuevo-chat  /chats  /historial  /eliminar-chat",
+                                 "Vistas: /studio  /web    Sesión: /ayuda  /salir"):
+            print(fill(accesos_visibles, width=ancho, subsequent_indent="  ",
+                       break_long_words=False, break_on_hyphens=False))
         print()
 
     cabecera()
@@ -269,7 +292,6 @@ def terminal(sesion):
                         api(sesion, "historial", {"confirmar": True, "id": activa})
                         if sys.stdout.isatty():
                             print("\033[3J\033[2J\033[H", end="")
-                        cabecera()
                         print("Conversación eliminada.")
                     continue
                 if comando in accesos:
@@ -294,14 +316,16 @@ def terminal(sesion):
 def escritorio(sesion):
     import queue
     import tkinter as tk
-    from tkinter import messagebox
+    from tkinter import messagebox, ttk
 
     try:
         ventana = tk.Tk()
     except tk.TclError as exc:
         raise RuntimeError("Se necesita una sesión gráfica con Tk para abrir el acompañante.") from exc
     ventana.title("Cerebro · Acompañante")
-    fondo, panel, texto = "#090e18", "#121c2c", "#e8f3ff"
+    from universe.paleta import ACENTO, BORDE, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
+
+    fondo, panel, texto = FONDO, PANEL, TEXTO
     ventana.configure(bg=fondo)
     ventana.resizable(False, False)
     ventana.attributes("-topmost", True)
@@ -315,9 +339,9 @@ def escritorio(sesion):
 
     def boton(padre, etiqueta, accion, color=panel):
         return tk.Button(padre, text=etiqueta, command=accion, bg=color, fg=texto,
-                         activebackground="#315484", activeforeground="#ffffff",
+                         activebackground=SELECCION, activeforeground="#ffffff",
                          disabledforeground="#7792b3", relief="flat", cursor="hand2",
-                         highlightbackground=fondo, highlightcolor="#86bbff", padx=9, pady=5)
+                         highlightbackground=fondo, highlightcolor=ACENTO, padx=9, pady=5)
 
     cabecera = tk.Frame(ventana, bg=fondo)
     cabecera.pack(fill="x", padx=14, pady=(10, 0))
@@ -351,7 +375,12 @@ def escritorio(sesion):
     conversacion.pack(fill="both", expand=True)
     salida = tk.Text(conversacion, height=5, wrap="word", bg=panel, fg=texto, relief="flat",
                      padx=12, pady=8, highlightthickness=0, font=("TkDefaultFont", 10))
-    desplazamiento = tk.Scrollbar(conversacion, command=salida.yview)
+    estilo = ttk.Style(ventana)
+    estilo.theme_use("clam")
+    estilo.configure("Esfera.Vertical.TScrollbar", background=BORDE, troughcolor=panel,
+                     bordercolor=panel, lightcolor=BORDE, darkcolor=BORDE,
+                     arrowcolor=SECUNDARIO, arrowsize=9, gripcount=0)
+    desplazamiento = ttk.Scrollbar(conversacion, command=salida.yview, style="Esfera.Vertical.TScrollbar")
     desplazamiento.pack(side="right", fill="y")
     salida.configure(yscrollcommand=desplazamiento.set)
     salida.pack(side="left", fill="both", expand=True)
@@ -361,12 +390,12 @@ def escritorio(sesion):
     salida.configure(state="disabled")
 
     aviso = tk.StringVar()
-    tk.Label(contenido, textvariable=aviso, fg="#aec6e5", bg=fondo, anchor="w",
+    tk.Label(contenido, textvariable=aviso, fg=SECUNDARIO, bg=fondo, anchor="w",
              justify="left", wraplength=330).pack(fill="x")
     compositor = tk.Frame(contenido, bg=fondo)
     compositor.pack(fill="x", pady=(4, 6))
     entrada = tk.Entry(compositor, bg=panel, fg=texto, insertbackground=texto,
-                       relief="flat", highlightbackground="#334e72", highlightcolor="#86bbff",
+                       relief="flat", highlightbackground=BORDE, highlightcolor=ACENTO,
                        highlightthickness=1, font=("TkDefaultFont", 11))
     entrada.pack(side="left", fill="both", expand=True, padx=(0, 6))
     barra = tk.Frame(contenido, bg=fondo)
@@ -566,7 +595,7 @@ def escritorio(sesion):
         ventana.after_cancel(temporizador)
         ventana.destroy()
 
-    boton_enviar = boton(compositor, "Enviar", enviar, "#245496")
+    boton_enviar = boton(compositor, "Enviar", enviar, SELECCION)
     boton_enviar.pack(side="right")
     boton_dictar = boton(barra, "Dictar", dictar)
     boton_dictar.pack(side="left", padx=(0, 5))
@@ -581,10 +610,10 @@ def escritorio(sesion):
     entrada.bind("<Return>", enviar)
 
     accesos = tk.Menubutton(barra, text="Accesos ▾", bg=panel, fg=texto,
-                            activebackground="#315484", activeforeground=texto,
+                            activebackground=SELECCION, activeforeground=texto,
                             takefocus=True, padx=9, pady=5)
     menu_acciones = tk.Menu(accesos, tearoff=False, bg=panel, fg=texto,
-                           activebackground="#315484", activeforeground=texto)
+                           activebackground=SELECCION, activeforeground=texto)
     for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
                            ("Terminal", lanzar_terminal), ("Universe", lanzar_universe)):
         menu_acciones.add_command(label=nombre, command=accion)

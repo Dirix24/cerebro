@@ -2,6 +2,8 @@
 from math import cos, sin, tau
 from tkinter import Canvas, Listbox, StringVar, ttk
 
+from universe.paleta import BORDE, EDITOR, PANEL, SELECCION, TEXTO
+
 COLORES = {
     "memoria": "#7adafa", "aprendizaje": "#85f3b6", "conocimiento": "#55d8bf",
     "relaciones": "#e6c68d", "razonamiento": "#9eacff", "investigación": "#f4ae84",
@@ -29,12 +31,13 @@ class MapaStudio(ttk.Frame):
         )
         panel = ttk.Panedwindow(self, orient="horizontal")
         panel.pack(fill="both", expand=True, pady=(8, 0))
-        self._lienzo = Canvas(panel, width=500, height=350, background="#0c1a24", highlightthickness=0)
+        self._lienzo = Canvas(panel, width=500, height=350, background=EDITOR, highlightthickness=1, highlightbackground=BORDE)
         panel.add(self._lienzo, weight=5)
         fichas = ttk.Frame(panel, padding=(8, 0))
         panel.add(fichas, weight=2)
-        self._lista = Listbox(fichas, background="#17242e", foreground="#e2f4f4",
-                              selectbackground="#315d68", exportselection=False)
+        self._lista = Listbox(fichas, background=PANEL, foreground=TEXTO,
+                              selectbackground=SELECCION, selectforeground=TEXTO,
+                              highlightthickness=1, highlightbackground=BORDE, relief="flat", exportselection=False)
         self._lista.pack(fill="both", expand=True)
         self._detalle = StringVar(value="Selecciona un nodo. La posición es visual.")
         ttk.Label(fichas, textvariable=self._detalle, justify="left", wraplength=285).pack(
