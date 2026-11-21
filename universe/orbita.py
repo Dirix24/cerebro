@@ -22,8 +22,11 @@ class Orbita(Canvas):
         self._dibujar(0)
 
     def procesando(self, valor):
-        self._procesando = bool(valor)
-        self.itemconfigure(self._etiqueta, text="Procesando" if valor else "Disponible")
+        self.estado("Procesando" if valor else "Disponible")
+
+    def estado(self, texto):
+        self._procesando = texto != "Disponible"
+        self.itemconfigure(self._etiqueta, text=texto)
         self._dibujar(monotonic() - self._inicio)
 
     def _reanudar(self, _evento):

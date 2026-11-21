@@ -97,10 +97,12 @@ def nucleo():
     verificar_almacenamiento()
     modelo, meta, _ = cargar_modelo()
     internet = os.environ.get("CEREBRO_SIN_INTERNET") != "1"
-    motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet)
+    motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet,
+                   documentos_usuario=True)
     token = secrets.token_urlsafe(32)
     with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio,
-                         abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante) as servidor:
+                         abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante,
+                         abrir_destino=lanzar_destino, abrir_universe=lanzar_universe) as servidor:
         ruta = carpeta()
         datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
                  "version": version_local()}
@@ -114,6 +116,29 @@ def nucleo():
 def abrir(sesion, interfaz):
     lanzar_acompanante()
     return abrir_web(f"{sesion['url']}/{interfaz}#{sesion['token']}")
+
+
+def lanzar_destino(destino):
+    if not _hay_escritorio():
+        return False
+    if destino == "youtube":
+        return abrir_web("https://www.youtube.com/")
+    if destino == "navegador":
+        if exo := which("exo-open"):
+            return _lanzar_proceso([exo, "--launch", "WebBrowser"])
+        return abrir_web("about:blank")
+    if destino == "steam":
+        if steam := which("steam"):
+            return _lanzar_proceso([steam])
+        if flatpak := which("flatpak"):
+            try:
+                instalado = subprocess.run([flatpak, "info", "com.valvesoftware.Steam"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4).returncode == 0
+            except subprocess.SubprocessError:
+                instalado = False
+            if instalado:
+                return _lanzar_proceso([flatpak, "run", "com.valvesoftware.Steam"])
+    return False
 
 
 def _hay_escritorio():
@@ -136,6 +161,12 @@ def lanzar_estudio():
     if not _hay_escritorio():
         return False
     return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "studio"])
+
+
+def lanzar_universe():
+    if not _hay_escritorio():
+        return False
+    return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "universe"])
 
 
 def lanzar_terminal():
@@ -211,8 +242,8 @@ def escritorio(sesion):
     ventana.resizable(False, False)
     ventana.attributes("-topmost", True)
     x = max(0, ventana.winfo_screenwidth() - 370)
-    y = max(0, ventana.winfo_screenheight() - 358)
-    ventana.geometry(f"340x327+{x}+{y}")
+    y = max(0, ventana.winfo_screenheight() - 398)
+    ventana.geometry(f"340x367+{x}+{y}")
 
     from universe.orbita import Orbita
     nucleo_visual = Orbita(ventana)
@@ -225,6 +256,13 @@ def escritorio(sesion):
     salida.configure(state="disabled")
     entrada = tk.Entry(ventana, bg="#142b32", fg="#e4fffa", insertbackground="white")
     entrada.pack(fill="x", padx=12, pady=6)
+    barra_voz = tk.Frame(ventana, bg="#102027")
+    barra_voz.pack()
+    ultima_respuesta = ""
+    voz_activada = False
+    cancelar_audio = Event()
+    microfono = tk.StringVar(value="default")
+    ocupado = False
     barra = tk.Frame(ventana, bg="#102027")
     barra.pack()
     eventos = queue.SimpleQueue()
@@ -255,15 +293,81 @@ def escritorio(sesion):
         except (OSError, RuntimeError) as exc:
             eventos.put(("respuesta", str(exc)))
 
+    def cambiar_estado(texto):
+        nonlocal ocupado
+        ocupado = texto != "Disponible"
+        nucleo_visual.estado(texto)
+        estado = "disabled" if ocupado else "normal"
+        entrada.configure(state=estado)
+        boton_dictar.configure(state=estado)
+        boton_audio.configure(state=estado)
+
     def enviar(_evento=None):
         texto = entrada.get().strip()
-        if texto:
+        if texto and not ocupado:
             entrada.delete(0, "end")
-            entrada.configure(state="disabled")
-            nucleo_visual.procesando(True)
+            cambiar_estado("Procesando")
             Thread(target=despachar, args=(texto,), daemon=True).start()
 
+    def tarea_de_voz(operacion, tipo):
+        try:
+            eventos.put((tipo, operacion()))
+        except (OSError, RuntimeError, ValueError) as exc:
+            eventos.put(("error de voz", str(exc)))
+
+    def dictar():
+        from core.local_voice import dictar as grabar
+        dispositivo = microfono.get()
+        cambiar_estado("Escuchando")
+        Thread(target=tarea_de_voz, args=(lambda: grabar(dispositivo=dispositivo), "dictado"),
+               daemon=True).start()
+
+    def hablar_respuesta(texto):
+        from core.local_voice import leer_en_espanol
+        if not texto:
+            return
+        cancelar_audio.clear()
+        cambiar_estado("Hablando")
+        Thread(target=tarea_de_voz,
+               args=(lambda: leer_en_espanol(texto, cancelar_audio), "audio listo")).start()
+
+    def alternar_voz():
+        nonlocal voz_activada
+        voz_activada = not voz_activada
+        boton_leer.configure(text="Voz activa" if voz_activada else "Voz apagada")
+        if not voz_activada:
+            cancelar_audio.set()
+        elif not ocupado:
+            hablar_respuesta(ultima_respuesta)
+
+    def audio():
+        from core.local_voice import dispositivos_audio
+        cambiar_estado("Detectando audio")
+        Thread(target=tarea_de_voz, args=(dispositivos_audio, "dispositivos"), daemon=True).start()
+
+    def elegir_audio(datos):
+        from tkinter import ttk
+        panel = tk.Toplevel(ventana)
+        panel.title("Audio de Cerebro")
+        panel.transient(ventana)
+        cuadro = ttk.Frame(panel, padding=12)
+        cuadro.pack(fill="both", expand=True)
+        ttk.Label(cuadro, text="Entrada detectada · micrófono").pack(anchor="w")
+        ttk.Combobox(cuadro, values=datos["entradas"], textvariable=microfono,
+                     width=40, state="readonly").pack(fill="x", pady=(5, 10))
+        ttk.Label(cuadro, text="Salida: predeterminada de MX Linux").pack(anchor="w")
+        for dispositivo in datos["salidas"]:
+            ttk.Label(cuadro, text=dispositivo, wraplength=340).pack(anchor="w")
+        ttk.Button(cuadro, text="Listo", command=panel.destroy).pack(anchor="e", pady=(8, 0))
+
+    def mostrar_texto(texto):
+        salida.configure(state="normal")
+        salida.delete("1.0", "end")
+        salida.insert("end", texto)
+        salida.configure(state="disabled")
+
     def actualizar():
+        nonlocal ultima_respuesta
         while not eventos.empty():
             tipo, valor = eventos.get()
             if tipo == "vista":
@@ -272,21 +376,47 @@ def escritorio(sesion):
                 elif valor != "escritorio" and ventana.state() != "withdrawn":
                     ventana.withdraw()
             elif tipo == "respuesta":
-                nucleo_visual.procesando(False)
-                salida.configure(state="normal")
-                salida.delete("1.0", "end")
-                salida.insert("end", valor)
-                salida.configure(state="disabled")
-                entrada.configure(state="normal")
+                ultima_respuesta = valor
+                mostrar_texto(valor)
+                cambiar_estado("Disponible")
+                if voz_activada:
+                    hablar_respuesta(valor)
+            elif tipo == "dictado":
+                cambiar_estado("Disponible")
+                if valor:
+                    entrada.delete(0, "end")
+                    entrada.insert(0, valor)
+                    entrada.focus_set()
+                    mostrar_texto("Revisa lo que has dictado y pulsa Enter para enviarlo.")
+                else:
+                    mostrar_texto("No reconocí palabras. Puedes volver a dictar o escribir tu petición.")
+            elif tipo == "error de voz":
+                mostrar_texto(valor)
+                cambiar_estado("Disponible")
+            elif tipo == "audio listo":
+                cambiar_estado("Disponible")
+            elif tipo == "dispositivos":
+                cambiar_estado("Disponible")
+                elegir_audio(valor)
         ventana.after(150, actualizar)
 
     def cerrar():
+        cancelar_audio.set()
         detenido.set()
         ventana.destroy()
 
+    boton_dictar = tk.Button(barra_voz, text="Dictar · 5 s", command=dictar, bg="#25434b",
+                             fg="#e6faf5", relief="flat", padx=10, pady=4)
+    boton_leer = tk.Button(barra_voz, text="Voz apagada", command=alternar_voz, bg="#25434b",
+                           fg="#e6faf5", relief="flat", padx=10, pady=4)
+    boton_audio = tk.Button(barra_voz, text="Audio", command=audio, bg="#25434b", fg="#e6faf5",
+                            relief="flat", padx=10, pady=4)
+    boton_dictar.pack(side="left", padx=4, pady=(0, 4))
+    boton_leer.pack(side="left", padx=4, pady=(0, 4))
+    boton_audio.pack(side="left", padx=4, pady=(0, 4))
     entrada.bind("<Return>", enviar)
     for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
-                           ("Terminal", lanzar_terminal), ("Universe", lambda: abrir(sesion, "universe"))):
+                           ("Terminal", lanzar_terminal), ("Universe", lanzar_universe)):
         tk.Button(barra, text=nombre, command=accion, bg="#25434b", fg="#e6faf5",
                   activebackground="#38635f", activeforeground="#ffffff", relief="flat",
                   padx=9, pady=5, borderwidth=0).pack(side="left", padx=4)
@@ -296,7 +426,7 @@ def escritorio(sesion):
     ventana.mainloop()
 
 
-def abrir_studio_local(sesion):
+def abrir_studio_local(sesion, vista="proyecto"):
     from universe.studio import abrir_studio
 
     directorio = carpeta()
@@ -305,11 +435,13 @@ def abrir_studio_local(sesion):
         try:
             fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            solicitud.touch(mode=0o600)
+            temporal = directorio / f"studio.{os.getpid()}.tmp"
+            temporal.write_text(vista, encoding="ascii")
+            temporal.replace(solicitud)
             return
         solicitud.unlink(missing_ok=True)
         lanzar_acompanante()
-        abrir_studio(sesion, solicitud=solicitud)
+        abrir_studio(sesion, solicitud=solicitud, inicial=vista)
 
 
 def apagar():
@@ -343,8 +475,8 @@ def main():
             sesion = conectar()
             if modo == "terminal":
                 terminal(sesion)
-            elif modo == "studio":
-                abrir_studio_local(sesion)
+            elif modo in ("studio", "universe"):
+                abrir_studio_local(sesion, vista="universe" if modo == "universe" else "proyecto")
             elif not abrir(sesion, modo):
                 raise RuntimeError("No se pudo abrir el navegador predeterminado.")
     except (OSError, ImportError, RuntimeError, ValueError) as exc:

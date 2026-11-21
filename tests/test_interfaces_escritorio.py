@@ -238,3 +238,46 @@ def test_acciones_desde_chat_requieren_clave_y_lanzador_local(nucleo):
         servidor.shutdown()
         hilo.join(timeout=2)
         servidor.server_close()
+
+
+def test_busqueda_documento_local_y_ambiguedad(nucleo, tmp_path, monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    docs = tmp_path / "Documentos"
+    docs.mkdir()
+    (docs / "cálculo.txt").write_text("El experimento duró dos horas.", encoding="utf-8")
+    assert "requiere el lanzador local" in nucleo.conversar("Busca un documento calculo")["respuesta"]
+    nucleo.documentos_usuario = True
+    assert "El experimento duró dos horas." in nucleo.conversar("Busca un documento calculo")["respuesta"]
+    assert not any("dos horas" in turno["texto"] for turno in nucleo.historial()["turnos"])
+    (docs / "modelo azul.txt").touch()
+    (docs / "modelo gris.txt").touch()
+    assert "varios" in nucleo.conversar("Busca el documento modelo")["respuesta"]
+    (docs / "privado.txt").symlink_to(tmp_path / "otro.txt")
+    (tmp_path / "otro.txt").write_text("Fuera del directorio.")
+    assert "No encontré" in nucleo.conversar("Busca un documento privado")["respuesta"]
+
+
+def test_lanzador_local_conserva_un_solo_chat_web(nucleo):
+    from threading import Thread
+    from urllib.request import urlopen
+    from universe.lanzador import api
+    from universe.servidor import crear_servidor
+
+    try:
+        servidor = crear_servidor(0, nucleo, "clave", abrir_estudio=lambda: True, abrir_universe=lambda: True)
+    except PermissionError:
+        pytest.skip("El entorno no permite sockets de loopback.")
+    hilo = Thread(target=servidor.serve_forever)
+    hilo.start()
+    try:
+        base = f"http://127.0.0.1:{servidor.server_port}"
+        for vista in ("/", "/studio", "/universe"):
+            with urlopen(base + vista, timeout=3) as respuesta:
+                assert respuesta.url == base + "/chat"
+        assert api({"url": base, "token": "clave"}, "escritorio", {"accion": "universe"}) == {"solicitado": True}
+    finally:
+        servidor.shutdown()
+        hilo.join(timeout=2)
+        servidor.server_close()

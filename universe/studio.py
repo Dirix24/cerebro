@@ -18,7 +18,7 @@ TEXTO = "#e9f3f6"
 ACENTO = "#9fead9"
 
 
-def abrir_studio(sesion, solicitud=None):
+def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     try:
         app = Tk()
     except TclError as exc:
@@ -30,10 +30,16 @@ def abrir_studio(sesion, solicitud=None):
     estilo = ttk.Style(app)
     estilo.theme_use("clam")
     estilo.configure(".", background=FONDO, foreground=TEXTO, fieldbackground=PANEL)
-    estilo.configure("TButton", background=PANEL, foreground=TEXTO, padding=(9, 6))
+    estilo.configure("TButton", background="#1e2e3a", foreground=TEXTO, padding=(10, 6),
+                     borderwidth=0, bordercolor=FONDO, lightcolor=FONDO, darkcolor=FONDO)
+    estilo.configure("TNotebook", background=FONDO, borderwidth=0)
+    estilo.configure("TNotebook.Tab", background="#202d3a", foreground=TEXTO, padding=(13, 7))
+    estilo.map("TNotebook.Tab", background=[("selected", "#284653")],
+               foreground=[("selected", ACENTO)])
     estilo.map("TButton", background=[("active", "#263d4a")])
     estilo.configure("Titulo.TLabel", font=("TkDefaultFont", 17, "bold"), foreground=ACENTO)
-    estilo.configure("TEntry", fieldbackground=PANEL, foreground=TEXTO, insertcolor=TEXTO)
+    estilo.configure("TEntry", fieldbackground=PANEL, foreground=TEXTO, insertcolor=TEXTO,
+                     bordercolor="#36515f", lightcolor=PANEL, darkcolor=PANEL)
     estilo.configure("TPanedwindow", background=FONDO)
 
     estado = StringVar(value="Conectando con Cerebro…")
@@ -84,7 +90,6 @@ def abrir_studio(sesion, solicitud=None):
     boton(cabecera, "Terminal", lanzar_terminal)
     boton(cabecera, "Acompañante", app.iconify)
     boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"))
-    boton(cabecera, "Universe web", lambda: abrir(sesion, "universe"))
     paginas = ttk.Notebook(app)
     paginas.pack(fill=BOTH, expand=True, padx=14, pady=4)
     cuerpo = ttk.Panedwindow(paginas, orient="horizontal")
@@ -231,10 +236,16 @@ def abrir_studio(sesion, solicitud=None):
                 lanzar_acompanante()
 
     def pulso():
-        if solicitud is not None and solicitud.exists():
-            solicitud.unlink(missing_ok=True)
-            app.deiconify()
-            app.lift()
+        if solicitud is not None:
+            try:
+                destino = solicitud.read_text(encoding="ascii")
+            except FileNotFoundError:
+                destino = None
+            if destino is not None:
+                solicitud.unlink(missing_ok=True)
+                paginas.select(mapa if destino == "universe" else cuerpo)
+                app.deiconify()
+                app.lift()
         if visible:
             informar()
         if tareas_en_curso:
@@ -278,6 +289,8 @@ def abrir_studio(sesion, solicitud=None):
     app.bind("<Map>", lambda evento: visibilidad(evento, True))
     app.bind("<Unmap>", lambda evento: visibilidad(evento, False))
     app.protocol("WM_DELETE_WINDOW", cerrar)
+    if inicial == "universe":
+        paginas.select(mapa)
     actualizar_archivos()
     publicar(lambda: pedir("historial"), lambda datos: mostrar(salida, "\n".join(
         f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}"
