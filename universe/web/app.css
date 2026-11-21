@@ -61,6 +61,9 @@ footer { margin-top: 1rem; border-top: 1px solid var(--linea); padding-top: .65r
 [data-interfaz="estudio"] { background: radial-gradient(ellipse at top right, #14333b, #10151c 52%); min-height: 100vh; }
 [data-interfaz="estudio"] .editor { box-shadow: 0 0 0 1px #78e4bd22; }
 [data-interfaz="estudio"] .titulo h1 { letter-spacing: -.065em; color: #c4fae9; }
+#mensaje { min-height: 3.6rem; max-height: 38vh; min-width: 0; font: inherit; }
+#estado-chat { color: var(--muted); font-size: .88rem; }
+.herramientas-chat { gap: .45rem; }
 #video-adjunto { width: 100%; max-height: 250px; background: #0b151a; border-radius: 8px; }
 #mensajes a { color: #a3e3d1; text-underline-offset: .15em; }
 #inicio-chat, .inicio-sugerencias { display: none; }
@@ -136,7 +139,7 @@ footer { margin-top: 1rem; border-top: 1px solid var(--linea); padding-top: .65r
   border-radius: 6px 6px 16px 16px;
   background: #fffdf7;
 }
-[data-interfaz="chat"] #chat input { border-color: transparent; background: #fffdf7; }
+[data-interfaz="chat"] #chat textarea { border-color: transparent; background: #fffdf7; }
 [data-interfaz="chat"] #chat button { background: #7c412e; color: #fff9ed; }
 [data-interfaz="chat"] #aviso { color: #7c412e; }
 @media (max-width: 720px) {
@@ -148,4 +151,5 @@ footer { margin-top: 1rem; border-top: 1px solid var(--linea); padding-top: .65r
   }
   [data-interfaz="chat"] .accesos-escritorio { flex-flow: row wrap; align-items: center; }
   [data-interfaz="chat"] #conexion { display: none; }
+  [data-interfaz="chat"] #mensajes { height: clamp(170px, 40dvh, 400px); }
 }

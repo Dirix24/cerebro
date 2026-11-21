@@ -12,10 +12,10 @@ from urllib.parse import quote
 from universe.lanzador import api, abrir, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
-FONDO = "#121920"
-PANEL = "#17242e"
+FONDO = "#101827"
+PANEL = "#18263a"
 TEXTO = "#e9f3f6"
-ACENTO = "#9fead9"
+ACENTO = "#9fcaff"
 
 
 def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
@@ -44,6 +44,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     estado = StringVar(value="Conectando con Cerebro…")
     ruta = StringVar()
+    filtro_archivos = StringVar()
+    inventario = []
     entrada = StringVar()
     pendientes = SimpleQueue()
     tareas_en_curso = set()
@@ -113,9 +115,14 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cuerpo.add(codigo, weight=4)
     cuerpo.add(chat, weight=3)
 
-    ttk.Label(archivos, text="Archivos del proyecto").pack(anchor="w", pady=(0, 7))
+    ttk.Label(archivos, text="Filtrar archivos").pack(anchor="w", pady=(0, 5))
+    buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
+    buscador.pack(fill=X, pady=(0, 7))
     lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#346355",
                     relief="flat", highlightthickness=0, exportselection=False)
+    desplazamiento_archivos = ttk.Scrollbar(archivos, command=lista.yview)
+    lista.configure(yscrollcommand=desplazamiento_archivos.set)
+    desplazamiento_archivos.pack(side="right", fill=Y)
     lista.pack(fill=BOTH, expand=True)
     barra_archivos = ttk.Frame(archivos)
     barra_archivos.pack(fill=X)
@@ -134,11 +141,19 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     barra_chat.pack(fill=X)
     ttk.Label(app, textvariable=estado, padding=(16, 7), anchor="w").pack(fill=X)
 
+    def filtrar_archivos(*_args):
+        filtro = filtro_archivos.get().strip().casefold()
+        lista.delete(0, END)
+        for nombre in inventario:
+            if filtro in nombre.casefold():
+                lista.insert(END, nombre)
+
+    filtro_archivos.trace_add("write", filtrar_archivos)
+
     def actualizar_archivos():
         def cargar(datos):
-            lista.delete(0, END)
-            for nombre in datos["archivos"]:
-                lista.insert(END, nombre)
+            inventario[:] = datos["archivos"]
+            filtrar_archivos()
         publicar(lambda: pedir("archivos"), cargar)
 
     def cargar_archivo(_evento=None):
@@ -236,6 +251,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 lanzar_acompanante()
 
     def pulso():
+        nonlocal temporizador_pulso
         if solicitud is not None:
             try:
                 destino = solicitud.read_text(encoding="ascii")
@@ -255,9 +271,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                         mostrar(salida, "\nValidación · " + tarea["salida"] + "\n", anexar=True)
                         tareas_en_curso.remove(tarea["id"])
             publicar(lambda: pedir("tareas"), mostrar_tareas)
-        app.after(2000, pulso)
+        temporizador_pulso = app.after(2000, pulso)
 
     def procesar():
+        nonlocal temporizador_cola
         while True:
             try:
                 terminado, datos, error = pendientes.get_nowait()
@@ -267,7 +284,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 estado.set(error)
             else:
                 terminado(datos)
-        app.after(75, procesar)
+        temporizador_cola = app.after(75, procesar)
 
     def cerrar():
         nonlocal generacion
@@ -276,15 +293,29 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         generacion += 1
         with presencia, suppress(OSError, RuntimeError):
             api(sesion, "interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
+        app.after_cancel(temporizador_cola)
+        app.after_cancel(temporizador_pulso)
         app.destroy()
 
     boton(barra_archivos, "Actualizar", actualizar_archivos)
-    boton(barra_editor, "Guardar", guardar)
+    boton(barra_editor, "Guardar · Ctrl+S", guardar)
     boton(barra_editor, "Validar Python", revisar)
     boton(barra_chat, "Enviar", enviar)
     boton(barra_chat, "Adjuntar", adjuntar)
     lista.bind("<<ListboxSelect>>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())
+
+    def guardar_atajo(_evento):
+        guardar()
+        return "break"
+
+    def buscar_atajo(_evento):
+        paginas.select(cuerpo)
+        buscador.focus_set()
+        return "break"
+
+    app.bind("<Control-s>", guardar_atajo)
+    app.bind("<Control-p>", buscar_atajo)
     app.bind("<FocusIn>", lambda evento: informar(True) if evento.widget is app and visible else None)
     app.bind("<Map>", lambda evento: visibilidad(evento, True))
     app.bind("<Unmap>", lambda evento: visibilidad(evento, False))
@@ -298,7 +329,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     ) + "\n", anexar=True))
     publicar(lambda: pedir("estado"), lambda _: estado.set("Núcleo conectado"))
     informar(True)
-    app.after(75, procesar)
-    app.after(2000, pulso)
+    temporizador_cola = app.after(75, procesar)
+    temporizador_pulso = app.after(2000, pulso)
     consulta.focus_set()
     app.mainloop()

@@ -38,6 +38,7 @@ let formas = [];
 let trazo = null;
 let canvasCargado = false;
 let sondeoOcupado = false;
+let chatOcupado = false;
 
 async function api(ruta, datos) {
   const headers = {Authorization: "Bearer " + token};
@@ -204,21 +205,40 @@ function agregarMensaje(rol, texto) {
 }
 
 async function conversar(texto) {
+  if (chatOcupado) return false;
+  chatOcupado = true;
+  const controles = [$("enviar-chat"), ...document.querySelectorAll("[data-chat]")];
+  controles.forEach(control => { control.disabled = true; });
+  $("estado-chat").hidden = false;
   activarVista();
-  $("sugerencias-chat").hidden = true;
-  agregarMensaje("Tú", texto);
-  const salida = await api("chat", {mensaje: texto, modo: modoWeb});
-  agregarMensaje("Cerebro", salida.respuesta);
-  if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/studio#" + token);
+  try {
+    const salida = await api("chat", {mensaje: texto, modo: modoWeb});
+    $("sugerencias-chat").hidden = true;
+    agregarMensaje("Tú", texto);
+    agregarMensaje("Cerebro", salida.respuesta);
+    if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/studio#" + token);
+    return true;
+  } finally {
+    chatOcupado = false;
+    controles.forEach(control => { control.disabled = false; });
+    $("estado-chat").hidden = true;
+  }
 }
 
+const compositor = $("mensaje");
+compositor.addEventListener("keydown", evento => {
+  if (evento.key === "Enter" && !evento.shiftKey && !evento.isComposing) {
+    evento.preventDefault();
+    if (!chatOcupado) $("chat").requestSubmit($("enviar-chat"));
+  }
+});
 $("chat").addEventListener("submit", evento => {
   evento.preventDefault();
-  const texto = $("mensaje").value.trim();
-  if (!texto) return;
-  ejecutar(evento.submitter, async () => {
-    await conversar(texto);
-    if ($("mensaje").value.trim() === texto) $("mensaje").value = "";
+  const borrador = compositor.value;
+  const texto = borrador.trim();
+  if (!texto || chatOcupado) return;
+  ejecutar($("enviar-chat"), async () => {
+    if (await conversar(texto) && compositor.value === borrador) compositor.value = "";
   });
 });
 for (const elemento of document.querySelectorAll("[data-chat]"))
@@ -271,7 +291,9 @@ $("adjunto").addEventListener("change", async () => {
     const salida = await api("adjunto", {nombre: archivo.name, contenido});
     aviso("Adjunto disponible: " + salida.nombre);
     if (!/\.(?:srt|vtt)$/i.test(salida.nombre)) {
-      await conversar("Analiza " + salida.nombre);
+      if (!await conversar("Analiza " + salida.nombre)) {
+        aviso("Adjunto disponible. Cuando termine la consulta, escribe «Analiza " + salida.nombre + "».");
+      }
     }
   } catch (error) { aviso(error.message); }
   finally { $("adjunto").value = ""; }

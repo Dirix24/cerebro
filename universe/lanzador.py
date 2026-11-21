@@ -200,24 +200,40 @@ def terminal(sesion):
     renovador.start()
     acento = "\033[38;5;79m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
     fin = "\033[0m" if acento else ""
-    print(f"{acento}╭─ Cerebro · Terminal ──────────────────╮{fin}")
-    print("  Programación · Revisa un archivo, pide una función o abre Studio.")
-    print("  «Salir» devuelve el foco al acompañante.")
-    try:
-        for turno in api(sesion, "historial")["turnos"][-4:]:
+    def mostrar_historial(limite):
+        for turno in api(sesion, "historial")["turnos"][-limite:]:
             print(f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}")
+
+    accesos = {
+        "/studio": lanzar_estudio,
+        "/web": lambda: abrir(sesion, "chat"),
+    }
+    print(f"{acento}Cerebro Terminal{fin}  ·  {Path.cwd()}")
+    print("  /studio   /web   /historial   /ayuda   /salir")
+    if sys.stdin.isatty():
+        with contextlib.suppress(ImportError):
+            __import__("readline")
+    try:
         while True:
-            entrada = input(f"{acento}❯{fin} ").strip()
-            if entrada.casefold() in {"salir", "/salir", "adiós", "adios"}:
+            entrada = input(f"{acento}cerebro ›{fin} ").strip()
+            comando = entrada.casefold()
+            if comando in {"salir", "/salir", "adiós", "adios"}:
                 break
             if not entrada:
                 continue
             try:
                 presencia(True, enfocar=True)
+                if comando == "/historial":
+                    mostrar_historial(12)
+                    continue
+                if comando in accesos:
+                    if not accesos[comando]():
+                        print("No se pudo abrir la interfaz desde esta sesión.", file=sys.stderr)
+                    continue
                 respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal"})
                 print(respuesta["respuesta"])
                 if respuesta.get("abrir") == "studio":
-                    abrir(sesion, "studio")
+                    lanzar_estudio()
             except (OSError, RuntimeError) as exc:
                 print(exc, file=sys.stderr)
     except (KeyboardInterrupt, EOFError):
@@ -392,6 +408,12 @@ def escritorio(sesion):
         elif not ocupado:
             hablar_respuesta(ultima_respuesta)
 
+    def copiar_respuesta():
+        if ultima_respuesta:
+            ventana.clipboard_clear()
+            ventana.clipboard_append(ultima_respuesta)
+            aviso.set("Respuesta copiada.")
+
     def audio():
         from core.local_voice import dispositivos_audio
         cambiar_estado("Detectando audio")
@@ -477,9 +499,11 @@ def escritorio(sesion):
                            ("Terminal", lanzar_terminal), ("Universe", lanzar_universe)):
         menu_acciones.add_command(label=nombre, command=accion)
     menu_acciones.add_separator()
+    menu_acciones.add_command(label="Copiar respuesta", command=copiar_respuesta)
     menu_acciones.add_command(label="Elegir audio", command=audio)
     accesos.configure(menu=menu_acciones)
     accesos.pack(side="right")
+    ventana.bind("<Escape>", lambda _evento: alternar_panel() if not compacto else None)
     ventana.protocol("WM_DELETE_WINDOW", cerrar)
     Thread(target=observar, daemon=True).start()
     ventana.after(150, actualizar)
