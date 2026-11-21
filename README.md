@@ -65,6 +65,10 @@ En X11 puedes decir «Enfócame el navegador», «Maximiza Blender», «Minimiza
 
 «Cierra LibreOffice» y «Cierra todas las ventanas de LibreOffice» requieren **Confirmar cierre** desde la conversación que inició la operación. Se envía una solicitud de cierre normal. Si una ventana sigue abierta, revisa si la aplicación pide guardar cambios. Puedes encadenar órdenes de aplicaciones y ventanas, como «Enfoca Blender, minimiza el navegador y pon LibreOffice delante». La secuencia pausa ante una selección o confirmación y se detiene si un paso falla.
 
+«Cierra todo menos el navegador» muestra qué ventanas cerraría y cuáles conservaría. El cierre general incluye ventanas normales de aplicaciones identificadas y conserva navegadores, terminales, componentes del sistema y ventanas de Cerebro. Tras la confirmación, se detiene en la primera ventana que siga abierta, por ejemplo si pide guardar un documento.
+
+Puedes acotar la búsqueda por extensión con «Busca documentos ODT de física» o «Busca archivos con extensión .blend». Cerebro consulta las carpetas autorizadas.
+
 El control de ventanas requiere X11, `wmctrl`, `xdotool` y `xprop`. En Wayland se necesita un adaptador del compositor.
 
 **Modo táctil experimental.** En el panel local selecciona tu cámara y autorízala. **Ver cámara** muestra los puntos detectados y pausa el puntero. **Dibujar figura** permite trazar un contorno con una pinza. **Convertir a 3D** le da grosor y **Guardar OBJ** exporta la malla. **Pausar** libera la cámara.

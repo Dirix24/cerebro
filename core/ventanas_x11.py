@@ -33,6 +33,17 @@ def listar():
     return ventanas
 
 
+def admite_cierre_general(ventana):
+    """La lista EWMH también contiene ventanas especiales del escritorio."""
+    if not ventana["pid"].isdigit() or int(ventana["pid"]) <= 1:
+        return False
+    propiedades = _ejecutar("xprop", "-id", ventana["id"],
+                            "_NET_WM_WINDOW_TYPE", "WM_TRANSIENT_FOR")
+    tipo = re.search(r"^_NET_WM_WINDOW_TYPE\(ATOM\) = (.+)$", propiedades, re.M)
+    transitoria = re.search(r"^WM_TRANSIENT_FOR\(WINDOW\):", propiedades, re.M)
+    return bool(tipo and tipo[1].strip() == "_NET_WM_WINDOW_TYPE_NORMAL" and not transitoria)
+
+
 def activa(ventanas=None):
     if ventanas is None:
         ventanas = listar()

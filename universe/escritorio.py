@@ -1,5 +1,6 @@
 """Tareas de escritorio compartidas por los clientes del núcleo."""
 from collections import OrderedDict
+import os
 from pathlib import Path
 import re
 from time import monotonic, sleep
@@ -139,8 +140,13 @@ class Escritorio:
             self._autorizar()
             self.pendientes.pop(cliente, None)
             accion, nombre = control
-            if accion == "cierra" and re.match(r"^(?:todo\b|todas las ventanas(?: de trabajo)?$)", nombre):
-                return "El cierre general está pendiente. Indica el nombre de una aplicación o ventana."
+            general = re.fullmatch(
+                r"(?:todo(?: menos (.+)| y deja cerebro funcionando)?|todas las ventanas de trabajo)", nombre
+            ) if accion == "cierra" else None
+            if general:
+                return self._preparar_cierre_general(cliente, general[1])
+            if accion == "cierra" and nombre.startswith("todo "):
+                return "Para el cierre general, indica qué aplicación quieres conservar."
             ventanas = ventanas_x11.listar()
             grupo = re.fullmatch(r"todas las ventanas de (.+)", nombre) if accion == "cierra" else None
             if grupo:
@@ -215,6 +221,59 @@ class Escritorio:
             return "Elige una aplicación por número o responde «Cancelar».\n" + "\n".join(
                 f"{i}. {app['nombre']}" for i, app in enumerate(candidatas[:12], 1))
         return None
+
+    def _preparar_cierre_general(self, cliente, excepcion):
+        self._autorizar_escritura()
+        ventanas = ventanas_x11.listar()
+        aplicaciones = [app for app in aplicaciones_linux.listar() if app.get("id")]
+        conservar = []
+        if excepcion in {"el navegador", "navegador", "tu", "cerebro"}:
+            # Los navegadores pueden alojar un cliente de Cerebro.
+            excepcion = None
+        if excepcion:
+            apps = buscar(excepcion, aplicaciones, etiquetas)
+            if len(apps) != 1:
+                return "No pude identificar la excepción con seguridad. Indica el nombre de la aplicación."
+            conservar = self._ventanas_de_app(apps[0], ventanas)
+
+        candidatas = []
+        excluidas = []
+        for ventana in ventanas:
+            razon = self._motivo_proteccion(ventana, aplicaciones, conservar)
+            if razon:
+                excluidas.append(f'• {ventana["titulo"]} ({razon})')
+            else:
+                candidatas.append(ventana)
+        exclusiones = "\nConservaré:\n" + "\n".join(excluidas) if excluidas else ""
+        if not candidatas:
+            return "No identifiqué ventanas de trabajo aptas para el cierre general." + exclusiones
+        self._guardar_pendiente(cliente, cierres=candidatas, general=True)
+        nombres = "\n".join(f'• {v["titulo"]}' for v in candidatas)
+        return ("Solicitaré el cierre normal de estas ventanas:\n" + nombres + exclusiones +
+                "\nRevisa si hay documentos sin guardar o tareas activas. "
+                "Responde «Confirmar cierre» o «Cancelar».")
+
+    def _motivo_proteccion(self, ventana, aplicaciones, conservar):
+        if ventana in conservar:
+            return "excepción solicitada"
+        if ventana["pid"] == str(os.getpid()) or any(
+                "cerebro" in ventana[campo].casefold() for campo in ("clase", "titulo")):
+            return "cliente de Cerebro"
+        compatibles = [app for app in aplicaciones if self._ventanas_de_app(app, [ventana])]
+        if not compatibles:
+            return "aplicación sin identificar"
+        for app in compatibles:
+            categorias = set(app.get("categorias", []))
+            formatos = set(app.get("formatos", []))
+            if (categorias.intersection({"TerminalEmulator", "WebBrowser", "System", "Settings"})
+                    or formatos.intersection({"x-scheme-handler/http", "x-scheme-handler/https"})):
+                return "navegador, terminal o componente del sistema"
+        try:
+            if ventanas_x11.admite_cierre_general(ventana):
+                return None
+        except RuntimeError:
+            return "la ventana cambió durante la consulta"
+        return "ventana especial o proceso no identificado"
 
     def _secuencia(self, pasos, cliente):
         respuestas = []
@@ -300,6 +359,8 @@ class Escritorio:
                     escritorio += " Faltan utilidades de control: " + ", ".join(faltan) + "."
                 if not self.nucleo.agente.tiene_permisos("WRITE"):
                     escritorio += " Cierre bloqueado por permisos: WRITE."
+                elif which("xprop"):
+                    escritorio += " Cierre general selectivo disponible con confirmación."
             except RuntimeError as exc:
                 escritorio = f"Control de ventanas no disponible: {exc}"
             lectura_pdf = "disponible" if which("pdftotext") else "bloqueada: falta pdftotext"
@@ -319,8 +380,9 @@ class Escritorio:
         else:
             criterios = dict(primero.argumentos)
             reciente = criterios.pop("reciente", False)
-            caminos, limitado = documentos_usuario.buscar_filtrado(**criterios)
-            nombre = (criterios["tipo"] + " " + criterios.get("nombre", "")).strip()
+            caminos, limitado = documentos_usuario.buscar_filtrado(**criterios, reciente=reciente)
+            formato = next(iter(criterios["extensiones"])) if "extensiones" in criterios else criterios["tipo"]
+            nombre = (formato + " " + criterios.get("nombre", "")).strip()
         if any(paso.herramienta == "resumir_pdf" for paso in resto):
             from subprocess import SubprocessError
             from universe.consultas import _extracto, _leer_texto
@@ -328,7 +390,7 @@ class Escritorio:
             self.nucleo.exigir_permisos("WRITE")
             if limitado or not caminos:
                 return {"respuesta": "No pude identificar con seguridad el PDF más reciente. Acota la búsqueda."}
-            ruta = max(caminos, key=lambda item: item.stat().st_mtime_ns)
+            ruta = caminos[0]
             if not documentos_usuario.permitido(ruta):
                 return {"respuesta": "El PDF dejó de estar disponible."}
             try:
@@ -476,18 +538,24 @@ class Escritorio:
             self._autorizar_escritura()
             self.pendientes.pop(cliente)
             respuestas = []
+            cierres = datos["cierres"]
             completado = True
-            for ventana in datos["cierres"]:
+            for indice, ventana in enumerate(cierres):
                 self._autorizar_escritura()
                 try:
+                    if datos.get("general") and not ventanas_x11.admite_cierre_general(ventana):
+                        raise RuntimeError("La ventana dejó de cumplir las condiciones de cierre general")
                     cerrada = ventanas_x11.actuar("cierra", ventana)
                 except RuntimeError as exc:
-                    respuestas.append(f'«{ventana["titulo"]}»: {exc}')
-                    completado = False
-                    continue
-                estado = "cerrada" if cerrada else "sigue abierta, comprueba si hay un aviso"
+                    cerrada = False
+                    estado = str(exc)
+                else:
+                    estado = "cerrada" if cerrada else "sigue abierta, comprueba si hay un aviso"
                 respuestas.append(f'«{ventana["titulo"]}»: {estado}.')
-                completado &= cerrada
+                if not cerrada:
+                    completado = False
+                    respuestas.extend(f'«{v["titulo"]}»: cierre aún no solicitado.' for v in cierres[indice + 1:])
+                    break
             return self._continuar("\n".join(respuestas), datos.get("resto"), cliente, completado)
         if "cierre" in datos and confirmacion == "confirmar cierre":
             self._autorizar()

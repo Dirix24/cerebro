@@ -172,3 +172,29 @@ def test_x11_identifica_ventana_activa_con_valor_adicional(monkeypatch):
     ventana = {"id": "0x000123"}
     monkeypatch.setattr(ventanas_x11, "_ejecutar", lambda *args: "window id # 0x123, 0x0")
     assert ventanas_x11.activa([ventana]) == ventana
+
+
+def test_cierre_general_protege_clientes_y_detiene_ante_aviso(nucleo, monkeypatch):
+    from core import ventanas_x11
+
+    ventanas = [{"id": hex(i), "pid": str(100 + i), "clase": nombre, "titulo": nombre}
+                for i, nombre in enumerate(("Bloc", "Dibujo", "Navegador", "Panel", "Cerebro Studio"))]
+    apps = [{"id": nombre + ".desktop", "nombre": nombre, "formatos": [],
+             "categorias": categorias}
+            for nombre, categorias in (("Bloc", []), ("Dibujo", []), ("Navegador", ["WebBrowser"]))]
+    operaciones = []
+    monkeypatch.setattr(ventanas_x11, "listar", lambda: ventanas)
+    monkeypatch.setattr(ventanas_x11, "admite_cierre_general", lambda _: True)
+    monkeypatch.setattr(aplicaciones_linux, "listar", lambda: apps)
+    monkeypatch.setattr(ventanas_x11, "actuar", lambda accion, ventana: operaciones.append(ventana["titulo"]) or False)
+    cliente = "a" * 24
+    respuesta = nucleo.conversar("Cierra todo menos el navegador", cliente=cliente)["respuesta"]
+    previstas, conservadas = respuesta.split("Conservaré:")
+    assert "Bloc" in previstas and "Dibujo" in previstas
+    assert all(nombre in conservadas for nombre in ("Navegador", "Panel", "Cerebro Studio"))
+    assert not operaciones
+    nucleo.conversar("Confirmar cierre", cliente="b" * 24)
+    assert not operaciones
+    resultado = nucleo.conversar("Confirmar cierre", cliente=cliente)["respuesta"]
+    assert operaciones == ["Bloc"]
+    assert "sigue abierta" in resultado and "cierre aún no solicitado" in resultado

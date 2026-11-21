@@ -74,7 +74,8 @@ TIPOS = {
 }
 
 
-def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None, *, extensiones=None):
+def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None, *,
+                    extensiones=None, reciente=False, limite_resultados=12):
     """Consulta metadatos dentro de ámbitos existentes, con inventario acotado."""
     from datetime import datetime, time, timedelta
     from difflib import SequenceMatcher
@@ -126,7 +127,10 @@ def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None, 
         if limitado:
             break
     resultados.sort(key=lambda dato: (-dato[0], -dato[1], str(dato[2])))
-    return [ruta for _, _, ruta in resultados[:12]], limitado or len(resultados) > 12
+    if reciente:
+        return [ruta for _, _, ruta in resultados[:1]], limitado
+    return ([ruta for _, _, ruta in resultados[:limite_resultados]],
+            limitado or len(resultados) > limite_resultados)
 
 
 def buscar_por_contenido(termino, hogar=None):
@@ -134,7 +138,8 @@ def buscar_por_contenido(termino, hogar=None):
     objetivo = _normalizar(termino.strip())
     if len(objetivo) < 3 or len(objetivo) > 120:
         raise ValueError("Indica entre 3 y 120 caracteres para buscar en el contenido.")
-    rutas, limitado = buscar_filtrado("documentos", hogar=hogar, extensiones={".txt", ".md"})
+    rutas, limitado = buscar_filtrado("documentos", hogar=hogar,
+                                      extensiones={".txt", ".md"}, limite_resultados=128)
     resultados = []
     for ruta in rutas:
         if not permitido(ruta, hogar):
@@ -149,4 +154,4 @@ def buscar_por_contenido(termino, hogar=None):
             limitado = True
         if objetivo in _normalizar(datos[:64 * 1024].decode("utf-8", errors="replace")):
             resultados.append(ruta)
-    return resultados, limitado
+    return resultados[:12], limitado or len(resultados) > 12

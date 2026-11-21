@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import re
 from urllib.parse import urlencode, urlsplit
 
-from core.documentos_usuario import _normalizar
+from core.documentos_usuario import TIPOS, _normalizar
 
 
 @dataclass(frozen=True)
@@ -65,16 +65,31 @@ def elaborar(pregunta):
         return [Paso("buscar_archivos", {"tipo": "blender", "reciente": True}),
                 Paso("abrir_archivo", {})]
 
+    extension = re.fullmatch(
+        r"(busca(?:me)?|encuentra|abre) (?:(?:mis|mi|el|los|un) )?"
+        r"(?:archivos?|documentos?) (?:con extension )?\.?([a-z0-9]{2,8})(?: de (.+))?",
+        normal,
+    )
+    if extension:
+        verbo, formato, nombre = extension.groups()
+        sufijo = "." + formato
+        tipo = next((tipo for tipo, formatos in TIPOS.items() if sufijo in formatos), None)
+        if tipo:
+            pasos = [Paso("buscar_archivos", {"tipo": tipo, "nombre": nombre or "", "extensiones": {sufijo}})]
+            if verbo == "abre":
+                pasos.append(Paso("abrir_archivo", {}))
+            return pasos
+
     archivos = re.fullmatch(
         r"(busca(?:me)?|encuentra|abre|reproduce)\s+"
         r"(?:(?:todos?|todas|mis|mi|el|la|los|las|un|una|este)\s+)*"
-        r"(pdfs?|fotos?|imagenes?|videos?|proyecto de blender|archivos? de blender)"
+        r"(pdfs?|documentos|fotos?|imagenes?|videos?|proyecto de blender|archivos? de blender)"
         r"(?:\s+(.+))?", normal)
     if not archivos:
         return []
     verbo, formato, resto = archivos.groups()
     tipo = ("pdf" if formato.startswith("pdf") else "videos" if formato.startswith("video")
-            else "blender" if "blender" in formato else "fotos")
+            else "blender" if "blender" in formato else "documentos" if formato == "documentos" else "fotos")
     criterio = {}
     nombre = resto or ""
     if nombre.endswith(" esta semana") or nombre == "esta semana":

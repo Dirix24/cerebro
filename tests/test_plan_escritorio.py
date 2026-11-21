@@ -109,3 +109,40 @@ def test_busqueda_por_contenido_es_explicitamente_local(nucleo, tmp_path):
     nucleo.agente.permisos_concedidos.discard("READ")
     with pytest.raises(PermissionError):
         nucleo.conversar(orden)
+
+
+def test_busqueda_reciente_no_confunde_truncado_de_resultados_con_ambito_parcial(tmp_path):
+    import os
+
+    documentos = tmp_path / "Documentos"
+    documentos.mkdir()
+    for indice in range(20):
+        ruta = documentos / f"fisica {indice:02d}.pdf"
+        ruta.touch()
+        os.utime(ruta, (1700000000 + indice, 1700000000 + indice))
+    rutas, limitado = documentos_usuario.buscar_filtrado("pdf", "fisica", hogar=tmp_path, reciente=True)
+    assert not limitado
+    assert [ruta.name for ruta in rutas] == ["fisica 19.pdf"]
+
+
+def test_busqueda_por_contenido_revisa_mas_de_doce_archivos(tmp_path):
+    import os
+
+    documentos = tmp_path / "Documentos"
+    documentos.mkdir()
+    for indice in range(20):
+        ruta = documentos / f"nota {indice:02d}.txt"
+        ruta.write_text("hallazgo importante" if indice == 0 else "otra nota")
+        os.utime(ruta, (1700000000 + indice, 1700000000 + indice))
+    rutas, limitado = documentos_usuario.buscar_por_contenido("hallazgo importante", hogar=tmp_path)
+    assert not limitado
+    assert [ruta.name for ruta in rutas] == ["nota 00.txt"]
+
+
+def test_busqueda_por_extension_con_tema(nucleo, tmp_path):
+    documentos = tmp_path / "Documentos"
+    (documentos / "física.odt").touch()
+    (documentos / "física.docx").touch()
+    respuesta = nucleo.conversar("Busca documentos ODT de física")["respuesta"]
+    assert "física.odt" in respuesta
+    assert "física.docx" not in respuesta
