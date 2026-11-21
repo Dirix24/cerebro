@@ -30,6 +30,10 @@ def abrir_documento(ruta):
     return _gio("abrir", str(ruta))
 
 
+def aplicaciones_compatibles(ruta):
+    return _gio("compatibles", str(ruta))
+
+
 def lanzar_aplicacion(identificador):
     return _gio("lanzar", identificador)
 
@@ -58,6 +62,9 @@ def _ejecutar(accion, valor):
 
     archivo = Gio.File.new_for_path(valor)
     formato, _ = Gio.content_type_guess(archivo.get_basename(), None)
+    if accion == "compatibles":
+        return {"formato": formato, "aplicaciones": [app.get_display_name()
+                for app in Gio.AppInfo.get_all_for_type(formato) if app.should_show()][:20]}
     aplicacion = Gio.AppInfo.get_default_for_type(formato, False)
     if aplicacion is None:
         return {"formato": formato, "aceptado": False, "aplicacion": None}
@@ -71,6 +78,6 @@ def _ejecutar(accion, valor):
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 3 or sys.argv[1] not in {"listar", "abrir", "lanzar"}:
+    if len(sys.argv) != 3 or sys.argv[1] not in {"listar", "abrir", "lanzar", "compatibles"}:
         sys.exit(2)
     print(json.dumps(_ejecutar(*sys.argv[1:]), ensure_ascii=False))

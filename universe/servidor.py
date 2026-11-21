@@ -19,7 +19,7 @@ ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/htm
 
 
 def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
-                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None, abrir_tactil=None):
+                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None, abrir_tactil=None, abrir_url=None):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -108,6 +108,11 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
             if resultado.get("abrir") == "tactil" and abrir_tactil is not None and abrir_tactil():
                 resultado["respuesta"] = "Solicité el modo táctil. Elige una cámara y autoriza su uso en la ventana local."
+            if "abrir_url" in resultado and abrir_url is not None:
+                url = resultado["abrir_url"]
+                abierto = abrir_url(url)
+                resultado["respuesta"] = (("El navegador aceptó abrir el enlace." if abierto
+                                           else "El navegador no aceptó la apertura.") + "\n" + url)
             destino = resultado.get("abrir")
             if destino in ("navegador", "youtube", "steam") and abrir_destino is not None:
                 abierto = abrir_destino(destino)

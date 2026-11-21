@@ -337,6 +337,9 @@ class Nucleo:
             consulta = self.conversar("Investiga " + tema, modo=modo, cliente=cliente)
             return {"respuesta": consulta["respuesta"], "abrir": "navegador", "conservar_respuesta": True}
         if comando == "":
+            plan = self.escritorio.planificar(pregunta, cliente)
+            if plan is not None:
+                return plan
             resultado_escritorio = self.escritorio.consultar(pregunta, cliente)
             if resultado_escritorio is not None:
                 return {"respuesta": resultado_escritorio}

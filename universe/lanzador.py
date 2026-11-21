@@ -112,7 +112,8 @@ def nucleo():
     token = secrets.token_urlsafe(32)
     with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio,
                          abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante,
-                         abrir_destino=lanzar_destino, abrir_universe=lanzar_universe, abrir_tactil=lanzar_tactil) as servidor:
+                         abrir_destino=lanzar_destino, abrir_universe=lanzar_universe, abrir_tactil=lanzar_tactil,
+                         abrir_url=abrir_web) as servidor:
         ruta = carpeta()
         datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
                  "version": version_local()}

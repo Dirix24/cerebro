@@ -3,7 +3,7 @@ import json
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-HOSTS = frozenset({"api.github.com", "api.search.brave.com"})
+HOSTS = frozenset({"api.github.com", "api.search.brave.com", "es.wikipedia.org"})
 MAX_BYTES = 2 * 1024 * 1024
 
 

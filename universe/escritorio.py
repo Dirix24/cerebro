@@ -18,9 +18,11 @@ class Escritorio:
     def __init__(self, nucleo):
         self.nucleo = nucleo
         self.pendientes = OrderedDict()
+        self.enlaces = OrderedDict()
 
     def limpiar(self):
         self.pendientes.clear()
+        self.enlaces.clear()
 
     def _guardar_pendiente(self, cliente, **datos):
         self.pendientes[cliente] = (monotonic() + 300, datos)
@@ -118,6 +120,124 @@ class Escritorio:
                 f"{i}. {app['nombre']}" for i, app in enumerate(candidatas[:12], 1))
         return None
 
+    def planificar(self, pregunta, cliente):
+        from agent.plan_escritorio import elaborar
+
+        pasos = elaborar(pregunta)
+        if not pasos:
+            return None
+        primero, *resto = pasos
+        if primero.herramienta in {"abrir_web", "analizar_web"}:
+            self.nucleo.exigir_permisos("READ")
+            if not self.nucleo.internet:
+                raise PermissionError("Permiso de internet desactivado.")
+            url = primero.argumentos.get("url") or self.enlaces.get(cliente)
+            if not url:
+                return {"respuesta": "Pega un enlace HTTP o HTTPS junto a la orden."}
+            self.enlaces[cliente] = url
+            self.enlaces.move_to_end(cliente)
+            if len(self.enlaces) > 64:
+                self.enlaces.popitem(last=False)
+            if primero.herramienta == "analizar_web":
+                return {"respuesta": self._analizar_enlace(url)}
+            return {"respuesta": "El enlace se abrirá desde el lanzador local.", "abrir_url": url}
+        if primero.herramienta == "compatibilidad":
+            self.nucleo.exigir_permisos("READ")
+            actual = self.nucleo.archivo_en_contexto
+            if not actual:
+                return {"respuesta": "Adjunta y analiza un archivo primero."}
+            ruta = self.nucleo.ruta(actual, lectura=True)
+            if not ruta.is_file():
+                return {"respuesta": "El archivo actual ya no está disponible."}
+            dato = aplicaciones_linux.aplicaciones_compatibles(ruta)
+            lista = ", ".join(dato["aplicaciones"]) or "ninguna"
+            return {"respuesta": f"{ruta.name} · {dato['formato']}. Aplicaciones asociadas: {lista}. "
+                                 "La asociación indica compatibilidad de apertura."}
+        if primero.herramienta == "capacidades":
+            from shutil import which
+
+            if not self.nucleo.agente.tiene_permisos("READ"):
+                return {"respuesta": "Bloqueado por permisos: READ. No inspeccioné aplicaciones ni carpetas."}
+            if not self.nucleo.documentos_usuario:
+                return {"respuesta": "El acceso local a documentos está desactivado en esta sesión."}
+            try:
+                apps = aplicaciones_linux.listar()
+                inventario = f"Comprobado ahora: GIO devolvió {len(apps)} aplicaciones visibles."
+            except RuntimeError as exc:
+                inventario = f"Inventario no disponible: {exc}"
+            lectura_pdf = "disponible" if which("pdftotext") else "bloqueada: falta pdftotext"
+            red = "habilitadas" if self.nucleo.internet else "bloqueadas por configuración"
+            return {"respuesta": (f"{inventario}\nBúsqueda local en {len(documentos_usuario.carpetas())} carpetas autorizadas."
+                                  f"\nExtracción de PDF: {lectura_pdf}. Aperturas aún sin verificar en esta consulta."
+                                  f"\nConsultas públicas: {red}. Aprendizaje por demostración: pendiente.")}
+        self._autorizar()
+        self.pendientes.pop(cliente, None)
+        criterios = dict(primero.argumentos)
+        reciente = criterios.pop("reciente", False)
+        caminos, limitado = documentos_usuario.buscar_filtrado(**criterios)
+        tipo = criterios["tipo"]
+        nombre = (tipo + " " + criterios.get("nombre", "")).strip()
+        if any(paso.herramienta == "resumir_pdf" for paso in resto):
+            from subprocess import SubprocessError
+            from universe.consultas import _extracto, _leer_texto
+
+            self.nucleo.exigir_permisos("WRITE")
+            if limitado or not caminos:
+                return {"respuesta": "No pude identificar con seguridad el PDF más reciente. Acota la búsqueda."}
+            ruta = max(caminos, key=lambda item: item.stat().st_mtime_ns)
+            if not documentos_usuario.permitido(ruta):
+                return {"respuesta": "El PDF dejó de estar disponible."}
+            try:
+                texto = _leer_texto(ruta)
+            except (OSError, ValueError, SubprocessError) as exc:
+                return {"respuesta": f"No pude extraer el PDF: {exc}"}
+            if not texto.strip():
+                return {"respuesta": "El PDF no contiene texto extraíble. El resumen requiere texto u OCR."}
+            apertura = aplicaciones_linux.abrir_documento(ruta)
+            if not apertura["aceptado"]:
+                return {"respuesta": "La aplicación no aceptó abrir el PDF. No preparé el guardado."}
+            resumen = _extracto(texto)
+            self._guardar_pendiente(cliente, resumen=resumen, fuente=ruta)
+            return {"respuesta": (f"La aplicación aceptó abrir «{ruta.name}». Resumen de hasta 12 páginas:\n"
+                                  f"{resumen}\nResponde «Confirmar guardar resumen» para escribirlo en Studio.")}
+        if resto and criterios.get("nombre"):
+            self.nucleo.memoria.cargar_memoria()
+            recuerdo = self.nucleo.memoria.recuperar_largo_plazo(self._clave(nombre))
+            if isinstance(recuerdo, dict) and isinstance(recuerdo.get("ruta"), str):
+                ruta = Path(recuerdo["ruta"])
+                if ruta in caminos:
+                    return {"respuesta": self._abrir(cliente, nombre, ruta, recordar=False)}
+        if not caminos:
+            return {"respuesta": "No encontré archivos que coincidan en las carpetas autorizadas."}
+        if resto and (reciente or len(caminos) == 1) and not limitado:
+            return {"respuesta": self._abrir(cliente, nombre, caminos[0], recordar=not reciente)}
+        sufijo = "\nLa búsqueda alcanzó su límite. Usa un nombre o fecha más precisos." if limitado else ""
+        opciones = "\n".join(f"{i}. {ruta.relative_to(Path.home())}" for i, ruta in enumerate(caminos, 1))
+        self._guardar_pendiente(cliente, nombre=nombre, opciones=caminos, verbo="abre")
+        return {"respuesta": "Coincidencias. Responde con el número para abrir un archivo o «Cancelar».\n"
+                             + opciones + sufijo}
+
+    def _analizar_enlace(self, url):
+        from urllib.parse import unquote, urlencode, urlsplit
+        from core.fuentes_publicas import consultar_json
+        from universe.consultas import _extracto
+
+        enlace = urlsplit(url)
+        if enlace.scheme != "https" or enlace.netloc != "es.wikipedia.org" or not enlace.path.startswith("/wiki/"):
+            return "Puedo analizar enlaces públicos de la Wikipedia en español. Esta dirección no se consultó."
+        titulo = unquote(enlace.path.removeprefix("/wiki/"))
+        if not titulo or len(titulo) > 150 or ":" in titulo or "/" in titulo:
+            return "Selecciona el enlace directo a un artículo público."
+        parametros = urlencode({"action": "query", "prop": "extracts", "exintro": 1, "explaintext": 1,
+                                "titles": titulo, "format": "json", "formatversion": 2, "redirects": 1})
+        try:
+            paginas = consultar_json("https://es.wikipedia.org/w/api.php?" + parametros)["query"]["pages"]
+            if not paginas or not (texto := paginas[0].get("extract")):
+                return "Wikipedia no devolvió texto legible para ese artículo."
+            return f"Resumen de la introducción de {paginas[0]['title']}\n\n{_extracto(texto)}\n\nFuente: {url}"
+        except (OSError, ValueError, KeyError, TypeError):
+            return "No pude leer el artículo de Wikipedia."
+
     def consultar(self, pregunta, cliente):
         texto = re.sub(r"^cerebro(?:[,\s]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
         normal = documentos_usuario._normalizar(texto)
@@ -186,6 +306,20 @@ class Escritorio:
         if confirmacion in _RECHAZAR:
             self.pendientes.pop(cliente)
             return "De acuerdo. No guardé una selección nueva."
+        if "resumen" in datos and confirmacion == "confirmar guardar resumen":
+            from secrets import token_hex
+
+            self._autorizar()
+            self.nucleo.exigir_permisos("WRITE")
+            if not documentos_usuario.permitido(datos["fuente"]):
+                return "El PDF original ya no está disponible en las carpetas autorizadas."
+            nombre = "resumenes/resumen-" + token_hex(6) + ".txt"
+            texto = f"Fuente: {datos['fuente'].name}\n\n{datos['resumen']}\n"
+            self.nucleo.guardar(nombre, texto)
+            if self.nucleo.leer(nombre)["texto"] != texto:
+                raise RuntimeError("No pude verificar el contenido guardado.")
+            self.pendientes.pop(cliente)
+            return f"Guardé y verifiqué «{nombre}» en el espacio de Studio."
         if "cierre" in datos and confirmacion == "confirmar cierre":
             self._autorizar()
             self._autorizar_escritura()

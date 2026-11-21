@@ -19,7 +19,7 @@ def carpetas(hogar=None):
 
 
 def permitido(ruta, hogar=None):
-    if not ruta.is_absolute() or ruta.suffix.lower() not in FORMATOS:
+    if not ruta.is_absolute() or not any(ruta.suffix.lower() in extensiones for extensiones in TIPOS.values()):
         return False
     try:
         real = ruta.resolve(strict=True)
@@ -63,3 +63,67 @@ def buscar(nombre, hogar=None):
 def _priorizar(coincidencias, tema):
     exactas = [ruta for ruta in coincidencias if tema in (_normalizar(ruta.name), _normalizar(ruta.stem))]
     return exactas or coincidencias
+
+
+TIPOS = {
+    "pdf": {".pdf"},
+    "documentos": FORMATOS | {".odt", ".rtf"},
+    "fotos": {".jpg", ".jpeg", ".png", ".webp", ".heic", ".tif", ".tiff"},
+    "videos": {".mp4", ".mkv", ".webm", ".mov", ".avi"},
+    "blender": {".blend"},
+}
+
+
+def buscar_filtrado(tipo, nombre="", periodo=None, descargas=False, hogar=None):
+    """Consulta metadatos dentro de ámbitos existentes, con inventario acotado."""
+    from datetime import datetime, time, timedelta
+    from difflib import SequenceMatcher
+
+    extensiones = TIPOS[tipo]
+    tema = _normalizar(nombre)
+    if tema and not re.fullmatch(r"[\w .()-]{1,130}", tema):
+        raise ValueError("Escribe parte del nombre del archivo, sin rutas.")
+    hoy = datetime.now().astimezone().date()
+    fecha_inicial = (hoy - timedelta(days=hoy.weekday()) if periodo == "semana"
+                     else hoy - timedelta(days=1) if periodo == "ayer" else hoy)
+    inicial = datetime.combine(fecha_inicial, time.min).timestamp() if periodo else None
+    final = datetime.combine(hoy, time.min).timestamp() if periodo == "ayer" else None
+    resultados = []
+    vistos = 0
+    limitado = False
+    for raiz in carpetas(hogar):
+        if descargas and raiz.name not in {"Descargas", "Downloads"}:
+            continue
+        for directorio, subdirectorios, archivos in os.walk(raiz):
+            base = Path(directorio)
+            subdirectorios[:] = sorted(d for d in subdirectorios
+                                       if not d.startswith(".") and not (base / d).is_symlink()
+                                       and len(base.relative_to(raiz).parts) < 5)
+            vistos += 1
+            for archivo in sorted(archivos):
+                vistos += 1
+                if vistos > 5000:
+                    break
+                ruta = base / archivo
+                if ruta.suffix.lower() not in extensiones or not permitido(ruta, hogar):
+                    continue
+                try:
+                    fecha = ruta.stat().st_mtime
+                except OSError:
+                    continue
+                if (inicial is not None and fecha < inicial) or (final is not None and fecha >= final):
+                    continue
+                titulo = _normalizar(ruta.stem)
+                coincidencia = 2 if not tema or tema in titulo else 0
+                if not coincidencia and len(tema) >= 5:
+                    candidatos = [titulo, *re.findall(r"\w+", titulo)]
+                    coincidencia = int(any(SequenceMatcher(None, tema, t).ratio() >= .8 for t in candidatos))
+                if coincidencia:
+                    resultados.append((coincidencia, fecha, ruta))
+            if vistos >= 5000:
+                limitado = True
+                break
+        if limitado:
+            break
+    resultados.sort(key=lambda dato: (-dato[0], -dato[1], str(dato[2])))
+    return [ruta for _, _, ruta in resultados[:12]], limitado or len(resultados) > 12

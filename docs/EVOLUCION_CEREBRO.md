@@ -62,6 +62,17 @@ La esfera flotante acepta tareas escritas o dictadas mediante activación explí
 - Consultar qué aprendió Cerebro y comprobar que puede mostrar la evidencia, corregir un recuerdo y explicar por qué no guardó como válido un procedimiento fallido.
 - Repetir una tarea autorizada y comprobar que Cerebro propone una automatización, espera aprobación y conserva los límites de la tarea original.
 
+## Descubrimiento y herramientas del escritorio
+
+El núcleo recibe la orden de cualquiera de las cuatro interfaces y prepara pasos con argumentos tipados. Los adaptadores conservan las comprobaciones de permisos en la ejecución.
+
+- Inventario de aplicaciones y compatibilidad MIME con GIO. Diagnóstico bajo demanda de aplicaciones, carpetas, extracción PDF y acceso a Internet.
+- Búsqueda de PDF, fotos, vídeos y proyectos Blender por nombre, fecha de modificación y ubicación en las carpetas ya autorizadas. Las coincidencias ambiguas requieren elegir. La apertura se solicita a la aplicación asociada.
+- Búsqueda de YouTube en el navegador predeterminado. Apertura de enlaces HTTP y HTTPS. El análisis de páginas usa el extracto de artículos públicos de Wikipedia en español. Los enlaces recientes se guardan solo en el contexto en memoria de cada cliente.
+- Plan PDF comprobable: buscar el más reciente, solicitar su apertura y extraer un resumen. La autorización final permite escribir un archivo nuevo en el espacio de Studio. Cerebro vuelve a leerlo para comprobar el contenido.
+
+Quedan pendientes el catálogo de paquetes y accesibilidad, la búsqueda por contenido, los resultados de YouTube dentro de Cerebro, el control de reproducción y la enseñanza supervisada por demostración. Los procedimientos futuros deberán registrar autorización, acciones, resultado observado y una forma de detenerse ante cambios de versión o interfaz.
+
 ## Primera entrega: repositorios e investigación pública
 
 Escribe dentro de Terminal, Chat, Companion o Studio:
