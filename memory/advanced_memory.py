@@ -66,6 +66,36 @@ class AdvancedMemoryManager:
                 self.long_term_memory = anterior
                 raise
 
+    def importar_recuerdos(self, recuerdos):
+        """Importa pares clave/valor sin sobrescribir recuerdos diferentes."""
+        if not isinstance(recuerdos, dict):
+            raise ValueError("Se espera un objeto JSON con pares clave y valor.")
+        nuevos = {}
+        for clave, valor in recuerdos.items():
+            if not isinstance(clave, str) or not clave.strip():
+                raise ValueError("Cada recuerdo necesita una clave y un valor.")
+            clave = clave.strip()
+            if clave in nuevos:
+                raise ValueError(f"Clave duplicada: {clave}")
+            nuevos[clave] = {"valor": valor, "categoria": "declarado_por_usuario",
+                             "importancia": 2, "fecha": _ahora()}
+        json.dumps(recuerdos, allow_nan=False)
+        anterior = self.long_term_memory
+        cambios = {}
+        for clave, entrada in nuevos.items():
+            if clave not in anterior:
+                cambios[clave] = entrada
+            elif self.recuperar_largo_plazo(clave) != entrada["valor"]:
+                raise ValueError(f"Ya existe un recuerdo distinto con la clave «{clave}».")
+        if cambios:
+            self.long_term_memory = {**anterior, **cambios}
+            try:
+                self.persistir()
+            except Exception:
+                self.long_term_memory = anterior
+                raise
+        return len(cambios)
+
     def recuperar_largo_plazo(self, clave):
         entrada = self.long_term_memory.get(clave)
         return entrada.get("valor") if isinstance(entrada, dict) else None

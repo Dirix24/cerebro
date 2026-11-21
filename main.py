@@ -7,8 +7,7 @@ Cerebro — chat local.
     python3 main.py --semilla 7            # respuestas reproducibles
     python3 main.py --ckpt otro.npz        # usar otro checkpoint
 
-Necesita un modelo entrenado (checkpoints/best.npz). Si no existe:
-    python3 train.py
+Usa herramientas locales si todavía no hay un checkpoint entrenado.
 """
 
 import argparse
@@ -102,15 +101,14 @@ def main():
         print(json.dumps(resultado, ensure_ascii=False, indent=2))
         return
     modelo, meta, ruta = cargar_modelo(args.ckpt)
-    if modelo is None:
-        sys.exit("[!] No hay ningún modelo entrenado.\n"
-                 "    Entrena uno con:  python3 train.py")
-    if args.debug:
+    if modelo is None and args.ckpt:
+        ap.error(f"No se encontró el checkpoint solicitado: {args.ckpt}")
+    if args.debug and modelo is not None:
         print(f"[debug] checkpoint: {ruta} (paso {meta.get('paso')}, "
               f"val {meta.get('val_bpb', float('nan')):.3f} bpb)")
 
     conv = Conversacion(modelo, AdvancedMemoryManager(), ControlledAgent(),
-                        info_checkpoint=meta, seed=args.semilla, modo_local=args.local)
+                        info_checkpoint=meta, seed=args.semilla, modo_local=args.local or modelo is None)
 
     if args.una_vez is not None:
         respuesta, _ = conv.procesar(args.una_vez)
@@ -125,7 +123,7 @@ def main():
         return
 
     print("\n========================================")
-    print(" CEREBRO  ·  modelo de lenguaje local")
+    print(" CEREBRO  ·  asistente local")
     print(" Escribe /ayuda para ver los comandos.")
     print("========================================\n")
     while True:

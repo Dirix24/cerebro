@@ -30,18 +30,16 @@ def _torch_disponible(python):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
-def iniciar_automatico():
-    """Abre el asistente local con los pesos existentes."""
-    try:
-        import numpy  # noqa: F401
-        python = sys.executable
-    except ImportError:
-        entorno = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        if not entorno.is_file():
-            print("Falta NumPy en el entorno activo. Usa un entorno que ya lo tenga instalado.", file=sys.stderr)
-            return 1
-        python = str(entorno)
-    return _ejecutar([python, str(RAIZ / "main.py"), "--local"])
+def _python_chat():
+    entorno = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if entorno.is_file():
+        return str(entorno)
+    return sys.executable
+
+
+def iniciar_automatico(*argumentos):
+    """Abre el asistente local con las dependencias instaladas por Cerebro."""
+    return _ejecutar([_python_chat(), str(RAIZ / "main.py"), "--local", *argumentos])
 
 
 def preparar_modelo_inicial():
@@ -137,7 +135,11 @@ def main(argv=None):
         return 0
     if args.accion == "instalar":
         from core.instalacion import instalar
-        return instalar(RAIZ, avanzado=args.avanzado)
+        try:
+            return instalar(RAIZ, avanzado=args.avanzado)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            print(f"No se pudo instalar Cerebro: {exc}", file=sys.stderr)
+            return 1
     if args.accion == "desinstalar":
         from core.instalacion import desinstalar
         if args.borrar_datos and not args.confirmar:
@@ -154,9 +156,10 @@ def main(argv=None):
             ap.error("La acción diagnostico no admite argumentos adicionales")
         return mostrar_diagnostico()
     if args.accion == "iniciar":
-        if resto:
-            ap.error("La acción iniciar no admite argumentos adicionales")
-        return iniciar_automatico()
+        if resto and not (len(resto) == 2 and resto[0] == "--una-vez"
+                          or len(resto) == 1 and resto[0].startswith("--una-vez=")):
+            ap.error("La acción iniciar solo admite --una-vez MENSAJE")
+        return iniciar_automatico(*resto)
     if args.accion == "todo":
         if resto:
             ap.error("La acción todo no admite argumentos adicionales")
@@ -170,7 +173,7 @@ def main(argv=None):
     if args.accion == "chat":
         if args.motor != "original":
             ap.error("El chat integrado utiliza el motor original; para PyTorch usa generar")
-        return _ejecutar([sys.executable, str(RAIZ / "main.py"), *resto])
+        return _ejecutar([_python_chat(), str(RAIZ / "main.py"), *resto])
     if args.motor == "original":
         if args.accion == "generar":
             ap.error("Para generar con el motor original usa la acción chat")

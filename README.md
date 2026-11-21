@@ -24,8 +24,7 @@ Requisitos: Linux (orientado a MX Linux / Debian), Python 3 y acceso a Internet 
 # Instala las dependencias básicas en un entorno local aislado
 python3 cerebro.py instalar
 
-# Inicia el chat, prepara el modelo inicial si hace falta,
-# indexa documentos y arranca el ciclo de aprendizaje mientras el chat esté abierto
+# Inicia el chat con herramientas locales, incluso sin checkpoint
 python3 cerebro.py iniciar
 ```
 
@@ -37,7 +36,26 @@ python3 cerebro.py instalar --avanzado
 
 PyTorch es una biblioteca de cálculo; **no es otro asistente ni un modelo descargado**. Puede ocupar bastante espacio y tardar en instalarse. El chat normal sigue utilizando el motor NumPy: los motores PyTorch se entrenan y generan por sus comandos específicos, **no** se alternan automáticamente dentro del chat.
 
-La instalación no crea un servicio del sistema. El proceso de aprendizaje diario funciona mientras el lanzador permanece abierto. Cierra el chat con `/salir` para detener la sesión.
+La instalación no crea un servicio del sistema. La acción `todo` ejecuta el aprendizaje diario mientras el chat permanece abierto. Cierra el chat con `/salir` para detener la sesión.
+
+### Razonamiento, recuerdos e internet
+
+Cerebro ejecuta su modelo NumPy y sus herramientas de razonamiento en tu equipo. El asistente local verifica cálculos y deducciones dentro de los formatos admitidos. La generación experimental con los pesos propios está disponible con `python3 cerebro.py chat`. Su alcance es más limitado que el de un modelo generalista.
+
+Estos ejemplos se escriben dentro del chat:
+
+```text
+Deduce: Ada es ave; ave implica animal; animal implica ser vivo ? ser vivo
+Inserta un recuerdo: proyecto = Atlas
+¿Qué recuerdas sobre el proyecto?
+Extrae recuerdos
+/insertar-recuerdo {"proyecto": "Atlas"}
+Busca en internet fotosíntesis
+```
+
+Los recuerdos se conservan entre sesiones. Copia el JSON de `/extraer-recuerdos` para restaurar los valores con `/insertar-recuerdo` en otra instalación. Si una clave ya contiene un valor distinto, Cerebro rechaza la importación completa. Para extraer una sola clave, usa `/extraer-recuerdos proyecto`.
+
+`/internet` y «Busca en internet…» envían el tema que escribas a Wikipedia en español y devuelven un extracto con su enlace. Escribe solo temas públicos en ese comando. Para usar el asistente local desde un script, ejecuta `python3 cerebro.py iniciar --una-vez '/recuerdo proyecto'`.
 
 ## 🧩 Todos los comandos de la aplicación
 
