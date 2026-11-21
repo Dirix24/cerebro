@@ -143,9 +143,39 @@ def _resumen_curriculo(informe):
     return "\n".join(lineas)
 
 
+def _resumen_comparacion(informe):
+    lineas = ["Comparación neuronal aislada. Pesos activos preservados."]
+    for ensayo in informe["ensayos"]:
+        lineas.append(f"{ensayo['perfil']} · semilla {ensayo['semilla']} · {ensayo['estrategia']} "
+                      f"· {ensayo['contexto']} tokens")
+        materias = []
+        for materia, nota in ensayo["competencias_despues"].items():
+            anterior = ensayo["competencias_antes"][materia]["exitos"]
+            delta = nota["exitos"] - anterior
+            diferencia = "mejoró" if delta > 0 else "empeoró" if delta < 0 else "igual"
+            materias.append(f"{materia.capitalize()}: {anterior} → {nota['exitos']}/{nota['total']} ({diferencia})")
+        lineas.extend(("  " + " · ".join(materias[:3]), "  " + " · ".join(materias[3:])))
+        previas = ensayo.get("curriculo_reservado_antes", {})
+        reservadas = ensayo.get("curriculo_reservado_despues", {})
+        cambios = [f"{m}: {previas[m]['exitos']} → {f['exitos']}/{f['total']}"
+                   for m, f in reservadas.items() if f["exitos"] != previas[m]["exitos"]]
+        if cambios:
+            lineas.append("  Transferencia en currículo: " + " · ".join(cambios))
+        dialogo = ensayo["dialogos"]["razonamiento"]
+        pares = ensayo.get("pares_largos")
+        detalle = f" Pares completos: {pares['ambos_correctos']}/{pares['pares']}." if pares else ""
+        lineas.append(f"  Diálogo largo: {dialogo['exitos']}/{dialogo['total']}; "
+                      f"contexto completo en {dialogo['contextos_completos']}/{dialogo['total']}." + detalle)
+        lineas.append(f"  Retención: {ensayo['validacion_antes']:.1%} → {ensayo['validacion_despues']:.1%} · "
+                      f"pérdida: {ensayo['bpb_antes']:.3f} → {ensayo['bpb_despues']:.3f} bpb.")
+    return "\n".join(lineas)
+
+
 def resumen(informe):
     if not informe:
         return "Aún no hay una evaluación de competencias guardada."
+    if informe.get("tipo") == "comparacion_arquitecturas":
+        return _resumen_comparacion(informe)
     if informe.get("tipo") == "curriculo":
         return _resumen_curriculo(informe)
     lineas = []
