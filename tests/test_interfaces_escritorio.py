@@ -259,7 +259,7 @@ def test_busqueda_documento_local_y_ambiguedad(nucleo, tmp_path, monkeypatch):
     assert "No encontré" in nucleo.conversar("Busca un documento privado")["respuesta"]
 
 
-def test_lanzador_local_conserva_un_solo_chat_web(nucleo):
+def test_lanzador_local_comparte_chat_y_proyecto_web(nucleo):
     from threading import Thread
     from urllib.request import urlopen
     from universe.lanzador import api
@@ -276,6 +276,9 @@ def test_lanzador_local_conserva_un_solo_chat_web(nucleo):
         for vista in ("/", "/studio", "/universe"):
             with urlopen(base + vista, timeout=3) as respuesta:
                 assert respuesta.url == base + "/chat"
+        with urlopen(base + "/proyecto", timeout=3) as respuesta:
+            assert respuesta.url == base + "/proyecto"
+            assert b'id="enlace-chat"' in respuesta.read()
         assert api({"url": base, "token": "clave"}, "escritorio", {"accion": "universe"}) == {"solicitado": True}
     finally:
         servidor.shutdown()

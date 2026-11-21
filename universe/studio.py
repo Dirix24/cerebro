@@ -12,10 +12,10 @@ from urllib.parse import quote
 from universe.lanzador import api, abrir, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
-FONDO = "#101827"
-PANEL = "#18263a"
-TEXTO = "#e9f3f6"
-ACENTO = "#9fcaff"
+FONDO = "#f5f6fb"
+PANEL = "#ffffff"
+TEXTO = "#22233b"
+ACENTO = "#4d3bb1"
 
 
 def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
@@ -23,23 +23,23 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         app = Tk()
     except TclError as exc:
         raise RuntimeError("No pude abrir Studio. Necesitas una sesión gráfica y python3-tk.") from exc
-    app.title("Cerebro Studio · Arquitectura ARUS")
+    app.title("Cerebro Studio")
     app.geometry("1120x720")
     app.minsize(720, 490)
     app.configure(bg=FONDO)
     estilo = ttk.Style(app)
     estilo.theme_use("clam")
     estilo.configure(".", background=FONDO, foreground=TEXTO, fieldbackground=PANEL)
-    estilo.configure("TButton", background="#1e2e3a", foreground=TEXTO, padding=(10, 6),
+    estilo.configure("TButton", background="#eeeff8", foreground=TEXTO, padding=(10, 6),
                      borderwidth=0, bordercolor=FONDO, lightcolor=FONDO, darkcolor=FONDO)
     estilo.configure("TNotebook", background=FONDO, borderwidth=0)
-    estilo.configure("TNotebook.Tab", background="#202d3a", foreground=TEXTO, padding=(13, 7))
-    estilo.map("TNotebook.Tab", background=[("selected", "#284653")],
+    estilo.configure("TNotebook.Tab", background="#eeeff8", foreground=TEXTO, padding=(13, 7))
+    estilo.map("TNotebook.Tab", background=[("selected", "#e6e2fb")],
                foreground=[("selected", ACENTO)])
-    estilo.map("TButton", background=[("active", "#263d4a")])
+    estilo.map("TButton", background=[("active", "#e3dff8")])
     estilo.configure("Titulo.TLabel", font=("TkDefaultFont", 17, "bold"), foreground=ACENTO)
     estilo.configure("TEntry", fieldbackground=PANEL, foreground=TEXTO, insertcolor=TEXTO,
-                     bordercolor="#36515f", lightcolor=PANEL, darkcolor=PANEL)
+                     bordercolor="#dbdeed", lightcolor=PANEL, darkcolor=PANEL)
     estilo.configure("TPanedwindow", background=FONDO)
 
     estado = StringVar(value="Conectando con Cerebro…")
@@ -119,7 +119,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     ttk.Label(archivos, text="Filtrar archivos").pack(anchor="w", pady=(0, 5))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
     buscador.pack(fill=X, pady=(0, 7))
-    lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#346355",
+    lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#e6e2fb", selectforeground=ACENTO,
                     relief="flat", highlightthickness=0, exportselection=False)
     desplazamiento_archivos = ttk.Scrollbar(archivos, command=lista.yview)
     lista.configure(yscrollcommand=desplazamiento_archivos.set)

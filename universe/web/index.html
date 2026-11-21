@@ -9,9 +9,13 @@
 </head>
 <body>
   <header>
-    <div class="marca"><span class="isotipo" aria-hidden="true">◉</span> Cerebro <b id="marca-modo">Universe</b></div>
-    <nav aria-label="Interfaces">
-      <button data-tab="studio" aria-pressed="true">Studio</button>
+    <div class="marca"><span class="isotipo" aria-hidden="true"></span><span>Cerebro <b id="marca-modo">Studio</b></span></div>
+    <nav class="navegacion-principal" aria-label="Cambiar interfaz">
+      <a href="/chat" id="enlace-chat">Chat</a>
+      <a href="/proyecto" id="enlace-proyecto">Studio</a>
+    </nav>
+    <nav class="vistas" aria-label="Herramientas de Studio">
+      <button data-tab="studio" aria-pressed="true">Proyecto</button>
       <button data-tab="universe" aria-pressed="false">Universe</button>
       <button data-tab="canvas" aria-pressed="false">Canvas</button>
       <button data-tab="body" aria-pressed="false">Body</button>
@@ -31,23 +35,40 @@
     </form>
     <p id="aviso" role="status" aria-live="polite"></p>
     <section id="studio" hidden>
-      <div class="titulo"><div><h1 id="titulo-interfaz">Studio</h1><p id="inicio-chat">Pregunta, investiga o analiza un archivo.</p></div><output id="identidad"></output></div>
+      <div class="titulo"><h1 id="titulo-interfaz">Espacio de trabajo</h1><output id="identidad"></output></div>
       <div class="studio">
         <aside class="panel explorador">
           <h2>Archivos</h2>
           <form id="abrir-archivo"><label for="archivo">Ruta relativa</label><input id="archivo" placeholder="notas/proyecto.md" required><button>Abrir</button></form>
           <div id="archivos"></div>
         </aside>
+        <div class="columna">
+          <section class="panel editor">
+            <h2>Editor <output id="archivo-activo">Sin archivo abierto</output></h2>
+            <label for="contenido" class="oculto">Contenido del archivo</label>
+            <textarea id="contenido" spellcheck="false" placeholder="Crea una nota o edita código de tu espacio de trabajo."></textarea>
+            <div class="acciones"><button id="guardar">Guardar</button><button data-tarea="sintaxis">Validar Python</button></div>
+          </section>
+          <section class="panel tareas">
+            <h2>Validaciones <span class="nota">Salida del núcleo</span></h2>
+            <div class="acciones"><button data-tarea="estado">Estado del núcleo</button><button id="limpiar-tareas">Limpiar historial</button></div>
+            <div id="tareas"></div>
+          </section>
+        </div>
         <section class="panel conversacion" aria-labelledby="titulo-chat">
           <h2 id="titulo-chat">Conversación</h2>
-          <div class="acciones inicio-sugerencias" id="sugerencias-chat" hidden>
-            <button type="button" data-chat="Noticias de hoy">Noticias de hoy</button>
-            <button type="button" data-chat="Explora el repositorio Dirix24/cerebro">Explorar Cerebro en GitHub</button>
+          <div class="inicio-chat">
+            <span class="isotipo" aria-hidden="true"></span>
+            <h2>¿En qué trabajamos hoy?</h2>
+            <div class="acciones inicio-sugerencias" id="sugerencias-chat" hidden>
+              <button type="button" data-chat="¿Qué aplicaciones tengo instaladas?">Ver mis aplicaciones</button>
+              <button type="button" data-chat="Explora el repositorio Dirix24/cerebro">Explorar Cerebro en GitHub</button>
+            </div>
           </div>
           <div id="mensajes" role="log" aria-label="Mensajes"></div>
           <video id="video-adjunto" controls preload="metadata" playsinline hidden aria-label="Vídeo local adjunto"></video>
           <form id="chat" class="fila">
-            <label for="mensaje" class="oculto">Mensaje para Cerebro</label><textarea id="mensaje" rows="2" maxlength="24000" placeholder="Pregunta o pide «Investiga…»" required></textarea><button id="enviar-chat">Enviar</button>
+            <label for="mensaje" class="oculto">Mensaje para Cerebro</label><textarea id="mensaje" rows="2" maxlength="24000" placeholder="Escribe tu mensaje…" required></textarea><button id="enviar-chat">Enviar</button>
           </form>
           <div id="estado-chat" role="status" hidden>Consultando al núcleo…</div>
           <div class="acciones herramientas-chat"><button data-chat="¿Qué sabes hacer?">Capacidades</button>
@@ -58,19 +79,6 @@
             <input id="importar" type="file" accept=".json,application/json" hidden>
           </div>
         </section>
-        <div class="columna">
-          <section class="panel editor">
-            <h2>Editor</h2>
-            <label for="contenido" class="oculto">Contenido del archivo</label>
-            <textarea id="contenido" spellcheck="false" placeholder="Crea una nota o edita código de tu espacio de trabajo."></textarea>
-            <div class="acciones"><button id="guardar">Guardar</button><button data-tarea="sintaxis">Validar Python</button></div>
-          </section>
-          <section class="panel tareas">
-            <h2>Terminal controlada</h2>
-            <div class="acciones"><button data-tarea="estado">Estado del núcleo</button><button id="limpiar-tareas">Limpiar historial</button></div>
-            <div id="tareas"></div>
-          </section>
-        </div>
       </div>
     </section>
     <section id="universe" hidden>

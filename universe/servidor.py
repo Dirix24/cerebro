@@ -14,7 +14,7 @@ from universe.nucleo import MIB, PERFILES, Nucleo
 
 WEB = Path(__file__).with_name("web")
 ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/html"),
-             "/studio": ("index.html", "text/html"), "/universe": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
+             "/studio": ("index.html", "text/html"), "/proyecto": ("index.html", "text/html"), "/universe": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
              "/app.js": ("app.js", "text/javascript"), "/escena.js": ("escena.js", "text/javascript")}
 
 

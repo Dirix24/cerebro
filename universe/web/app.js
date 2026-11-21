@@ -7,11 +7,10 @@ const modoWeb = location.pathname === "/chat" ? "chat" : "studio";
 const idInterfaz = Array.from(crypto.getRandomValues(new Uint8Array(12)),
   byte => byte.toString(16).padStart(2, "0")).join("");
 document.body.dataset.interfaz = modoWeb === "chat" ? "chat" : "estudio";
-if (modoWeb === "chat") {
-  document.title = "Cerebro Chat";
-  $("marca-modo").textContent = "Chat";
-  $("titulo-interfaz").textContent = "¿En qué te ayudo?";
-}
+const esChat = modoWeb === "chat";
+document.title = esChat ? "Cerebro Chat" : "Cerebro Studio";
+$("marca-modo").textContent = esChat ? "Chat" : "Studio";
+$(esChat ? "enlace-chat" : "enlace-proyecto").setAttribute("aria-current", "page");
 
 function anunciar(visible, enfocar = false) {
   if (!token) return;
@@ -185,11 +184,15 @@ setInterval(sondear, 3000);
 function agregarMensaje(rol, texto) {
   const mensaje = document.createElement("p");
   mensaje.className = rol === "Tú" ? "usuario" : "cerebro";
-  mensaje.append(rol + " · ");
+  const autor = document.createElement("strong");
+  autor.textContent = rol;
+  mensaje.append(autor);
+  const cuerpo = document.createElement("span");
+  mensaje.append(cuerpo);
   const partes = rol === "Cerebro" ? texto.split(/(https:\/\/[^\s<>"']+)/u) : [texto];
   for (const [indice, parte] of partes.entries()) {
     if (indice % 2 === 0) {
-      mensaje.append(parte);
+      cuerpo.append(parte);
       continue;
     }
     const enlace = document.createElement("a");
@@ -197,7 +200,7 @@ function agregarMensaje(rol, texto) {
     enlace.textContent = parte;
     enlace.target = "_blank";
     enlace.rel = "noopener noreferrer";
-    mensaje.append(enlace);
+    cuerpo.append(enlace);
   }
   $("mensajes").append(mensaje);
   if ($("mensajes").children.length > 100) $("mensajes").firstElementChild.remove();
@@ -216,7 +219,7 @@ async function conversar(texto) {
     $("sugerencias-chat").hidden = true;
     agregarMensaje("Tú", texto);
     agregarMensaje("Cerebro", salida.respuesta);
-    if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/studio#" + token);
+    if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/proyecto");
     return true;
   } finally {
     chatOcupado = false;
@@ -318,6 +321,7 @@ $("adjunto").addEventListener("change", async () => {
 async function abrirArchivo(nombre) {
   $("contenido").value = (await api("archivo?nombre=" + encodeURIComponent(nombre))).texto;
   $("archivo").value = nombre;
+  $("archivo-activo").textContent = nombre;
 }
 async function actualizarArchivos() {
   lista($("archivos"), (await api("archivos")).archivos, nombre => boton(nombre, () => abrirArchivo(nombre)));
@@ -327,7 +331,9 @@ $("abrir-archivo").addEventListener("submit", evento => {
   ejecutar(evento.submitter, () => abrirArchivo($("archivo").value.trim()));
 });
 $("guardar").addEventListener("click", () => ejecutar($("guardar"), async () => {
-  await api("archivo", {nombre: $("archivo").value.trim(), texto: $("contenido").value});
+  const nombre = $("archivo").value.trim();
+  await api("archivo", {nombre, texto: $("contenido").value});
+  $("archivo-activo").textContent = nombre;
   await actualizarArchivos();
   aviso("Archivo guardado.");
 }));
