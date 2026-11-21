@@ -34,7 +34,7 @@ class TestEntrenamientoGuiado(unittest.TestCase):
                 copia = Path(opciones["env"]["CEREBRO_HOME"])
                 (copia / "checkpoints" / "best.npz").write_bytes(b"candidato")
 
-            with patch("config.raiz_datos", return_value=raiz), patch("config.CKPT_ULTIMO", str(ultimo)), patch("config.CKPT_MEJOR", str(mejor)), patch("config.VALIDACION_FILE", str(validacion)), patch("entrenamiento_guiado.evaluar_fijo", side_effect=[1.0, .9]), patch("entrenamiento_guiado.subprocess.run", side_effect=entrenar):
+            with patch("config.raiz_datos", return_value=raiz), patch("config.CKPT_ULTIMO", str(ultimo)), patch("config.CKPT_MEJOR", str(mejor)), patch("config.VALIDACION_FILE", str(validacion)), patch("entrenamiento_guiado.evaluar_fijo", side_effect=[1.0, .9]), patch("entrenamiento_guiado.acierto_en_validacion", return_value={"n": 1, "exactas": 1.0}), patch("entrenamiento_guiado.subprocess.run", side_effect=entrenar):
                 self.assertTrue(entrenar_guiado(1, .0003))
             self.assertEqual(mejor.read_bytes(), b"original")
             self.assertEqual(ultimo.read_bytes(), b"original")

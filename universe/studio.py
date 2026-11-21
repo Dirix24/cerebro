@@ -185,7 +185,9 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             resumen = "\n".join(
                 [f"Evaluaciones: {informe['evaluaciones']}",
                  f"Correcciones pendientes: {informe['correcciones_pendientes']}",
-                 f"Entrenamientos registrados: {informe['entrenamientos_registrados']}", "",
+                 f"Entrenamientos registrados: {informe['entrenamientos_registrados']}",
+                 "Profesor local configurado." if informe.get("profesor_configurado")
+                 else "Profesor local desactivado.", "",
                  *[f"{tarea['objetivo']}. {tarea['accion']}" for tarea in informe["propuestas"]]])
             messagebox.showinfo("Análisis de aprendizaje", resumen, parent=app)
 

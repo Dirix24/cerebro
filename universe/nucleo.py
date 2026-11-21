@@ -24,6 +24,7 @@ from core.actividad_neuronal import publicar, ultimos
 from core.conversaciones import Conversaciones
 from core.entorno_portatil import detectar_entorno
 from core.legado_identidad import leer_origen
+from core.profesor_local import GIB, ProfesorLocal, diagnostico as diagnostico_profesor
 from core.repaso_espaciado import cargar
 from memory.advanced_memory import AdvancedMemoryManager
 from universe.cazel import construir_orden, parsear_ayuda
@@ -52,7 +53,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -63,6 +64,7 @@ class Nucleo:
             raise ValueError("El directorio de Universe no puede ser un enlace simbólico.")
         self.estudio.mkdir(mode=0o700, exist_ok=True)
         self.agente = agente if agente is not None else ControlledAgent()
+        self.profesor = profesor if profesor is not None else ProfesorLocal.desde_entorno()
         self.memoria = AdvancedMemoryManager()
         self.chat = Conversacion(modelo, self.memoria, self.agente, info_checkpoint=meta, modo_local=True)
         self.internet = internet
@@ -94,7 +96,7 @@ class Nucleo:
         return Nucleo(self.perfil, cuota=self.cuota, modelo=self.chat.modelo, internet=self.internet,
                       solo_lectura=self.solo_lectura, meta=self.chat.info,
                       investigar_auto=self.investigar_auto, documentos_usuario=self.documentos_usuario,
-                      conversaciones_dir=carpeta, agente=self.agente)
+                      conversaciones_dir=carpeta, agente=self.agente, profesor=self.profesor)
 
     def exigir_permisos(self, *permisos):
         if self.solo_lectura and "WRITE" in permisos:
@@ -315,6 +317,16 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if not comando and re.fullmatch(r"(?:estado del profesor|profesor local|que profesor recomiendas)", intencion):
+            self.exigir_permisos("READ")
+            ficha = diagnostico_profesor(self.raiz)
+            recomendacion = ficha["recomendacion"]
+            disponible = ficha["ram_disponible_bytes"]
+            memoria = f"{disponible / GIB:.1f} GiB disponibles" if disponible is not None else "RAM disponible sin medir"
+            estado = "Puerto local configurado" if self.profesor.configurado else "Profesor desactivado"
+            detalle = (f"Candidato para probar en CPU: {recomendacion['modelo']} ({recomendacion['licencia']})."
+                       if recomendacion else "Los recursos medidos no permiten recomendar un modelo del catálogo.")
+            return {"respuesta": f"{estado}. {memoria}. {detalle}", "profesor": ficha}
         if not comando and re.fullmatch(
                 r"(?:vamos a programar|programemos|pongamonos a programar|"
                 r"empecemos a programar)(?: por favor)?",
@@ -379,6 +391,7 @@ class Nucleo:
             return {"respuesta": "La apertura requiere el lanzador local de Cerebro.", "abrir": destino,
                     **({"compartir_temporal": True} if destino == "youtube" else {})}
         inicio = perf_counter()
+        origen = None
         if self.agente.tiene_permisos("READ"):
             self.memoria.cargar_memoria()
         if comando == "/modelo":
@@ -389,19 +402,39 @@ class Nucleo:
             if not texto:
                 raise ValueError("Uso: /modelo pregunta")
             respuesta = self.chat.responder_modelo(texto)
+            origen = "alumno_neuronal"
         else:
-            from universe.consultas import alternativa_publica, consulta_directa
+            from universe.consultas import alternativa_publica, consulta_directa, tema_publico
+
+            explicacion = re.fullmatch(r"(?:explicame|explica) (.+)", intencion) if not comando else None
+            tema = tema_publico(explicacion[1]) if explicacion else None
             respuesta = consulta_directa(self, pregunta, modo=modo)
             if respuesta is not None and re.match(
                     r"(?:busca|encuentra)(?:me)?\s+(?:(?:un|el|mi)\s+)?documento\b", pregunta, re.I):
                 return {"respuesta": respuesta, "compartir_temporal": True}
             if respuesta is None:
                 respuesta, _ = self.chat.procesar(pregunta)
-                respuesta = alternativa_publica(self, pregunta, respuesta)
+                if tema and self.profesor.configurado and respuesta.startswith((
+                        "No tengo una respuesta fiable", "No encontré una definición")):
+                    self.exigir_permisos("READ")
+                    publicar("razonando", "profesor_local")
+                    try:
+                        explicada = self.profesor.explicar(tema)
+                    except RuntimeError as exc:
+                        respuesta += "\nProfesor local: " + str(exc)
+                    else:
+                        respuesta = "Profesor local: " + explicada
+                        origen = "profesor_local"
+                if origen != "profesor_local":
+                    alternativa = alternativa_publica(self, pregunta, respuesta)
+                    if alternativa != respuesta:
+                        origen = "consulta_publica"
+                    respuesta = alternativa
         self.latencias.append((perf_counter() - inicio) * 1000)
         self._registrar_turno(pregunta, respuesta)
         from universe.consultas import desea_studio
-        return {"respuesta": respuesta, **({"abrir": "studio"} if desea_studio(pregunta) else {})}
+        return {"respuesta": respuesta, **({"origen": origen} if origen else {}),
+                **({"abrir": "studio"} if desea_studio(pregunta) else {})}
 
     def analizar_aprendizaje(self):
         from collections import Counter
@@ -411,6 +444,7 @@ class Nucleo:
         tipos = Counter(nodo["tipo"] for nodo in self.nodos()["nodos"])
         informe = analizar(self.raiz)
         informe["tipos"] = dict(tipos)
+        informe["profesor_configurado"] = self.profesor.configurado
         return informe
 
     def evaluar_alumno(self):

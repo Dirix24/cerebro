@@ -1,7 +1,24 @@
 # Cerebro: más parámetros y segundo motor propio
 
-Cerebro sigue siendo **una IA local propia**, sin Ollama, llama.cpp,
-modelos de terceros, APIs ni descargas automáticas de pesos.
+Cerebro incluye un modelo alumno propio. El núcleo de escritorio también puede consultar un profesor de lenguaje en un servidor local autorizado. La integración está desactivada por defecto y carece de descargas automáticas de motores y pesos.
+
+## Profesor local opcional
+
+Di «Estado del profesor» para ver la recomendación según la RAM disponible y el disco del directorio de datos. Para el i7-4500U observado y unos 5 GiB de RAM libre, el primer candidato es Qwen2.5-1.5B-Instruct GGUF Q4_K_M, con licencia Apache-2.0. El archivo oficial ocupa 1,12 GB. La disponibilidad de memoria y la compatibilidad del formato permiten proponer la prueba en CPU. Hace falta medir latencia y calidad en español en este equipo. [Ficha y licencia de Qwen](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF)
+
+Una vez instalados y autorizados el motor y los pesos, puedes iniciar un servidor compatible usando el GGUF ya guardado:
+
+```sh
+llama-server -m /ruta/al/modelo.gguf --host 127.0.0.1 --port 8080 -c 1024 -t 2 -ngl 0
+```
+
+Arranca una nueva sesión del núcleo de Cerebro con `CEREBRO_PROFESOR_PUERTO=8080`. Si las rutas locales no resuelven «Explícame …», Cerebro puede enviar el tema al profesor. La respuesta indica su origen. El adaptador limita cada consulta a una explicación de 96 tokens y una conexión de hasta 18 segundos de espera de socket. Envía solo el tema y recibe texto. El profesor carece de acceso a las herramientas y las solicitudes de herramientas en su salida se rechazan. [Documentación del servidor de llama.cpp](https://github.com/ggml-org/llama.cpp/tree/master/tools/server)
+
+## Entrenamiento y evaluación del alumno
+
+`entrenamiento_guiado.py` puede arrancar desde `best.npz` cuando todavía no existe `last.npz`. Entrena en una copia con un hilo de BLAS y un límite configurable de tiempo. La validación fija exige que baje la pérdida en bits por byte y comprueba que el acierto exacto no empeore cuando hay preguntas reformuladas. Los pesos activos permanecen en su ubicación. `evaluate.py --ckpt RUTA --rapido` permite medir un candidato en el test reservado.
+
+La prueba aislada de tres pasos con el alumno de 190.528 parámetros pasó de 47 % a 44 % de respuestas exactas en 32 reformulaciones. El test final quedó en 0 de 6 y la pérdida de validación pasó de 0,100 a 0,101 bits por byte. El candidato quedó fuera de promoción. No se usaron respuestas de un profesor ni conversaciones privadas para entrenar.
 
 ## Más parámetros neuronales
 
