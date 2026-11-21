@@ -1,4 +1,4 @@
-"""Chat gráfico local opcional. Requiere checkpoint propio entrenado."""
+"""Chat gráfico local opcional."""
 import argparse
 import queue
 import threading
@@ -14,11 +14,9 @@ RUTA_HISTORIAL = Path(__file__).resolve().parent / "data" / "historial_cerebro.j
 
 
 def crear_conversacion():
-    modelo, meta, ruta = cargar_modelo()
-    if modelo is None:
-        raise FileNotFoundError("Falta checkpoint propio: ejecuta python3 train.py")
+    modelo, meta, _ = cargar_modelo()
     return Conversacion(modelo, AdvancedMemoryManager(), ControlledAgent(),
-                        info_checkpoint=meta)
+                        info_checkpoint=meta, modo_local=modelo is None)
 
 
 def ventana(guardar_automaticamente=False):
@@ -44,7 +42,7 @@ def ventana(guardar_automaticamente=False):
 
     try:
         conversacion = crear_conversacion()
-        mostrar("Sistema", "Modelo propio cargado. /ayuda muestra los comandos.")
+        mostrar("Sistema", "Asistente local listo. /ayuda muestra los comandos.")
     except (OSError, ValueError) as exc:
         mostrar("Sistema", str(exc))
         messagebox.showwarning("Cerebro", str(exc))

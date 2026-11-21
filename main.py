@@ -7,8 +7,7 @@ Cerebro — chat local.
     python3 main.py --semilla 7            # respuestas reproducibles
     python3 main.py --ckpt otro.npz        # usar otro checkpoint
 
-Necesita un modelo entrenado (checkpoints/best.npz). Si no existe:
-    python3 train.py
+Usa herramientas locales si todavía no hay un checkpoint entrenado.
 """
 
 import argparse
@@ -34,6 +33,7 @@ def cargar_modelo(ruta=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Cerebro - chat local")
+    ap.add_argument("--local", action="store_true", help="usa respuestas verificables y fuentes locales")
     ap.add_argument("--estacion-terminal", action="store_true", help="abrir estación neuronal en terminal sin modelo")
     ap.add_argument("--ojos", action="store_true", help="rostro animado en terminal; cámara apagada")
     ap.add_argument("--diagnostico-memoria", action="store_true", help="estadísticas locales sin mostrar recuerdos")
@@ -101,15 +101,14 @@ def main():
         print(json.dumps(resultado, ensure_ascii=False, indent=2))
         return
     modelo, meta, ruta = cargar_modelo(args.ckpt)
-    if modelo is None:
-        sys.exit("[!] No hay ningún modelo entrenado.\n"
-                 "    Entrena uno con:  python3 train.py")
-    if args.debug:
+    if modelo is None and args.ckpt:
+        ap.error(f"No se encontró el checkpoint solicitado: {args.ckpt}")
+    if args.debug and modelo is not None:
         print(f"[debug] checkpoint: {ruta} (paso {meta.get('paso')}, "
               f"val {meta.get('val_bpb', float('nan')):.3f} bpb)")
 
     conv = Conversacion(modelo, AdvancedMemoryManager(), ControlledAgent(),
-                        info_checkpoint=meta, seed=args.semilla)
+                        info_checkpoint=meta, seed=args.semilla, modo_local=args.local or modelo is None)
 
     if args.una_vez is not None:
         respuesta, _ = conv.procesar(args.una_vez)
@@ -124,7 +123,7 @@ def main():
         return
 
     print("\n========================================")
-    print(" CEREBRO  ·  modelo de lenguaje local")
+    print(" CEREBRO  ·  asistente local")
     print(" Escribe /ayuda para ver los comandos.")
     print("========================================\n")
     while True:

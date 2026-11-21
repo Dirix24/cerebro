@@ -1,0 +1,327 @@
+"""Entradas de MX Linux para un núcleo de usuario compartido."""
+import contextlib
+import fcntl
+from hashlib import sha256
+import json
+import os
+import re
+from pathlib import Path
+import secrets
+import subprocess
+import sys
+from threading import Event, Thread
+from time import monotonic, sleep
+from urllib.error import HTTPError
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
+from webbrowser import open as abrir_web
+
+
+class SoloLoopback(HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs):
+        return None
+
+
+CLIENTE_LOCAL = build_opener(ProxyHandler({}), SoloLoopback())
+
+
+def carpeta():
+    base = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache")
+    ruta = base / "cerebro-local"
+    ruta.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if ruta.is_symlink() or ruta.stat().st_uid != os.getuid() or ruta.stat().st_mode & 0o077:
+        raise PermissionError(f"El directorio de sesión de Cerebro debe ser privado: {ruta}")
+    return ruta
+
+
+def api(sesion, ruta, datos=None, tiempo=25):
+    if not re.fullmatch(r"http://127\.0\.0\.1:[0-9]{1,5}", sesion["url"]):
+        raise ValueError("Dirección de sesión inválida.")
+    cuerpo = None if datos is None else json.dumps(datos, ensure_ascii=False).encode()
+    solicitud = Request(sesion["url"] + "/api/" + ruta, data=cuerpo, headers={
+        "Authorization": "Bearer " + sesion["token"], "Content-Type": "application/json",
+    })
+    try:
+        with CLIENTE_LOCAL.open(solicitud, timeout=tiempo) as respuesta:
+            return json.load(respuesta)
+    except HTTPError as exc:
+        raise RuntimeError(json.load(exc).get("error", "Cerebro devolvió un error.")) from exc
+
+
+def version_local():
+    raiz = Path(__file__).resolve().parent.parent
+    fuentes = sorted(raiz.glob("universe/*.py")) + sorted(raiz.glob("universe/web/*"))
+    fuentes += [raiz / "chat.py", raiz / "config.py"]
+    firma = sha256()
+    for fuente in fuentes:
+        if fuente.is_file():
+            firma.update(fuente.read_bytes())
+    return firma.hexdigest()
+
+
+def conectar():
+    ruta = carpeta()
+    registro = ruta / "sesion.json"
+    with (ruta / "inicio.lock").open("a") as cerrojo:
+        fcntl.flock(cerrojo, fcntl.LOCK_EX)
+        try:
+            sesion = json.loads(registro.read_text())
+            api(sesion, "interfaz", tiempo=1)
+            if sesion.get("version") == version_local():
+                return sesion
+            api(sesion, "apagar", {}, tiempo=2)
+            registro.unlink(missing_ok=True)
+        except (OSError, ValueError, RuntimeError, KeyError):
+            registro.unlink(missing_ok=True)
+        with (ruta / "nucleo.log").open("ab") as log:
+            proceso = subprocess.Popen([sys.executable, "-m", "universe.lanzador", "_nucleo"],
+                                       stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                                       start_new_session=True)
+        limite = monotonic() + 12
+        while monotonic() < limite and proceso.poll() is None:
+            if registro.is_file():
+                return json.loads(registro.read_text())
+            sleep(.08)
+    raise RuntimeError(f"No arrancó el núcleo. Consulta {ruta / 'nucleo.log'}.")
+
+
+def nucleo():
+    from core.entorno_portatil import verificar_almacenamiento
+    from main import cargar_modelo
+    from universe.nucleo import Nucleo
+    from universe.servidor import crear_servidor
+
+    verificar_almacenamiento()
+    modelo, meta, _ = cargar_modelo()
+    internet = os.environ.get("CEREBRO_SIN_INTERNET") != "1"
+    motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet)
+    token = secrets.token_urlsafe(32)
+    with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio) as servidor:
+        ruta = carpeta()
+        datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
+                 "version": version_local()}
+        fd = os.open(ruta / "sesion.tmp", os.O_CREAT | os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "w") as archivo:
+            json.dump(datos, archivo)
+        (ruta / "sesion.tmp").replace(ruta / "sesion.json")
+        servidor.serve_forever()
+
+
+def abrir(sesion, interfaz):
+    return abrir_web(f"{sesion['url']}/{interfaz}#{sesion['token']}")
+
+
+def lanzar_estudio():
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return False
+    with (carpeta() / "nucleo.log").open("ab") as log:
+        subprocess.Popen([sys.executable, "-m", "universe.lanzador", "studio"],
+                         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    return True
+
+
+def terminal(sesion):
+    identificador = secrets.token_hex(12)
+    cerrar = Event()
+
+    def presencia(visible, enfocar=False):
+        return api(sesion, "interfaz", {"id": identificador, "modo": "terminal",
+                                       "visible": visible, "enfocar": enfocar}, tiempo=2)
+
+    def renovar():
+        while not cerrar.wait(2):
+            with contextlib.suppress(OSError, RuntimeError):
+                presencia(True)
+
+    presencia(True, enfocar=True)
+    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
+        with (carpeta() / "nucleo.log").open("ab") as log:
+            subprocess.Popen([sys.executable, "-m", "universe.lanzador", "escritorio"],
+                             stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    renovador = Thread(target=renovar, daemon=True)
+    renovador.start()
+    acento = "\033[38;5;79m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
+    fin = "\033[0m" if acento else ""
+    print(f"{acento}╭─ Cerebro · Terminal ──────────────────╮{fin}")
+    print("  Programación · Revisa un archivo, pide una función o abre Studio.")
+    print("  «Salir» devuelve el foco al acompañante.")
+    try:
+        for turno in api(sesion, "historial")["turnos"][-4:]:
+            print(f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}")
+        while True:
+            entrada = input(f"{acento}❯{fin} ").strip()
+            if entrada.casefold() in {"salir", "/salir", "adiós", "adios"}:
+                break
+            if not entrada:
+                continue
+            try:
+                presencia(True, enfocar=True)
+                respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal"})
+                print(respuesta["respuesta"])
+                if respuesta.get("abrir") == "studio":
+                    abrir(sesion, "studio")
+            except (OSError, RuntimeError) as exc:
+                print(exc, file=sys.stderr)
+    except (KeyboardInterrupt, EOFError):
+        print()
+    finally:
+        cerrar.set()
+        renovador.join(timeout=2)
+        with contextlib.suppress(OSError, RuntimeError):
+            presencia(False)
+
+
+def escritorio(sesion):
+    import queue
+    import tkinter as tk
+
+    try:
+        ventana = tk.Tk()
+    except tk.TclError as exc:
+        raise RuntimeError("Se necesita una sesión gráfica con Tk para abrir el acompañante.") from exc
+    ventana.title("Cerebro · Escritorio")
+    ventana.configure(bg="#102027")
+    ventana.resizable(False, False)
+    ventana.attributes("-topmost", True)
+    x = max(0, ventana.winfo_screenwidth() - 370)
+    y = max(0, ventana.winfo_screenheight() - 330)
+    ventana.geometry(f"340x292+{x}+{y}")
+
+    cara = tk.Canvas(ventana, width=330, height=87, bg="#102027", highlightthickness=0)
+    cara.pack()
+    cara.create_oval(119, 3, 211, 85, outline="#284b54", width=1, dash=(2, 4))
+    cara.create_oval(129, 10, 201, 80, outline="#3f938a", width=2, fill="#173139")
+    for cx, cy in ((125, 23), (204, 28), (125, 64), (204, 68)):
+        cara.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill="#78d3bd", outline="")
+    cara.create_arc(138, 31, 193, 67, start=218, extent=104, outline="#5ee5b7", width=2, style="arc")
+    ojos = [cara.create_oval(pos, 32, pos + 9, 45, fill="#9ef7d4", outline="")
+            for pos in (148, 174)]
+    cara.create_text(17, 17, text="CEREBRO", anchor="w", fill="#9be8d3", font=("TkDefaultFont", 10, "bold"))
+    cara.create_text(17, 39, text="Asistente local", anchor="w", fill="#a9c1c9", font=("TkDefaultFont", 8))
+
+    def parpadear():
+        for ojo in ojos:
+            cara.itemconfigure(ojo, state="hidden")
+        ventana.after(130, lambda: [cara.itemconfigure(ojo, state="normal") for ojo in ojos])
+        ventana.after(5100, parpadear)
+
+    salida = tk.Text(ventana, height=5, wrap="word", bg="#142b32", fg="#e4fffa", relief="flat",
+                     padx=7, pady=4)
+    salida.pack(fill="x", padx=12)
+    salida.insert("1.0", "¿Qué quieres hacer? Puedes pedirme que investigue, recuerde algo o te ayude a programar.")
+    salida.configure(state="disabled")
+    entrada = tk.Entry(ventana, bg="#142b32", fg="#e4fffa", insertbackground="white")
+    entrada.pack(fill="x", padx=12, pady=6)
+    barra = tk.Frame(ventana, bg="#102027")
+    barra.pack()
+    eventos = queue.SimpleQueue()
+    detenido = Event()
+
+    def observar():
+        while not detenido.is_set():
+            try:
+                eventos.put(("vista", api(sesion, "interfaz", tiempo=2)["activa"]))
+            except (OSError, RuntimeError):
+                registro = carpeta() / "sesion.json"
+                with contextlib.suppress(OSError, ValueError):
+                    nueva = json.loads(registro.read_text())
+                    sesion.update(nueva)
+                eventos.put(("vista", "escritorio"))
+            detenido.wait(.8)
+
+    def despachar(mensaje):
+        try:
+            try:
+                salida = api(sesion, "chat", {"mensaje": mensaje})
+            except OSError:
+                sesion.update(conectar())
+                salida = api(sesion, "chat", {"mensaje": mensaje})
+            eventos.put(("respuesta", salida["respuesta"]))
+            if salida.get("abrir") == "studio":
+                abrir(sesion, "studio")
+        except (OSError, RuntimeError) as exc:
+            eventos.put(("respuesta", str(exc)))
+
+    def enviar(_evento=None):
+        texto = entrada.get().strip()
+        if texto:
+            entrada.delete(0, "end")
+            entrada.configure(state="disabled")
+            Thread(target=despachar, args=(texto,), daemon=True).start()
+
+    def actualizar():
+        while not eventos.empty():
+            tipo, valor = eventos.get()
+            if tipo == "vista":
+                if valor == "escritorio" and ventana.state() == "withdrawn":
+                    ventana.deiconify()
+                elif valor != "escritorio" and ventana.state() != "withdrawn":
+                    ventana.withdraw()
+            elif tipo == "respuesta":
+                salida.configure(state="normal")
+                salida.delete("1.0", "end")
+                salida.insert("end", valor)
+                salida.configure(state="disabled")
+                entrada.configure(state="normal")
+        ventana.after(150, actualizar)
+
+    def cerrar():
+        detenido.set()
+        ventana.destroy()
+
+    entrada.bind("<Return>", enviar)
+    for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
+                           ("Universe", lambda: abrir(sesion, "universe"))):
+        tk.Button(barra, text=nombre, command=accion, bg="#25434b", fg="#e6faf5",
+                  activebackground="#38635f", activeforeground="#ffffff", relief="flat",
+                  padx=9, pady=5, borderwidth=0).pack(side="left", padx=4)
+    ventana.protocol("WM_DELETE_WINDOW", cerrar)
+    Thread(target=observar, daemon=True).start()
+    ventana.after(150, actualizar)
+    ventana.after(5100, parpadear)
+    ventana.mainloop()
+
+
+def apagar():
+    registro = carpeta() / "sesion.json"
+    if registro.is_file():
+        try:
+            api(json.loads(registro.read_text()), "apagar", {}, tiempo=2)
+        finally:
+            registro.unlink(missing_ok=True)
+
+
+def main():
+    modo = sys.argv[1] if len(sys.argv) > 1 else "terminal"
+    if modo == "_nucleo":
+        nucleo()
+        return 0
+    if modo not in {"terminal", "escritorio", "chat", "studio", "universe", "apagar"}:
+        print("Uso: cerebro [terminal|escritorio|chat|studio|universe|apagar]")
+        return 0 if modo in {"-h", "--help"} else 2
+    try:
+        if modo == "apagar":
+            apagar()
+        elif modo == "escritorio":
+            with (carpeta() / "avatar.lock").open("a") as cerrojo:
+                try:
+                    fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    return 0
+                escritorio(conectar())
+        else:
+            sesion = conectar()
+            if modo == "terminal":
+                terminal(sesion)
+            elif modo == "studio":
+                from universe.studio import abrir_studio
+                abrir_studio(sesion)
+            elif not abrir(sesion, modo):
+                raise RuntimeError("No se pudo abrir el navegador predeterminado.")
+    except (OSError, ImportError, RuntimeError, ValueError) as exc:
+        print(f"Cerebro: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

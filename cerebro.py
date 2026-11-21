@@ -30,25 +30,16 @@ def _torch_disponible(python):
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
-def iniciar_automatico():
-    """Prepara el entorno local una vez y activa los servicios compatibles."""
-    try:
-        import numpy  # noqa: F401
-    except ImportError:
-        entorno = RAIZ / ".venv"
-        python = entorno / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-        if not python.is_file():
-            print("Creando entorno aislado de Cerebro...", flush=True)
-            venv.EnvBuilder(with_pip=True).create(str(entorno))
-        print("Instalando dependencias del motor local...", flush=True)
-        codigo = _ejecutar([str(python), "-m", "pip", "install", "-r", str(RAIZ / "requirements.txt")])
-        if codigo:
-            return codigo
-        return _ejecutar([str(python), str(RAIZ / "cerebro.py"), "todo"])
+def _python_chat():
     entorno = RAIZ / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    if entorno.is_file() and Path(sys.executable).resolve() != entorno.resolve():
-        return _ejecutar([str(entorno), str(RAIZ / "cerebro.py"), "todo"])
-    return ejecutar_todo()
+    if entorno.is_file():
+        return str(entorno)
+    return sys.executable
+
+
+def iniciar_automatico(*argumentos):
+    """Abre el asistente local con las dependencias instaladas por Cerebro."""
+    return _ejecutar([_python_chat(), str(RAIZ / "main.py"), "--local", *argumentos])
 
 
 def preparar_modelo_inicial():
@@ -119,7 +110,7 @@ def ejecutar_todo():
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Cerebro: chat y entrenamiento desde un único comando")
-    ap.add_argument("accion", choices=("automejora", "laboratorio", "instalar", "desinstalar", "motores", "iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
+    ap.add_argument("accion", choices=("universe", "automejora", "laboratorio", "instalar", "desinstalar", "motores", "iniciar", "diagnostico", "chat", "entrenar", "generar", "herramientas", "conocimiento", "aprender", "todo"))
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
@@ -127,6 +118,8 @@ def main(argv=None):
     ap.add_argument("--confirmar", action="store_true", help="Confirmar desinstalación de entornos")
     ap.add_argument("--borrar-datos", action="store_true", help="Solicitar también borrar datos locales")
     args, resto = ap.parse_known_args(argv)
+    if args.accion == "universe":
+        return _ejecutar([_python_chat(), "-m", "universe.servidor", *resto])
     if args.accion == "automejora":
         from core.automejora import generar
         import json
@@ -144,7 +137,11 @@ def main(argv=None):
         return 0
     if args.accion == "instalar":
         from core.instalacion import instalar
-        return instalar(RAIZ, avanzado=args.avanzado)
+        try:
+            return instalar(RAIZ, avanzado=args.avanzado)
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            print(f"No se pudo instalar Cerebro: {exc}", file=sys.stderr)
+            return 1
     if args.accion == "desinstalar":
         from core.instalacion import desinstalar
         if args.borrar_datos and not args.confirmar:
@@ -154,6 +151,9 @@ def main(argv=None):
             confirmacion_datos = input("Para borrar recuerdos, datos y checkpoints escribe BORRAR MIS DATOS: ")
         resultado = desinstalar(RAIZ, confirmar=args.confirmar,
                                borrar_datos=args.borrar_datos, confirmacion_datos=confirmacion_datos)
+        if args.confirmar:
+            from universe.instalar_escritorio import retirar
+            retirar(RAIZ)
         print(resultado)
         return 0
     if args.accion == "diagnostico":
@@ -161,9 +161,10 @@ def main(argv=None):
             ap.error("La acción diagnostico no admite argumentos adicionales")
         return mostrar_diagnostico()
     if args.accion == "iniciar":
-        if resto:
-            ap.error("La acción iniciar no admite argumentos adicionales")
-        return iniciar_automatico()
+        if resto and not (len(resto) == 2 and resto[0] == "--una-vez"
+                          or len(resto) == 1 and resto[0].startswith("--una-vez=")):
+            ap.error("La acción iniciar solo admite --una-vez MENSAJE")
+        return iniciar_automatico(*resto)
     if args.accion == "todo":
         if resto:
             ap.error("La acción todo no admite argumentos adicionales")
@@ -177,7 +178,7 @@ def main(argv=None):
     if args.accion == "chat":
         if args.motor != "original":
             ap.error("El chat integrado utiliza el motor original; para PyTorch usa generar")
-        return _ejecutar([sys.executable, str(RAIZ / "main.py"), *resto])
+        return _ejecutar([_python_chat(), str(RAIZ / "main.py"), *resto])
     if args.motor == "original":
         if args.accion == "generar":
             ap.error("Para generar con el motor original usa la acción chat")

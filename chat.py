@@ -20,6 +20,7 @@ from core.tokenizer import ID_EOS
 
 AYUDA = """Comandos:
   /ayuda                    esta ayuda
+  /razonar A2+3*4            dos pasos verificados con el modelo experimental V3
   /origen                   identidad histórica declarada del creador
   /configurar-creador nombre establece creador una sola vez
   /exportar-legado ruta     exporta identidad pública, sin datos privados
@@ -29,6 +30,10 @@ AYUDA = """Comandos:
   /github-estado dueño/repo consulta repositorio público, solo lectura
   /github-errores dueño/repo lista incidencias públicas abiertas
   /aprender-ficha pregunta || respuesta   añade una tarjeta aprobada
+  /enseñar-habilidad nombre || 0:1; 1:3; 2:5    aprende una regla afín
+  /usar-habilidad nombre || número             aplica la regla a otra entrada
+  /corregir-habilidad nombre || ejemplos       revisa una habilidad guardada
+  /encadenar-habilidades primera, segunda || número   combina reglas aprendidas
   /repasar                  muestra una pregunta pendiente
   /autoevaluar              evalúa el modelo con fichas aprobadas
   /progreso                 registra la precisión y su evolución
@@ -37,6 +42,11 @@ AYUDA = """Comandos:
   /motor-para pregunta      explica qué motor usaría Cerebro
   /calificar bien|mal       califica manualmente un repaso (opcional)
   /estado                   información del modelo y de la memoria
+  /deducir hecho; regla ? clase  encadena premisas y muestra la conclusión
+  /recuerdo tema             recupera recuerdos por clave o tema
+  /extraer-recuerdos [tema]  muestra recuerdos como JSON reutilizable
+  /insertar-recuerdo datos   guarda clave = valor o recuerdos en JSON
+  /internet tema             consulta Wikipedia en español y muestra la fuente
   /memoria                  muestra lo que hay en la memoria de largo plazo
   /recordar clave = valor   guarda un dato
   /olvidar clave            borra un dato
@@ -88,7 +98,9 @@ _NO_SON_NOMBRES = {"un", "una", "el", "la", "tu", "yo", "muy", "bien", "pequeño
 
 
 class Conversacion:
-    def __init__(self, modelo, memoria, agente, info_checkpoint=None, seed=None):
+    modo_local = False
+    tema_local = None
+    def __init__(self, modelo, memoria, agente, info_checkpoint=None, seed=None, modo_local=False):
         self.modelo = modelo
         self.memoria = memoria
         self.agente = agente
@@ -99,6 +111,7 @@ class Conversacion:
         import numpy as np
         self.rng = np.random.default_rng(seed)
         self.pregunta_repaso = None
+        self.modo_local = modo_local
 
     # -- entrada principal ------------------------------------------------------------
 
@@ -113,6 +126,7 @@ class Conversacion:
             _registrar_actividad("analizando", "mensaje")
         except OSError:
             _registrar_actividad = lambda *_args: None
+        tema_anterior, self.tema_local = self.tema_local, None
         if entrada.startswith("/"):
             return self._comando(entrada)
 
@@ -134,6 +148,82 @@ class Conversacion:
             resultado = "Correcto" if correcto else "Incorrecto"
             return (f"{resultado}. Respuesta esperada: {tarjeta['respuesta']}. "
                     f"Próximo repaso: {tarjeta['fecha']}."), False
+
+        rutas_directas = (
+            (r"(?:busca|consulta) en internet(?:[: ]+(.+))?", "/internet"),
+            (r"(?:extrae(?:r)?(?: (?:mis|los))? recuerdos?|exporta toda tu memoria)(?:[: ]+(.+))?", "/extraer-recuerdos"),
+            (r"(?:inserta(?:r)?(?: un)? recuerdo|guarda esta memoria)(?:[: ]+(.+))?", "/insertar-recuerdo"),
+            (r"¿?qu[eé] recuerdas(?: (?:sobre|de) (.+?))?\??", "/recuerdo"),
+            (r"deduce[: ]+(.+)", "/deducir"),
+        )
+        for patron, comando in rutas_directas:
+            solicitud = re.fullmatch(patron, entrada, re.IGNORECASE)
+            if solicitud:
+                return self._comando(f"{comando} {solicitud.group(1) or ''}")
+
+        from agent.dialogo_local import respuesta_breve
+        respuesta = respuesta_breve(entrada)
+        if respuesta == "capacidades":
+            return ("Puedo calcular, deducir a partir de premisas, guardar y recuperar recuerdos, "
+                    "aprender habilidades de ejemplos aprobados y consultar Wikipedia. "
+                    "Escribe /ayuda para ver cómo."), False
+        if respuesta == "creador":
+            return ("Para registrar la identidad declarada del creador, usa "
+                    "«/configurar-creador Nombre». Es una configuración de una sola vez."), False
+        if respuesta == "aclarar_definicion":
+            tema = entrada.split(maxsplit=2)[2].strip(" ?")
+            return f"¿Querías decir «qué es {tema}»? Para consultar Wikipedia, escribe «busca en internet {tema}».", False
+
+        sencillas = {
+            "ok": "De acuerdo. ¿Qué quieres hacer ahora?",
+            "vale": "De acuerdo. ¿Qué quieres hacer ahora?",
+            "de acuerdo": "De acuerdo. ¿Qué quieres hacer ahora?",
+            "gracias": "De nada.",
+            "muchas gracias": "De nada.",
+            "hola": "Hola. Puedo ayudarte con cálculos, fuentes locales y habilidades que me enseñes.",
+            "buenas": "Hola. ¿En qué te ayudo?",
+        }
+        saludo = entrada.casefold().rstrip(" .!¡")
+        if saludo in sencillas:
+            if saludo not in ("hola", "buenas"):
+                self.tema_local = tema_anterior
+            return sencillas[saludo], False
+
+        # Las peticiones de aprendizaje tienen sintaxis explícita y no ejecutan texto libre.
+        nombre = r"[\w-]+"
+        numero = r"[+-]?\d{1,9}(?:[.,]\d{1,6})?"
+        solicitud = re.fullmatch(
+            rf"(?:usa|aplica) (?:la habilidad )?({nombre})(?: y (?:luego|después) ({nombre}))? "
+            rf"(?:a|con) ({numero})[.!]?", entrada, re.IGNORECASE,
+        )
+        if solicitud:
+            primera, segunda, valor = solicitud.groups()
+            comando = (f"/encadenar-habilidades {primera}, {segunda}" if segunda
+                       else f"/usar-habilidad {primera}")
+            return self._comando(f"{comando} || {valor}")
+        leccion = re.fullmatch(
+            rf"(enséñate|aprende|corrige) (?:la habilidad )?({nombre}) con estos ejemplos: (.+)",
+            entrada, re.IGNORECASE,
+        )
+        if leccion:
+            accion, habilidad, ejemplos = leccion.groups()
+            comando = "/corregir-habilidad" if accion.casefold() == "corrige" else "/enseñar-habilidad"
+            return self._comando(f"{comando} {habilidad} || {ejemplos}")
+
+        dato_ensenado = re.fullmatch(r"aprende esta respuesta: *(.+?) *\|\| *(.+)", entrada, re.IGNORECASE)
+        if dato_ensenado:
+            if "WRITE" not in config.PERMISOS_AGENTE:
+                return "Necesito permiso WRITE para guardar la respuesta.", False
+            import sqlite3
+            from core.conocimiento import guardar, respuesta_exacta
+            pregunta, respuesta = dato_ensenado.groups()
+            try:
+                guardar(pregunta.strip(), respuesta.strip(), "Declarado por el usuario")
+                if not respuesta_exacta(pregunta):
+                    return "Guardé la respuesta, pero hay versiones distintas. Me abstendré de elegir una.", False
+                return "Guardé la respuesta con tu atribución. Puedes preguntármela en otra sesión.", False
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return f"No pude guardar la respuesta: {exc}", False
 
         # La visualización se puede solicitar hablando, sin memorizar comandos.
         if re.search(r"\b(estacion neuronal|mapa neuronal|visualiza (?:tus )?neuronas)\b",
@@ -220,6 +310,21 @@ class Conversacion:
             from core.consulta_exploracion import respuesta_documental
             return respuesta_documental(peticion_docs.group(1)), False
 
+        if self.modo_local:
+            import sqlite3
+            from core.conocimiento import respuesta_exacta
+            try:
+                dato = respuesta_exacta(entrada)
+            except (OSError, ValueError, sqlite3.Error):
+                dato = None
+            if dato:
+                return dato["respuesta"] + "\nFuente: " + dato["fuente"], False
+        if self.modo_local:
+            from core.temas_locales import responder_tema
+            respuesta, self.tema_local = responder_tema(entrada, tema_anterior)
+            if respuesta is not None:
+                return respuesta, False
+
         # Definiciones: comprobar evidencia precisa antes de usar similitud o generar.
         from core.respuestas_con_fuentes import (
             concepto_definicion, responder_definicion, respuesta_clara,
@@ -228,14 +333,13 @@ class Conversacion:
         if concepto_definicion(entrada):
             _registrar_actividad("investigando", "consulta")
             dato = responder_definicion(entrada)
-            if not dato:
+            if not dato and not self.modo_local:
                 # Solo se consulta el tema público de una definición, nunca
                 # recuerdos, archivos locales ni el historial del usuario.
                 dato = consultar_internet_si_falta(entrada)
             respuesta = (respuesta_clara(dato[0]) + "\nFuente: " + dato[1] if dato else
-                         "No encontré una definición fiable en mis fuentes locales "
-                         "ni pude obtenerla de Wikipedia. Puedes añadir una ficha "
-                         "con /aprender-ficha.")
+                         "No encontré una definición fiable. Puedes aportar una fuente local "
+                         "o guardar una tarjeta con /aprender-ficha.")
             self.memoria.agregar_contexto("usuario", entrada)
             self.memoria.agregar_contexto("ia", respuesta)
             _registrar_actividad("consolidado", "respuesta")
@@ -252,7 +356,7 @@ class Conversacion:
             if resultados:
                 return "\n\n".join(f"[{origen}] {texto}" for texto, origen in resultados), False
             return "No encontré información en el corpus local.", False
-        if ruta == "conocimiento":
+        if ruta == "conocimiento" and not self.modo_local:
             _registrar_actividad("investigando", "consulta")
             from core.conocimiento import buscar as buscar_conocimiento
             resultados = buscar_conocimiento(entrada, limite=1)
@@ -283,6 +387,10 @@ class Conversacion:
             self.memoria.agregar_contexto("ia", respuesta)
             _registrar_actividad("consolidado", "respuesta")
             return respuesta, False
+        if self.modo_local or self.modelo is None:
+            return ("No tengo una respuesta fiable con mis datos locales. Puedo calcular, "
+                    "buscar en el corpus o aplicar una habilidad que me enseñes. "
+                    "Escribe /ayuda para ver ejemplos."), False
         resultado = self.responder_modelo(entrada)
         _registrar_actividad("consolidado", "respuesta")
         return resultado, False
@@ -360,6 +468,75 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        if cmd in ("/enseñar-habilidad", "/usar-habilidad", "/corregir-habilidad", "/encadenar-habilidades"):
+            from pathlib import Path
+            import sqlite3
+            from core.habilidades import apply, chain, teach
+            ruta = Path(config.raiz_datos()) / "data" / "habilidades.sqlite3"
+            nombre, separador, datos = resto.partition("||")
+            if not separador:
+                return f"Uso: {cmd} nombre || datos", False
+            try:
+                if cmd == "/usar-habilidad":
+                    resultado, revision, fuera = apply(ruta, nombre, datos)
+                    aviso = " Fuera del rango de ejemplos: es una extrapolación." if fuera else ""
+                    return f"Regla aprendida (revisión {revision}): {resultado}.{aviso}", False
+                if cmd == "/encadenar-habilidades":
+                    pasos = chain(ruta, nombre.split(","), datos)
+                    return "\n".join(
+                        f"{regla} (revisión {revision}) → {valor}" + (" [extrapolación]" if fuera else "")
+                        for regla, valor, revision, fuera in pasos
+                    ), False
+                resultado = teach(ruta, nombre, datos, revise=cmd == "/corregir-habilidad")
+                from core.actividad_neuronal import publicar
+                publicar("aprendido", "herramienta")
+                return resultado, False
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                return f"No pude completar la habilidad: {exc}", False
+
+        if cmd == "/deducir":
+            from core.razonamiento_local import explicar_deduccion
+            try:
+                resultado = explicar_deduccion(resto)
+                from core.actividad_neuronal import publicar
+                publicar("razonando", "herramienta")
+                if "Conclusión:" in resultado:
+                    publicar("asociando", "relacion")
+                return resultado, False
+            except ValueError as exc:
+                return str(exc), False
+
+        if cmd == "/internet":
+            from aprendizaje_internet import buscar_tema, explicar_error_red
+            if not resto:
+                return "Uso: /internet tema público", False
+            from core.actividad_neuronal import publicar
+            publicar("investigando", "consulta")
+            try:
+                dato = buscar_tema(resto)
+            except ValueError as exc:
+                return str(exc), False
+            except OSError as exc:
+                publicar("error", "fallo")
+                return "No pude consultar Wikipedia. " + explicar_error_red(exc), False
+            if not dato:
+                return "Wikipedia no devolvió un artículo con extracto para esa consulta.", False
+            titulo, texto, url = dato
+            if len(texto) > 1200:
+                texto = texto[:1200].rsplit(" ", 1)[0] + "…"
+            return f"{titulo}\n\n{texto}\n\nFuente: {url}", False
+
+        if cmd == "/razonar":
+            from pathlib import Path
+            from reasoning_v3 import solve
+            checkpoint = Path(__file__).resolve().parent / "checkpoints" / "reasoning-v3.pt"
+            try:
+                return solve(resto, checkpoint), False
+            except ImportError:
+                return "Cerebro V3 requiere PyTorch local (torch>=2.6).", False
+            except (ValueError, OSError, RuntimeError) as exc:
+                return f"Cerebro V3: {exc}", False
+
         if cmd == "/mis-documentos":
             if "READ" not in config.PERMISOS_AGENTE:
                 return "Permiso READ requerido.", False
@@ -416,6 +593,8 @@ class Conversacion:
                                   ensure_ascii=False, indent=2), False
             except (OSError, ValueError) as exc:
                 return f"Recordatorios: {exc}", False
+        if cmd in ("/github-errores", "/github-estado") and getattr(self, "modo_local", False):
+            return "GitHub no está disponible en el modo local.", False
         if cmd == "/github-errores":
             import json
             from core.github_local import incidencias_publicas
@@ -681,6 +860,8 @@ class Conversacion:
                         return "Uso: /aprender-ficha pregunta || respuesta", False
                     pregunta, respuesta = resto.split(" || ", 1)
                     anadir(ruta, pregunta, respuesta)
+                    from core.actividad_neuronal import publicar
+                    publicar("verificado", "herramienta")
                     return "Tarjeta guardada para repasos posteriores.", False
                 if cmd == "/repasar":
                     tarjetas = pendientes(ruta, limite=1)
@@ -704,6 +885,48 @@ class Conversacion:
             return AYUDA, False
         if cmd in ("/estado", "/status"):
             return self.estado(), False
+        if cmd in ("/recuerdo", "/extraer-recuerdos"):
+            import json
+            if "READ" not in a.permisos_concedidos:
+                return "Permiso READ requerido.", False
+            if resto in self.memoria.long_term_memory:
+                recuerdos = {resto: self.memoria.recuperar_largo_plazo(resto)}
+            elif resto:
+                recuerdos = self.memoria.buscar(resto)
+            else:
+                recuerdos = {clave: entrada["valor"]
+                             for clave, entrada in self.memoria.long_term_memory.items()
+                             if isinstance(entrada, dict) and "valor" in entrada}
+            if recuerdos:
+                from core.actividad_neuronal import publicar
+                publicar("recuperando", "memoria")
+            if cmd == "/extraer-recuerdos":
+                return json.dumps(recuerdos, ensure_ascii=False), False
+            if not recuerdos:
+                return "No tengo recuerdos sobre ese tema.", False
+            return "\n".join(f"{clave} = {valor}" for clave, valor in recuerdos.items()), False
+        if cmd == "/insertar-recuerdo":
+            import json
+            if "WRITE" not in a.permisos_concedidos:
+                return "Permiso WRITE requerido.", False
+            if not resto:
+                return 'Uso: /insertar-recuerdo {"clave": "valor"}', False
+            try:
+                if resto.startswith("{"):
+                    recuerdos = json.loads(resto)
+                else:
+                    clave, separador, valor = resto.partition("=")
+                    if not separador or not valor.strip():
+                        raise ValueError("Usa clave = valor o pega el JSON extraído.")
+                    recuerdos = {clave: valor.strip()}
+                cantidad = self.memoria.importar_recuerdos(recuerdos)
+            except (OSError, ValueError, RecursionError) as exc:
+                return f"No pude insertar los recuerdos: {exc}", False
+            if cantidad:
+                from core.actividad_neuronal import publicar
+                publicar("aprendido", "memoria")
+            return (f"Recuerdos nuevos guardados: {cantidad}." if cantidad
+                    else "Esos recuerdos ya estaban guardados."), False
         if cmd in ("/memoria", "/memory"):
             if not self.memoria.long_term_memory:
                 return "La memoria de largo plazo está vacía. Usa /recordar clave = valor.", False
@@ -874,15 +1097,20 @@ class Conversacion:
 
     def estado(self):
         m = self.modelo
-        c = m.cfg
         lineas = [
             "=== ESTADO DE CEREBRO ===",
-            f"Modelo: transformer {c.n_layers} capas x {c.n_heads} cabezas, dim {c.dim}, "
-            f"contexto {c.block_size}, {m.n_parametros():,} parámetros",
-            f"Tokenizador: {m.tokenizer.tipo}, {len(m.tokenizer)} tokens",
             f"Memoria de largo plazo: {len(self.memoria.long_term_memory)} datos",
             f"Temperatura: {self.gen['temperatura']}",
         ]
+        if m is None:
+            lineas.insert(1, "Modelo: herramientas y razonamiento local")
+        else:
+            c = m.cfg
+            lineas[1:1] = [
+                f"Modelo: transformer {c.n_layers} capas x {c.n_heads} cabezas, dim {c.dim}, "
+                f"contexto {c.block_size}, {m.n_parametros():,} parámetros",
+                f"Tokenizador: {m.tokenizer.tipo}, {len(m.tokenizer)} tokens",
+            ]
         if "val_bpb" in self.info:
             lineas.append(f"Calidad en validación: {self.info['val_bpb']:.3f} bits/byte "
                           f"(perplejidad {self.info.get('val_ppl', float('nan')):.1f})")

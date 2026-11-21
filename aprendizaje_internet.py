@@ -149,6 +149,32 @@ def obtener_tema(titulo):
     return None
 
 
+def buscar_tema(titulo):
+    """Busca por relevancia en Wikipedia y devuelve un extracto con fuente."""
+    titulo = " ".join(titulo.split())
+    if not 2 <= len(titulo) <= 200:
+        raise ValueError("La consulta debe contener entre 2 y 200 caracteres.")
+    params = {"action": "query", "generator": "search", "gsrsearch": titulo,
+              "gsrnamespace": "0", "gsrlimit": "3", "prop": "extracts|info",
+              "explaintext": "1", "exintro": "1", "inprop": "url", "format": "json",
+              "formatversion": "2"}
+    req = Request(API + "?" + urlencode(params),
+                  headers={"User-Agent": "CerebroLocal/0.3 (https://github.com/Dirix24/cerebro)",
+                           "Accept": "application/json"})
+    with abrir_api(req, timeout=8, intentos=1) as respuesta:
+        datos = json.load(respuesta)
+    if "error" in datos:
+        raise ValueError("Wikipedia rechazó la consulta.")
+    paginas = sorted(datos.get("query", {}).get("pages", []),
+                     key=lambda pagina: pagina.get("index", 0))
+    for pagina in paginas:
+        url = pagina.get("fullurl", "")
+        texto = " ".join(pagina.get("extract", "").split())
+        if url.startswith("https://es.wikipedia.org/wiki/") and texto:
+            return pagina["title"], texto, url
+    return None
+
+
 def aprender_tema(titulo, max_bytes):
     """Guarda una ficha con procedencia, corpus e índice sin tocar checkpoints."""
     pagina = obtener_tema(titulo)

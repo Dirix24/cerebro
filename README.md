@@ -24,8 +24,7 @@ Requisitos: Linux (orientado a MX Linux / Debian), Python 3 y acceso a Internet 
 # Instala las dependencias básicas en un entorno local aislado
 python3 cerebro.py instalar
 
-# Inicia el chat, prepara el modelo inicial si hace falta,
-# indexa documentos y arranca el ciclo de aprendizaje mientras el chat esté abierto
+# Inicia el chat con herramientas locales, incluso sin checkpoint
 python3 cerebro.py iniciar
 ```
 
@@ -37,7 +36,38 @@ python3 cerebro.py instalar --avanzado
 
 PyTorch es una biblioteca de cálculo; **no es otro asistente ni un modelo descargado**. Puede ocupar bastante espacio y tardar en instalarse. El chat normal sigue utilizando el motor NumPy: los motores PyTorch se entrenan y generan por sus comandos específicos, **no** se alternan automáticamente dentro del chat.
 
-La instalación no crea un servicio del sistema. El proceso de aprendizaje diario funciona mientras el lanzador permanece abierto. Cierra el chat con `/salir` para detener la sesión.
+La instalación no crea un servicio del sistema. La acción `todo` ejecuta el aprendizaje diario mientras el chat permanece abierto. Cierra el chat con `/salir` para detener la sesión.
+
+### Razonamiento, recuerdos e internet
+
+Cerebro ejecuta su modelo NumPy y sus herramientas de razonamiento en tu equipo. El asistente local verifica cálculos y deducciones dentro de los formatos admitidos. La generación experimental con los pesos propios está disponible con `python3 cerebro.py chat`. Su alcance es más limitado que el de un modelo generalista.
+
+Estos ejemplos se escriben dentro del chat:
+
+```text
+Deduce: Ada es ave; ave implica animal; animal implica ser vivo ? ser vivo
+Inserta un recuerdo: proyecto = Atlas
+¿Qué recuerdas sobre el proyecto?
+Extrae recuerdos
+/insertar-recuerdo {"proyecto": "Atlas"}
+Busca en internet fotosíntesis
+```
+
+Los recuerdos se conservan entre sesiones. Copia el JSON de `/extraer-recuerdos` para restaurar los valores con `/insertar-recuerdo` en otra instalación. Si una clave ya contiene un valor distinto, Cerebro rechaza la importación completa. Para extraer una sola clave, usa `/extraer-recuerdos proyecto`.
+
+`/internet` y «Busca en internet…» envían el tema que escribas a Wikipedia en español y devuelven un extracto con su enlace. Escribe solo temas públicos en ese comando. Para usar el asistente local desde un script, ejecuta `python3 cerebro.py iniciar --una-vez '/recuerdo proyecto'`.
+
+## Cerebro en MX Linux
+
+Ejecuta `./instalar` una vez. En adelante escribe `cerebro` o elige Terminal, Escritorio, Chat o Studio en el menú de aplicaciones. Las cuatro entradas usan el mismo núcleo. [Guía de interfaces, investigación y adjuntos](docs/INTERFACES_MX.md).
+
+## Cerebro Universe
+
+```bash
+python3 cerebro.py universe
+```
+
+Abre la dirección que aparece en la terminal para usar Studio, Universe, Canvas y Body con el mismo núcleo. Consulta los [perfiles, la auditoría de integración y las pruebas](docs/UNIVERSE.md).
 
 ## 🧩 Todos los comandos de la aplicación
 
@@ -45,7 +75,7 @@ La instalación no crea un servicio del sistema. El proceso de aprendizaje diari
 |---|---|
 | `python3 cerebro.py instalar` | Instala dependencias básicas de Cerebro |
 | `python3 cerebro.py instalar --avanzado` | Instala también PyTorch opcional |
-| `python3 cerebro.py iniciar` | Arranque integrado con chat y aprendizaje |
+| `python3 cerebro.py iniciar` | Asistente local con los pesos existentes, sin entrenamiento automático |
 | `python3 cerebro.py todo` | Inicia chat, índice y aprendizaje usando dependencias ya disponibles |
 | `python3 cerebro.py chat` | Abre solo el chat NumPy |
 | `python3 cerebro.py diagnostico` | Consulta estado de checkpoints, índice y batería |
@@ -540,3 +570,61 @@ consulta mis documentos inteligencia artificial
 La consulta se hace **exclusivamente en el índice privado local** `data/exploracion_local.sqlite3`; no se envían consultas ni archivos a Internet. Muestra fragmentos de los documentos y la ruta de origen, marcados como coincidencias **no verificadas**. El índice se actualiza en cada exploración y puede quedar desactualizado si cambian los archivos. Para evitar divulgar información personal por accidente, la búsqueda se activa únicamente con estas expresiones o con el comando explícito, no en cualquier pregunta. Este cambio **no** conecta todavía esos textos al entrenamiento de pesos ni comprueba contradicciones.
 
 Pruebas: `python3 -m pytest -q tests/test_consulta_exploracion.py`.
+
+## Reasoning V3 experimental
+
+La rama `feature/cerebro-reasoning-v3` incluye un Transformer propio entrenado
+desde cero y un checkpoint optativo para el comando `/razonar` con PyTorch
+local. Prueba `/razonar L1|0^1` para lógica booleana o `/razonar A2+3*4`
+para aritmética módulo 10. Las operaciones se aplican de izquierda a derecha.
+Cerebro comprueba la propuesta y se abstiene si algún paso falla.
+
+El experimento verificó ambos pasos en 16/16 casos de lógica y 11/128 de
+aritmética con combinaciones reservadas. Consulta los [resultados y comandos
+reproducibles](docs/REASONING_BASELINE.md).
+
+## Licencia
+
+El código original de Cerebro y los pesos procedimentales de Reasoning V3
+se distribuyen bajo la [licencia MIT](LICENSE). Los materiales y dependencias
+de terceros conservan sus condiciones y atribuciones.
+
+### Aprendizaje local de habilidades
+
+Puedes enseñar una regla numérica a Cerebro durante una conversación. Los dos
+primeros ejemplos determinan una regla afín y los demás deben confirmarla.
+Cerebro conserva la regla entre sesiones, acepta correcciones explícitas y
+marca cuándo aplica una regla fuera del rango observado.
+
+```text
+/enseñar-habilidad doble || 0:0; 2:4; 4:8
+/enseñar-habilidad suma-uno || 0:1; 4:5; 8:9
+/usar-habilidad doble || 3
+/encadenar-habilidades doble, suma-uno || 3
+/corregir-habilidad doble || 0:0; 2:4; 5:10
+```
+
+El encadenamiento del ejemplo produce 6 y luego 7. Se usan fracciones
+exactas. El alcance es una familia de reglas numéricas, almacenadas
+localmente en SQLite. Este modo no modifica los pesos neuronales ni convierte
+conversaciones o páginas externas en instrucciones de entrenamiento.
+
+En el modo local puedes decir `Aprende doble con estos ejemplos: 0:0; 2:4; 4:8`
+y después `Usa doble con 3`. Con dos habilidades enseñadas, prueba
+`Aplica doble y después suma-uno a 3`. El chat indica cuando una respuesta
+carece de respaldo local. `cerebro.py todo` sigue siendo la acción explícita
+para el flujo experimental de investigación y entrenamiento en segundo plano.
+
+También puedes escribir `Aprende esta respuesta: ¿Qué es mi laboratorio? ||
+Es mi espacio de pruebas.` y preguntar `Que es mi laboratorio?`. Cerebro
+muestra la atribución al usuario y se abstiene si hay respuestas guardadas
+que discrepan para la misma consulta.
+
+### Conversación local con contexto
+
+En `cerebro.py iniciar`, prueba `2mas 2`, `dos más dos` o `cuánto es 2 por 6`.
+Para probar el catálogo inicial, escribe `que es japon` y en el siguiente
+turno `¿y su capital?`. El modo local cita la fuente y también reconoce
+preguntas básicas sobre Portugal. Este catálogo es pequeño y el tema solo se
+conserva durante la sesión. Las consultas ajenas al catálogo siguen usando el
+conocimiento local existente o una respuesta de incertidumbre.

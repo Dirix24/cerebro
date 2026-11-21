@@ -1,0 +1,96 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background: #10151c;
+  color: #e4edf1;
+  --panel: #171f29;
+  --linea: #303e4a;
+  --muted: #a5b7c2;
+  --acento: #68dfbf;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+header { min-height: 69px; padding: .8rem clamp(1rem, 3vw, 3rem); border-bottom: 1px solid var(--linea); display: flex; align-items: center; gap: 1.5rem; justify-content: space-between; flex-wrap: wrap; }
+.marca { font-size: 1.2rem; font-weight: 700; letter-spacing: -.035em; }
+.marca b, .isotipo { color: var(--acento); }
+.isotipo { margin-right: .35rem; }
+nav, .acciones, .fila { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; }
+main { max-width: 1610px; margin: auto; padding: 0 clamp(1rem, 3vw, 3rem) 2rem; }
+button, .boton, select, input, textarea { font: inherit; border: 1px solid var(--linea); border-radius: 7px; color: inherit; background: #111822; padding: .55rem .72rem; }
+button, .boton { cursor: pointer; font-size: .9rem; }
+button:hover, .boton:hover, button[aria-pressed="true"] { border-color: var(--acento); color: var(--acento); }
+button:disabled { opacity: .5; cursor: wait; }
+:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+label, output, .nota, .titulo span, footer { color: var(--muted); font-size: .88rem; }
+.fila input, .fila textarea { flex: 1; min-width: 10ch; }
+input[type=number] { width: 7ch; }
+#aviso { color: #ffd397; min-height: 1.15rem; margin: .65rem 0; }
+.panel { background: var(--panel); border: 1px solid var(--linea); border-radius: 12px; padding: 1rem; min-width: 0; }
+.acceso { max-width: 460px; margin: 3rem auto; }
+.acceso label { display: block; margin-bottom: .5rem; }
+.titulo { display: flex; align-items: baseline; flex-wrap: wrap; gap: .8rem; margin-bottom: 1rem; }
+h1, h2 { margin: 0; }
+h1 { font-size: clamp(1.65rem, 3vw, 2.45rem); letter-spacing: -.05em; }
+h2 { font-size: 1rem; margin-bottom: .85rem; }
+.acceso h1 { margin-bottom: 1rem; }
+.studio { display: grid; grid-template-columns: minmax(155px,.55fr) minmax(280px,1.4fr) minmax(255px,1fr); gap: .8rem; }
+.columna, .conversacion, .editor, .explorador form { display: flex; flex-direction: column; gap: .65rem; }
+.explorador input, textarea { width: 100%; }
+#mensajes { height: clamp(240px, 55vh, 560px); overflow: auto; background: #121922; border-radius: 8px; padding: .7rem; }
+#mensajes p { padding: .55rem .7rem; border-left: 2px solid var(--acento); background: #1d3035; margin: 0 0 .65rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .93rem; }
+#mensajes p.usuario { background: #202c3b; border-color: #7faafa; }
+textarea { min-height: 235px; font: .9rem ui-monospace, monospace; resize: vertical; }
+#archivos, #tareas, #nodos { max-height: 255px; overflow: auto; display: grid; gap: .35rem; margin: .65rem 0; }
+#archivos button, #nodos button { text-align: left; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font: .86rem ui-monospace, monospace; }
+.grafo { display: grid; grid-template-columns: minmax(0, 3fr) minmax(215px, 1fr); gap: .8rem; }
+#cerebro-3d, #simulador, #lienzo { display: block; width: 100%; margin-top: .75rem; border: 1px solid var(--linea); border-radius: 9px; background: radial-gradient(ellipse at 50% 50%, #142b36, #0d141c 68%); }
+#cerebro-3d { height: clamp(270px, 54vh, 565px); touch-action: none; cursor: grab; }
+#lienzo { min-height: 240px; max-height: 65vh; touch-action: none; cursor: crosshair; background: #101822; }
+#leyenda { display: flex; gap: .65rem; flex-wrap: wrap; color: var(--muted); font-size: .8rem; }
+#leyenda span::before { content: "● "; }
+#simulador { max-height: 360px; }
+#robot { fill: #68dfbf; stroke: #d3fff1; stroke-width: 2; }
+.parar { background: #571823; border-color: #fa6876; color: #fff; font-weight: 750; }
+footer { margin-top: 1rem; border-top: 1px solid var(--linea); padding-top: .65rem; }
+.oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 900px) { .studio { grid-template-columns: 1fr 2fr; }.columna { grid-column: 1/-1; } }
+@media (max-width: 620px) { .studio,.grafo { grid-template-columns: 1fr; } .conversacion { grid-row: 1; } }
+
+[data-interfaz="chat"] header nav, [data-interfaz="chat"] .explorador,
+[data-interfaz="chat"] .columna { display: none; }
+[data-interfaz="chat"] .studio { display: block; max-width: 810px; margin-inline: auto; }
+[data-interfaz="chat"] .titulo { max-width: 810px; margin-inline: auto; }
+[data-interfaz="chat"] #mensajes { height: clamp(300px, 62vh, 660px); }
+[data-interfaz="chat"] .marca b { color: #9bdaca; }
+
+[data-interfaz="estudio"] { background: radial-gradient(ellipse at top right, #14333b, #10151c 52%); min-height: 100vh; }
+[data-interfaz="estudio"] .editor { box-shadow: 0 0 0 1px #78e4bd22; }
+[data-interfaz="estudio"] .titulo h1 { letter-spacing: -.065em; color: #c4fae9; }
+[data-interfaz="chat"] #mensajes { border: 1px solid #26383c; background-color: #121e24; }
+
+#video-adjunto { width: 100%; max-height: 250px; background: #0b151a; border-radius: 8px; }
+
+#mensajes a { color: #a3e3d1; text-underline-offset: .15em; }
+
+#inicio-chat { display: none; }
+[data-interfaz="chat"] {
+  background: #f7f2e9; color: #292720; min-height: 100vh; color-scheme: light;
+  --linea: #d9cdba; --muted: #635849; --panel: #fffaf2; --acento: #894429;
+}
+[data-interfaz="chat"] .marca b { color: #894429; }
+[data-interfaz="chat"] header { background: #f3eadb; }
+[data-interfaz="chat"] .titulo { margin-bottom: 1.5rem; justify-content: space-between; }
+[data-interfaz="chat"] h1 { font: 500 clamp(2.25rem, 6vw, 4.45rem) Georgia, serif; letter-spacing: -.055em; }
+[data-interfaz="chat"] #inicio-chat { display: block; color: #665848; margin: .4rem 0 0; }
+[data-interfaz="chat"] .panel { border-radius: 17px; padding: clamp(.65rem, 2vw, 1.35rem); }
+[data-interfaz="chat"] #mensajes { border: none; background: #fffaf2; padding: .45rem .1rem; }
+[data-interfaz="chat"] #mensajes p { background: #f2ebdf; border-color: #b67355; border-radius: 0 10px 10px 0; }
+[data-interfaz="chat"] #mensajes p.usuario { background: #eae0d1; border-color: #a28e73; }
+[data-interfaz="chat"] #mensajes a { color: #863a22; }
+[data-interfaz="chat"] button, [data-interfaz="chat"] input, [data-interfaz="chat"] .boton {
+  background: #fcf5e8; border-color: #d9c8ad; color: #4a3628;
+}
+[data-interfaz="chat"] #chat button { background: #7c412e; color: #fff9ed; }
+[data-interfaz="chat"] #aviso { color: #7c412e; }

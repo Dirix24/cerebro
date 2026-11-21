@@ -1,7 +1,7 @@
 name: Pruebas Cerebro
 on:
   push:
-    branches: [integracion-final-cerebro-2026]
+    branches: [integracion-final-cerebro-2026, feature/cerebro-reasoning-v3]
   pull_request:
     branches: [main]
   workflow_dispatch:

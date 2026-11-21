@@ -38,3 +38,39 @@ def deducir(es_un, todos_son):
     individuo, clase = es_un
     origen, destino = todos_son
     return f"{individuo} es {destino}" if clase.casefold() == origen.casefold() else None
+
+
+def explicar_deduccion(texto):
+    """Busca una cadena de premisas desde un individuo hasta la clase pedida."""
+    import re
+    from collections import deque
+
+    formato = "Uso: /deducir Ana es ave; ave implica animal; animal implica ser vivo ? ser vivo"
+    if len(texto) > 2000:
+        raise ValueError("La deducción admite hasta 2000 caracteres.")
+    premisas, separador, objetivo = texto.partition("?")
+    hechos = [premisa.strip() for premisa in premisas.split(";")]
+    objetivo = " ".join(objetivo.split())
+    inicial = re.fullmatch(r"(.+?)\s+es\s+(.+)", hechos[0], re.IGNORECASE)
+    if not separador or not objetivo or "?" in objetivo or not inicial:
+        raise ValueError(formato)
+    individuo, clase = (" ".join(campo.split()) for campo in inicial.groups())
+    reglas = {}
+    for premisa in hechos[1:]:
+        regla = re.fullmatch(r"(.+?)\s+implica\s+(.+)", premisa, re.IGNORECASE)
+        if not regla:
+            raise ValueError(formato)
+        origen, destino = (" ".join(campo.split()) for campo in regla.groups())
+        reglas.setdefault(origen.casefold(), []).append(destino)
+
+    pendientes = deque([(clase, [f"{individuo} es {clase}"])])
+    vistas = {clase.casefold()}
+    while pendientes:
+        actual, pasos = pendientes.popleft()
+        if actual.casefold() == objetivo.casefold():
+            return "\n".join(pasos + [f"Conclusión: {individuo} es {objetivo}."])
+        for siguiente in reglas.get(actual.casefold(), []):
+            if siguiente.casefold() not in vistas:
+                vistas.add(siguiente.casefold())
+                pendientes.append((siguiente, pasos + [f"{actual} implica {siguiente}"]))
+    return f"Las premisas dadas no permiten deducir que {individuo} sea {objetivo}."

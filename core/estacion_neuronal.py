@@ -10,7 +10,8 @@ ESTADOS = {
     "analizando": "#facc15", "aprendido": "#3b82f6",
     "investigando": "#fb923c", "consolidado": "#22c55e",
     "asociando": "#a855f7", "observando": "#22d3ee",
-    "error": "#ef4444",
+    "error": "#ef4444", "razonando": "#c298fa", "recuperando": "#61e1e9",
+    "creando": "#f18ed0", "verificado": "#87db92",
 }
 
 

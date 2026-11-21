@@ -24,8 +24,17 @@ _PALABRAS = [(r"\bpor\b", "*"), (r"\bm[aá]s\b", "+"), (r"\bmenos\b", "-"),
              (r"\belevado\s+a\b", "**"), (r"\by\s+medio\b", "+0.5")]
 
 
+_NUMEROS = dict(zip(
+    ("cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez"),
+    map(str, range(11)),
+))
+_NUMERO_ESCRITO = re.compile(r"\b(" + "|".join(_NUMEROS) + r")\b")
+_SEPARAR_CIFRAS = re.compile(r"(?<=\d)(?=[a-záéíóú])|(?<=[a-záéíóú])(?=\d)")
+
+
 def _a_expresion(texto):
-    t = texto.lower()
+    t = _SEPARAR_CIFRAS.sub(" ", texto.lower())
+    t = _NUMERO_ESCRITO.sub(lambda m: _NUMEROS[m[0]], t)
     t = re.sub(r"\bdividido\s+(?:entre|por)\b", "/", t)
     for patron, reemplazo in _PALABRAS:
         t = re.sub(patron, reemplazo, t)

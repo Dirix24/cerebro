@@ -6,7 +6,7 @@ from pathlib import Path
 import config
 
 ESTADOS = {"analizando", "aprendido", "investigando", "consolidado",
-           "asociando", "observando", "error"}
+           "asociando", "observando", "error", "razonando", "recuperando", "creando", "verificado"}
 
 
 def ruta_eventos():
@@ -29,6 +29,14 @@ def registrar(estado, detalle=""):
         os.write(fd, (json.dumps(evento, ensure_ascii=False) + "\n").encode("utf-8"))
     finally:
         os.close(fd)
+
+
+def publicar(estado, detalle):
+    """Un fallo de telemetría no cancela una operación del núcleo."""
+    try:
+        registrar(estado, detalle)
+    except OSError:
+        pass
 
 
 def ultimos(limite=120):
