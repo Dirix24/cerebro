@@ -17,6 +17,7 @@ from core.actividad_neuronal import publicar
 
 CANAL = "https://feeds.bbci.co.uk/mundo/rss.xml"
 DOCUMENTOS = {".txt", ".md", ".csv", ".json", ".pdf", ".docx", ".vtt", ".srt", ".py", ".obj"}
+IMAGENES = {".jpg", ".jpeg"}
 VIDEOS = {".mp4": "mov", ".mov": "mov", ".mkv": "matroska", ".webm": "matroska"}
 PRIVADO = re.compile(r"\b(?:mi|mis|m[ií]o|m[ií]a|contrase[ñn]a|clave|archivo|documento|correo|recuerdo|tel[eé]fono)\b",
                      re.IGNORECASE)

@@ -29,6 +29,16 @@ def url_navegable(texto):
 def elaborar(pregunta):
     texto = re.sub(r"^cerebro[,\s]+", "", pregunta.strip(" ¡!¿?"), flags=re.I)
     normal = _normalizar(texto.rstrip("."))
+    imagen = re.fullmatch(
+        r"(?:(abre(?:me)? (?:el )?navegador(?: web)?)[, ]+"
+        r"(?:(?:y|e) (?:luego )?|despues )?)?"
+        r"(?:descarga(?:me)?|baja(?:me)?) (?:una |la )?(?:imagen|foto) (?:de |del )?(.+)",
+        normal,
+    )
+    if imagen:
+        tema = re.sub(r"^(?:la |el planeta )|[.!]$", "", imagen[2]).strip()
+        pasos = [Paso("abrir_fuente_imagen", {})] if imagen[1] else []
+        return pasos + [Paso("descargar_imagen", {"tema": tema})]
     youtube = re.fullmatch(
         r"(?:abre youtube (?:y|e) busca (.+)|busca (.+) en youtube)", normal)
     if youtube:

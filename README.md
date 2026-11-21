@@ -53,6 +53,12 @@ Adjunta PDF de texto, TXT, Markdown, DOCX o código. Puedes preguntar «¿Qué d
 
 Una solicitud de apertura aceptada por el escritorio puede requerir que confirmes que apareció la ventana. Las búsquedas de YouTube se muestran en el navegador. El análisis directo de enlaces admite artículos de Wikipedia en español.
 
+### Descargar una imagen desde el asistente
+
+Di «Abre el navegador y descarga una imagen de la Tierra». Con internet y permiso de escritura, Cerebro abre la ficha de NASA, descarga el JPEG, verifica que se pueda decodificar y comprueba el contenido guardado en `adjuntos/` de Studio. La descarga usa el catálogo de fuentes verificadas, que actualmente incluye la Tierra. Se necesita Pillow para decodificar la imagen. Di «Abre la imagen de la Tierra que descargaste» para verla con el visor predeterminado.
+
+«Vamos a programar» pregunta si quieres continuar un proyecto o empezar otro. «Abre la Terminal de Cerebro» abre la interfaz local de programación.
+
 ### Guardar un resumen en Studio
 
 Prueba «Busca mis PDF de física, abre el más reciente, hazme un resumen y guárdalo en una carpeta». Cuando revises el resumen, responde **Confirmar guardar resumen** desde la interfaz que inició la operación. Cerebro escribe un TXT en `resumenes/` dentro del espacio de Studio y comprueba el contenido guardado. [Guía de búsquedas y adjuntos](docs/INTERFACES_MX.md)

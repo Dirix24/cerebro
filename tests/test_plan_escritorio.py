@@ -146,3 +146,55 @@ def test_busqueda_por_extension_con_tema(nucleo, tmp_path):
     respuesta = nucleo.conversar("Busca documentos ODT de física")["respuesta"]
     assert "física.odt" in respuesta
     assert "física.docx" not in respuesta
+
+
+def test_imagen_nasa_abre_fuente_y_guarda_archivo_verificado(nucleo, monkeypatch):
+    from core import imagenes_publicas
+
+    llamadas = []
+    imagen = imagenes_publicas.CATALOGO["tierra"]
+    monkeypatch.setattr(aplicaciones_linux, "abrir_url", lambda url: llamadas.append(url) or True)
+    monkeypatch.setattr(imagenes_publicas, "descargar", lambda ficha: llamadas.append(ficha.archivo)
+                        or (b"jpeg validado por el adaptador", 1024, 991))
+    pregunta = "Cerebro, abre el navegador y descarga una imagen de la Tierra"
+    respuesta = nucleo.conversar(pregunta, modo="escritorio")["respuesta"]
+    assert "Guardé y verifiqué" in respuesta and "1024 × 991" in respuesta
+    archivo = nucleo.estudio / "adjuntos" / imagen.nombre
+    assert archivo.read_bytes() == b"jpeg validado por el adaptador"
+    assert llamadas == [imagen.pagina, imagen.archivo]
+    monkeypatch.setattr(aplicaciones_linux, "abrir_documento", lambda ruta: {"aceptado": ruta == archivo})
+    assert "El visor aceptó" in nucleo.conversar("Abre la imagen de la Tierra que descargaste")["respuesta"]
+    nucleo.agente.permisos_concedidos.discard("WRITE")
+    with pytest.raises(PermissionError):
+        nucleo.conversar(pregunta)
+    assert len(llamadas) == 2
+
+
+def test_adaptador_rechaza_html_y_jpeg_invalido():
+    from email.message import Message
+    from io import BytesIO
+    from core.imagenes_publicas import CATALOGO, descargar
+
+    Image = pytest.importorskip("PIL.Image")
+    jpeg = BytesIO()
+    Image.new("RGB", (3, 2)).save(jpeg, "JPEG")
+
+    def respuesta(contenido, tipo):
+        archivo = BytesIO(contenido)
+        archivo.headers = Message()
+        archivo.headers["Content-Type"] = tipo
+        return archivo
+
+    imagen = CATALOGO["tierra"]
+    assert descargar(imagen, abrir=lambda *_a, **_k: respuesta(jpeg.getvalue(), "image/jpeg"))[1:] == (3, 2)
+    with pytest.raises(ValueError, match="diferente de JPEG"):
+        descargar(imagen, abrir=lambda *_a, **_k: respuesta(b"html", "text/html"))
+    with pytest.raises(ValueError, match="decodificar"):
+        descargar(imagen, abrir=lambda *_a, **_k: respuesta(b"html", "image/jpeg"))
+
+
+def test_intencion_programar_y_terminal_en_nucleo_compartido(nucleo):
+    for modo in ("terminal", "web", "studio", "escritorio"):
+        respuesta = nucleo.conversar("Cerebro, ¡vamos a programar!", modo=modo)
+        assert "¿Continuamos un proyecto o empezamos uno nuevo?" in respuesta["respuesta"]
+        assert nucleo.conversar("Abre la Terminal de Cerebro", modo=modo)["abrir"] == "terminal"

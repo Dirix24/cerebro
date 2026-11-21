@@ -378,6 +378,38 @@ class Escritorio:
         return [ventana for ventana in ventanas if clases.intersection(
             documentos_usuario._normalizar(ventana["clase"]).split("."))]
 
+    def _descargar_imagen(self, paso, abrir_fuente):
+        from base64 import b64encode
+        from core import imagenes_publicas
+        from core.actividad_neuronal import publicar
+
+        self._autorizar()
+        self._autorizar_escritura()
+        if not self.nucleo.internet:
+            raise PermissionError("Permiso de internet desactivado.")
+        tema = paso.argumentos["tema"]
+        imagen = imagenes_publicas.CATALOGO.get(tema)
+        if not imagen:
+            return {"respuesta": "La descarga verificada admite la imagen de la Tierra del catálogo de NASA."}
+
+        estado = ""
+        try:
+            if abrir_fuente:
+                if not aplicaciones_linux.abrir_url(imagen.pagina):
+                    return {"respuesta": "El navegador no aceptó abrir la fuente. La descarga quedó pendiente."}
+                estado = "El navegador aceptó abrir la ficha de NASA.\n"
+            publicar("investigando", "herramienta")
+            datos, ancho, alto = imagenes_publicas.descargar(imagen)
+            adjunto = self.nucleo.adjuntar(imagen.nombre, b64encode(datos).decode("ascii"))
+            ruta = self.nucleo.ruta(adjunto["nombre"], lectura=True)
+            if ruta.stat().st_size != len(datos) or ruta.read_bytes() != datos:
+                raise ValueError("El archivo guardado no coincide con lo descargado.")
+        except (OSError, RuntimeError, ValueError) as exc:
+            return {"respuesta": f"{estado}No pude completar la descarga verificada. {exc}"}
+        return {"respuesta": (f"{estado}Guardé y verifiqué {adjunto['nombre']} en Studio "
+                             f"({ancho} × {alto} px).\nFuente: {imagen.pagina}\nCrédito: {imagen.credito}. "
+                             "Para verla, di «Abre la imagen de la Tierra que descargaste».")}
+
     def planificar(self, pregunta, cliente):
         from agent.plan_escritorio import elaborar
 
@@ -385,6 +417,8 @@ class Escritorio:
         if not pasos:
             return None
         primero, *resto = pasos
+        if pasos[-1].herramienta == "descargar_imagen":
+            return self._descargar_imagen(pasos[-1], primero.herramienta == "abrir_fuente_imagen")
         if primero.herramienta in {"abrir_web", "analizar_web"}:
             self.nucleo.exigir_permisos("READ")
             if not self.nucleo.internet:
@@ -519,6 +553,18 @@ class Escritorio:
     def consultar(self, pregunta, cliente):
         texto = re.sub(r"^cerebro(?:[,\s]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
         normal = documentos_usuario._normalizar(texto)
+        if re.fullmatch(r"abre (?:la )?imagen (?:de la tierra )?que descargaste", normal):
+            from core.imagenes_publicas import CATALOGO
+
+            self._autorizar()
+            nombre = CATALOGO["tierra"].nombre
+            ruta = self.nucleo.ruta("adjuntos/" + nombre, lectura=True)
+            if not ruta.is_file():
+                return "Todavía no encuentro la imagen en los adjuntos de Studio."
+            resultado = aplicaciones_linux.abrir_documento(ruta)
+            if resultado["aceptado"]:
+                return f"El visor aceptó abrir {nombre}."
+            return "El escritorio no encontró un visor asociado con JPEG o el visor rechazó la apertura."
         demostracion = self.demostraciones.consultar(normal, cliente)
         if demostracion is not None:
             return demostracion

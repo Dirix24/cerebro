@@ -312,6 +312,22 @@ class Nucleo:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
         if cliente is not None and (not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente)):
             raise ValueError("Identificador de conversación inválido.")
+        from core.documentos_usuario import _normalizar
+
+        intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if not comando and re.fullmatch(
+                r"(?:vamos a programar|programemos|pongamonos a programar|"
+                r"empecemos a programar)(?: por favor)?",
+                intencion):
+            self.exigir_permisos("READ")
+            return {"respuesta": "¿Continuamos un proyecto o empezamos uno nuevo? "
+                                 "Puedes decir «Abre Studio» o «Abre la terminal».",
+                    "compartir_temporal": True}
+        if not comando and re.fullmatch(
+                r"(?:abre|abreme|inicia) (?:la )?terminal(?: de cerebro)?", intencion):
+            self.exigir_permisos("READ")
+            return {"respuesta": "La Terminal de Cerebro se abre desde el lanzador local.",
+                    "abrir": "terminal", "compartir_temporal": True}
         if not comando:
             from agent.preguntas_locales import calculo_dictado, preguntas_multiples
 
@@ -571,8 +587,8 @@ class Nucleo:
             ruta = ruta / parte
             if ruta.is_symlink():
                 raise PermissionError("Los enlaces simbólicos están fuera del explorador.")
-        from universe.consultas import DOCUMENTOS, VIDEOS
-        if ruta.suffix.lower() not in (DOCUMENTOS | set(VIDEOS) if lectura else ARCHIVOS):
+        from universe.consultas import DOCUMENTOS, IMAGENES, VIDEOS
+        if ruta.suffix.lower() not in (DOCUMENTOS | IMAGENES | set(VIDEOS) if lectura else ARCHIVOS):
             raise ValueError("Tipo de archivo no admitido.")
         return ruta
 

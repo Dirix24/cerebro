@@ -108,6 +108,11 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
                 if abrir_estudio():
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
+            if resultado.get("abrir") == "terminal" and abrir_terminal is not None:
+                if abrir_terminal():
+                    resultado.update(abrir="terminal_nativa", respuesta="Solicité abrir la Terminal de Cerebro.")
+                else:
+                    resultado["respuesta"] = "No pude abrir la Terminal de Cerebro en esta sesión."
             if resultado.get("abrir") == "tactil" and abrir_tactil is not None and abrir_tactil():
                 resultado["respuesta"] = "Solicité el modo táctil. Elige una cámara y autoriza su uso en la ventana local."
             if "abrir_url" in resultado and abrir_url is not None:
