@@ -132,3 +132,43 @@ def test_control_dinamico_y_cierre_confirmado(nucleo, monkeypatch):
     assert "se cerró" in nucleo.conversar("Confirmar cierre", cliente=cliente)["respuesta"]
     assert "Minimicé" in nucleo.conversar("Minimiza Editor prueba", cliente=cliente)["respuesta"]
     assert operaciones == [("cierra", "0x123"), ("minimiza", "0x123")]
+
+
+def test_control_compuesto_espera_confirmacion_y_revalida_permisos(nucleo, monkeypatch):
+    from core import ventanas_x11
+
+    cliente = "a" * 24
+    ventana = {"id": "0x123", "pid": "11", "clase": "demo.Editor", "titulo": "Editor"}
+    operaciones = []
+    monkeypatch.setattr(ventanas_x11, "listar", lambda: [ventana])
+    monkeypatch.setattr(ventanas_x11, "actuar", lambda accion, v: operaciones.append(accion) or True)
+    texto = "Pon Editor delante, cierra esa ventana y maximiza Editor"
+    respuesta = nucleo.conversar(texto, cliente=cliente)["respuesta"]
+    assert "Enfoqué" in respuesta and "Confirmar cierre" in respuesta
+    assert operaciones == ["enfoca"]
+    nucleo.agente.permisos_concedidos.discard("WRITE")
+    with pytest.raises(PermissionError):
+        nucleo.conversar("Confirmar cierre", cliente=cliente)
+    assert operaciones == ["enfoca"]
+    nucleo.agente.permisos_concedidos.add("WRITE")
+    assert "Maximicé" in nucleo.conversar("Confirmar cierre", cliente=cliente)["respuesta"]
+    assert operaciones == ["enfoca", "cierra", "maximiza"]
+
+
+def test_aplicacion_aproximada_pide_elegir(nucleo, monkeypatch):
+    app = {"id": "blender.desktop", "nombre": "Blender", "formatos": []}
+    ejecutadas = []
+    monkeypatch.setattr(aplicaciones_linux, "listar", lambda: [app])
+    monkeypatch.setattr(aplicaciones_linux, "lanzar_aplicacion", lambda id: ejecutadas.append(id) or True)
+    assert "Elige una aplicación" in nucleo.conversar("Abre Blendr")["respuesta"]
+    assert not ejecutadas
+    assert "aceptó" in nucleo.conversar("1")["respuesta"]
+    assert ejecutadas == [app["id"]]
+
+
+def test_x11_identifica_ventana_activa_con_valor_adicional(monkeypatch):
+    from core import ventanas_x11
+
+    ventana = {"id": "0x000123"}
+    monkeypatch.setattr(ventanas_x11, "_ejecutar", lambda *args: "window id # 0x123, 0x0")
+    assert ventanas_x11.activa([ventana]) == ventana

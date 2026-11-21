@@ -2,8 +2,9 @@
 from collections import OrderedDict
 from pathlib import Path
 import re
-from time import monotonic
+from time import monotonic, sleep
 
+from agent.control_ventanas import buscar, etiquetas, interpretar
 from core import aplicaciones_linux, documentos_usuario, ventanas_x11
 
 
@@ -12,6 +13,11 @@ _CONFIRMAR = {"si", "si recuerdalo", "si recuerdalo por favor", "recuerdalo"}
 _RECHAZAR = {"no", "no gracias", "no lo recuerdes", "cancelar", "cancela"}
 _ABRIR = r"(abre|abreme|abrir|abri|abra|habre|habreme)"
 _DOCUMENTO = r"(?:(?:el|mi|un)\s+)?documento"
+_VERBOS = {"enfoca": ("Enfoqué", "enfocar"), "minimiza": ("Minimicé", "minimizar"),
+           "maximiza": ("Maximicé", "maximizar"), "restaura": ("Restauré", "restaurar")}
+_NAVEGADOR = {"el navegador", "navegador", "el navegador web", "navegador web"}
+_CATEGORIAS = {"calculadora": "Calculator", "gestor de archivos": "FileManager", "editor de codigo": "IDE"}
+
 
 
 class Escritorio:
@@ -19,10 +25,14 @@ class Escritorio:
         self.nucleo = nucleo
         self.pendientes = OrderedDict()
         self.enlaces = OrderedDict()
+        self.ultimas_aplicaciones = OrderedDict()
+        self.ultimas_ventanas = OrderedDict()
 
     def limpiar(self):
         self.pendientes.clear()
         self.enlaces.clear()
+        self.ultimas_aplicaciones.clear()
+        self.ultimas_ventanas.clear()
 
     def _guardar_pendiente(self, cliente, **datos):
         self.pendientes[cliente] = (monotonic() + 300, datos)
@@ -58,13 +68,39 @@ class Escritorio:
             respuesta += " Si lo ves y quieres guardar la selección, responde «Sí, recuérdalo». Puedes responder «No»."
         return respuesta
 
-    def _aplicacion(self, app):
+    @staticmethod
+    def _recordar_contexto(contexto, cliente, valor):
+        contexto[cliente] = valor
+        contexto.move_to_end(cliente)
+        if len(contexto) > 64:
+            contexto.popitem(last=False)
+
+    def _aplicacion(self, app, cliente, avance=None):
         self._autorizar()
+        try:
+            anteriores = {v["id"] for v in ventanas_x11.listar()}
+        except RuntimeError:
+            anteriores = None
         if aplicaciones_linux.lanzar_aplicacion(app["id"]):
+            self._recordar_contexto(self.ultimas_aplicaciones, cliente, app)
+            if avance is not None:
+                avance.append(True)
+            if anteriores is not None:
+                for _ in range(5):
+                    try:
+                        nuevas = [v for v in ventanas_x11.listar() if v["id"] not in anteriores]
+                    except RuntimeError:
+                        break
+                    candidatas = self._ventanas_de_app(app, nuevas)
+                    if len(candidatas) == 1:
+                        ventana = candidatas[0]
+                        self._recordar_contexto(self.ultimas_ventanas, cliente, ventana)
+                        return f'{app["nombre"]} abrió la ventana «{ventana["titulo"]}».'
+                    sleep(.12)
             return f'{app["nombre"]} aceptó la solicitud de apertura.'
         return f'No pude iniciar {app["nombre"]}.'
 
-    def _ventana(self, cliente, accion, ventana):
+    def _ventana(self, cliente, accion, ventana, avance=None):
         self._autorizar()
         titulo = ventana["titulo"]
         if accion == "cierra":
@@ -72,53 +108,144 @@ class Escritorio:
             self._guardar_pendiente(cliente, cierre=ventana)
             return f'¿Cerrar «{titulo}»? Responde «Confirmar cierre» o «Cancelar».'
         verificado = ventanas_x11.actuar(accion, ventana)
-        return (f'Minimicé «{titulo}».' if verificado
-                else f'Solicité minimizar «{titulo}», pero el gestor no confirmó el cambio.')
+        hecho, infinitivo = _VERBOS[accion]
+        if verificado:
+            self._recordar_contexto(self.ultimas_ventanas, cliente, ventana)
+            if avance is not None:
+                avance.append(True)
+            return f'{hecho} «{titulo}».'
+        return f'Solicité {infinitivo} «{titulo}», pero el gestor no confirmó el cambio.'
 
-    def _controlar(self, texto, normal, cliente):
+    def _controlar(self, texto, normal, cliente, avance=None):
         from universe.consultas import destino_desktop, desea_studio
 
-        control = re.fullmatch(r"(cierra|minimiza)\s+(.{2,100})", normal)
+        control = interpretar(normal)
         apertura = re.fullmatch(rf"{_ABRIR}\s+(?:la aplicacion |el programa )?(.{{2,100}})", normal)
-        buscar = re.fullmatch(r"(?:busca|encuentra) (?:el |un |mi )?archivo (.+)", normal)
-        if buscar:
+        archivo = re.fullmatch(r"(?:busca|encuentra) (?:el |un |mi )?archivo (.+)", normal)
+        if archivo:
             self._autorizar()
-            archivos = documentos_usuario.buscar(buscar[1])
+            archivos = documentos_usuario.buscar(archivo[1])
             return ("Archivos encontrados:\n" + "\n".join(f"• {ruta.relative_to(Path.home())}" for ruta in archivos)
                     if archivos else "No encontré ese archivo en las carpetas autorizadas.")
+        if avance is not None and apertura and destino_desktop(texto) == "youtube":
+            self._autorizar()
+            if not self.nucleo.internet:
+                raise PermissionError("Permiso de internet desactivado.")
+            if aplicaciones_linux.abrir_url("https://www.youtube.com"):
+                avance.append(True)
+                return "El navegador aceptó abrir YouTube."
+            return "El navegador rechazó la apertura de YouTube."
         if control:
             self._autorizar()
             self.pendientes.pop(cliente, None)
-            accion, nombre = control.groups()
-            nombre = re.sub(r"^(?:la ventana de|el programa|la aplicacion) ", "", nombre)
+            accion, nombre = control
+            if accion == "cierra" and re.match(r"^(?:todo\b|todas las ventanas(?: de trabajo)?$)", nombre):
+                return "El cierre general está pendiente. Indica el nombre de una aplicación o ventana."
             ventanas = ventanas_x11.listar()
-            if nombre in {"esta ventana", "ventana activa"}:
+            grupo = re.fullmatch(r"todas las ventanas de (.+)", nombre) if accion == "cierra" else None
+            if grupo:
+                self._autorizar_escritura()
+                apps = buscar(grupo[1], aplicaciones_linux.listar(), etiquetas)
+                if len(apps) != 1:
+                    return "Indica el nombre exacto de una aplicación instalada para cerrar sus ventanas."
+                candidatas = self._ventanas_de_app(apps[0], ventanas)
+                if not candidatas:
+                    return "No pude vincular ventanas abiertas a esa aplicación."
+                self._guardar_pendiente(cliente, cierres=candidatas)
+                lista = "\n".join(f'• {v["titulo"]}' for v in candidatas)
+                return "Responde «Confirmar cierre» para solicitar el cierre normal, o «Cancelar».\n" + lista
+            if accion == "lista":
+                return ("Ventanas abiertas:\n" + "\n".join(f'• {v["titulo"]}' for v in ventanas)
+                        if ventanas else "No hay ventanas abiertas.")
+            if nombre in {"esta ventana", "ventana activa", "la ventana activa"}:
                 ventana = ventanas_x11.activa()
-                return self._ventana(cliente, accion, ventana) if ventana else "No identifiqué la ventana activa."
-            candidatos = [v for v in ventanas if nombre in documentos_usuario._normalizar(v["titulo"] + " " + v["clase"])]
+                return self._ventana(cliente, accion, ventana, avance) if ventana else "No identifiqué la ventana activa."
+            if nombre in {"esa ventana", "la ventana anterior", "la ventana"}:
+                anterior = self.ultimas_ventanas.get(cliente)
+                if anterior:
+                    actual = next((v for v in ventanas if all(
+                        v[campo] == anterior[campo] for campo in ("id", "pid", "clase"))), None)
+                    if actual:
+                        return self._ventana(cliente, accion, actual, avance)
+                return "No identifiqué una ventana anterior de esta conversación."
+            app = None
+            if nombre in _NAVEGADOR:
+                app = aplicaciones_linux.navegador_predeterminado()
+                if not app:
+                    return "No encontré un navegador predeterminado para HTTPS."
+            elif nombre in {"el programa que acabas de abrir", "la aplicacion que acabas de abrir",
+                             "el que acabas de abrir"}:
+                app = self.ultimas_aplicaciones.get(cliente)
+                if not app:
+                    return "Todavía no he abierto una aplicación en esta conversación."
+            if app:
+                candidatos = self._ventanas_de_app(app, ventanas)
+            else:
+                candidatos = buscar(nombre, ventanas, lambda v: [*v["clase"].split("."), v["titulo"]])
             if not candidatos:
                 return "No encontré una ventana que coincida con ese nombre."
             if len(candidatos) == 1:
-                return self._ventana(cliente, accion, candidatos[0])
+                return self._ventana(cliente, accion, candidatos[0], avance)
             self._guardar_pendiente(cliente, ventanas=candidatos[:12], accion=accion)
             return "Elige una ventana por número o responde «Cancelar».\n" + "\n".join(
                 f"{i}. {v['titulo']}" for i, v in enumerate(candidatos[:12], 1))
-        if (apertura and not destino_desktop(texto) and not desea_studio(texto)
+        destino = destino_desktop(texto)
+        if (apertura and destino != "youtube"
+                and not desea_studio(texto)
                 and re.fullmatch(r"[\w .()+-]+", apertura[2])):
             self._autorizar()
             self.pendientes.pop(cliente, None)
-            nombre = apertura[2]
-            apps = [a for a in aplicaciones_linux.listar() if a["id"]]
-            exactas = [a for a in apps if nombre == documentos_usuario._normalizar(a["nombre"])]
-            candidatas = exactas or [a for a in apps if nombre in documentos_usuario._normalizar(a["nombre"])]
+            nombre = re.sub(r" (?:por favor|otra vez|de nuevo)$", "", apertura[2])
+            if nombre in _NAVEGADOR:
+                app = aplicaciones_linux.navegador_predeterminado()
+                candidatas = [app] if app and app["id"] else []
+            else:
+                apps = [a for a in aplicaciones_linux.listar() if a["id"]]
+                candidatas = buscar(nombre, apps, etiquetas, aproximada=True)
+                if not candidatas:
+                    categoria = _CATEGORIAS.get(re.sub(r"^(?:el|la) ", "", nombre))
+                    candidatas = [a for a in apps if categoria in a.get("categorias", [])]
+                if not candidatas:
+                    candidatas = buscar(nombre, apps, lambda a: a.get("alias", []))
             if not candidatas:
-                return "No encontré una aplicación instalada con ese nombre."
-            if len(candidatas) == 1:
-                return self._aplicacion(candidatas[0])
+                return "No encontré una aplicación instalada con ese nombre. Puedes pedirme la lista de aplicaciones."
+            if len(candidatas) == 1 and (nombre in _NAVEGADOR or buscar(nombre, candidatas, etiquetas)):
+                return self._aplicacion(candidatas[0], cliente, avance)
             self._guardar_pendiente(cliente, aplicaciones=candidatas[:12])
             return "Elige una aplicación por número o responde «Cancelar».\n" + "\n".join(
                 f"{i}. {app['nombre']}" for i, app in enumerate(candidatas[:12], 1))
         return None
+
+    def _secuencia(self, pasos, cliente):
+        respuestas = []
+        self.pendientes.pop(cliente, None)
+        for indice, paso in enumerate(pasos):
+            avance = []
+            respuesta = self._controlar(paso, documentos_usuario._normalizar(paso), cliente, avance)
+            respuestas.append(respuesta or f"No pude ejecutar «{paso}» como acción de escritorio.")
+            if not avance:
+                resto = pasos[indice + 1:]
+                if resto and cliente in self.pendientes:
+                    self.pendientes[cliente][1]["resto"] = resto
+                elif resto:
+                    respuestas.append("Detuve los pasos restantes.")
+                break
+        return "\n".join(respuestas)
+
+    def _continuar(self, respuesta, resto, cliente, completado=False):
+        if resto and completado:
+            return respuesta + "\n" + self._secuencia(resto, cliente)
+        if resto and cliente in self.pendientes:
+            self.pendientes[cliente][1]["resto"] = resto
+        elif resto:
+            return respuesta + "\nDetuve los pasos restantes."
+        return respuesta
+
+    @staticmethod
+    def _ventanas_de_app(app, ventanas):
+        clases = {documentos_usuario._normalizar(valor) for valor in etiquetas(app) if valor}
+        return [ventana for ventana in ventanas if clases.intersection(
+            documentos_usuario._normalizar(ventana["clase"]).split("."))]
 
     def planificar(self, pregunta, cliente):
         from agent.plan_escritorio import elaborar
@@ -165,9 +292,20 @@ class Escritorio:
                 inventario = f"Comprobado ahora: GIO devolvió {len(apps)} aplicaciones visibles."
             except RuntimeError as exc:
                 inventario = f"Inventario no disponible: {exc}"
+            try:
+                ventanas = ventanas_x11.listar()
+                escritorio = f"X11 respondió con {len(ventanas)} ventanas."
+                faltan = [programa for programa in ("xprop", "xdotool") if not which(programa)]
+                if faltan:
+                    escritorio += " Faltan utilidades de control: " + ", ".join(faltan) + "."
+                if not self.nucleo.agente.tiene_permisos("WRITE"):
+                    escritorio += " Cierre bloqueado por permisos: WRITE."
+            except RuntimeError as exc:
+                escritorio = f"Control de ventanas no disponible: {exc}"
             lectura_pdf = "disponible" if which("pdftotext") else "bloqueada: falta pdftotext"
             red = "habilitadas" if self.nucleo.internet else "bloqueadas por configuración"
             return {"respuesta": (f"{inventario}\nBúsqueda local en {len(documentos_usuario.carpetas())} carpetas autorizadas."
+                                  f"\n{escritorio}"
                                   f"\nExtracción de PDF: {lectura_pdf}. Aperturas aún sin verificar en esta consulta."
                                   f"\nConsultas públicas: {red}. Aprendizaje por demostración: pendiente.")}
         self._autorizar()
@@ -296,6 +434,13 @@ class Escritorio:
             return (f"Aplicaciones visibles instaladas (mostrando {len(lineas)} de {len(apps)})\n" + "\n".join(lineas)
                     if apps else "El escritorio no devolvió aplicaciones visibles.")
 
+        separador = rf"(?:,\s*(?:(?:y|e)\s+)?|\s+(?:y luego|y despues|y|e|despues)\s+)"
+        inicio = rf"(?:{_ABRIR[1:-1]}|cierra|minimiza|maximiza|enfoca(?:me)?|restaura|pon|cambia a)"
+        pasos = re.split(separador + rf"(?={inicio}\s)", normal)
+        if 1 < len(pasos) <= 8 and all(interpretar(paso) or re.fullmatch(
+                rf"{_ABRIR} [\w .()+-]{{2,100}}", paso) for paso in pasos):
+            return self._secuencia(pasos, cliente)
+
         control = self._controlar(texto, normal, cliente)
         if control is not None:
             return control
@@ -311,7 +456,7 @@ class Escritorio:
         confirmacion = re.sub(r"[,\s]+", " ", normal)
         if confirmacion in _RECHAZAR:
             self.pendientes.pop(cliente)
-            return "De acuerdo. No guardé una selección nueva."
+            return "De acuerdo. Cancelé la operación pendiente."
         if "resumen" in datos and confirmacion == "confirmar guardar resumen":
             from secrets import token_hex
 
@@ -326,22 +471,43 @@ class Escritorio:
                 raise RuntimeError("No pude verificar el contenido guardado.")
             self.pendientes.pop(cliente)
             return f"Guardé y verifiqué «{nombre}» en el espacio de Studio."
+        if "cierres" in datos and confirmacion == "confirmar cierre":
+            self._autorizar()
+            self._autorizar_escritura()
+            self.pendientes.pop(cliente)
+            respuestas = []
+            completado = True
+            for ventana in datos["cierres"]:
+                self._autorizar_escritura()
+                try:
+                    cerrada = ventanas_x11.actuar("cierra", ventana)
+                except RuntimeError as exc:
+                    respuestas.append(f'«{ventana["titulo"]}»: {exc}')
+                    completado = False
+                    continue
+                estado = "cerrada" if cerrada else "sigue abierta, comprueba si hay un aviso"
+                respuestas.append(f'«{ventana["titulo"]}»: {estado}.')
+                completado &= cerrada
+            return self._continuar("\n".join(respuestas), datos.get("resto"), cliente, completado)
         if "cierre" in datos and confirmacion == "confirmar cierre":
             self._autorizar()
             self._autorizar_escritura()
             ventana = datos["cierre"]
             self.pendientes.pop(cliente)
             cerrado = ventanas_x11.actuar("cierra", ventana)
-            return (f'La ventana «{ventana["titulo"]}» se cerró.' if cerrado
-                    else "La ventana sigue abierta. Comprueba si la aplicación muestra un aviso.")
+            respuesta = (f'La ventana «{ventana["titulo"]}» se cerró.' if cerrado
+                         else "La ventana sigue abierta. Comprueba si la aplicación muestra un aviso.")
+            return self._continuar(respuesta, datos.get("resto"), cliente, cerrado)
         if eleccion and ("aplicaciones" in datos or "ventanas" in datos):
             opciones = datos.get("aplicaciones", datos.get("ventanas"))
             indice = int(eleccion[1]) - 1
             if not 0 <= indice < len(opciones):
                 return "Elige un número de la lista."
             self.pendientes.pop(cliente)
-            return (self._aplicacion(opciones[indice]) if "aplicaciones" in datos
-                    else self._ventana(cliente, datos["accion"], opciones[indice]))
+            avance = []
+            respuesta = (self._aplicacion(opciones[indice], cliente, avance) if "aplicaciones" in datos
+                         else self._ventana(cliente, datos["accion"], opciones[indice], avance))
+            return self._continuar(respuesta, datos.get("resto"), cliente, bool(avance))
         if "opciones" in datos and eleccion:
             indice = int(eleccion[1]) - 1
             if not 0 <= indice < len(datos["opciones"]):

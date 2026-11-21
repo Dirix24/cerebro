@@ -26,16 +26,20 @@ def listar():
     ventanas = []
     for linea in _ejecutar("wmctrl", "-lpx").splitlines():
         partes = linea.split(maxsplit=5)
-        if len(partes) == 6 and re.fullmatch(r"0x[0-9a-fA-F]+", partes[0]):
-            identificador, _, proceso, clase, _, titulo = partes
+        if len(partes) >= 5 and re.fullmatch(r"0x[0-9a-fA-F]+", partes[0]):
+            identificador, _, proceso, clase, _ = partes[:5]
+            titulo = partes[5] if len(partes) == 6 else clase
             ventanas.append({"id": identificador, "pid": proceso, "clase": clase, "titulo": titulo})
     return ventanas
 
 
-def activa():
-    valor = _ejecutar("xprop", "-root", "_NET_ACTIVE_WINDOW").split()[-1:]
-    if valor and re.fullmatch(r"0x[0-9a-fA-F]+", valor[0]):
-        return next((v for v in listar() if int(v["id"], 16) == int(valor[0], 16)), None)
+def activa(ventanas=None):
+    if ventanas is None:
+        ventanas = listar()
+    salida = _ejecutar("xprop", "-root", "_NET_ACTIVE_WINDOW")
+    valor = re.search(r"window id # (0x[0-9a-fA-F]+)", salida)
+    if valor:
+        return next((v for v in ventanas if int(v["id"], 16) == int(valor[1], 16)), None)
     return None
 
 
@@ -54,14 +58,32 @@ def actuar(accion, ventana):
                 return True
             sleep(.12)
         return False
-    if accion != "minimiza":
+    maximizada = {"_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"}
+    if accion == "enfoca":
+        _ejecutar("wmctrl", "-ia", identificador)
+    elif accion == "minimiza":
+        _ejecutar("xdotool", "windowminimize", str(int(identificador, 16)))
+    elif accion in {"maximiza", "restaura"}:
+        if accion == "restaura":
+            _ejecutar("wmctrl", "-ia", identificador)
+        cambio = "add" if accion == "maximiza" else "remove"
+        _ejecutar("wmctrl", "-ir", identificador, "-b", f"{cambio},maximized_vert,maximized_horz")
+    else:
         raise ValueError("Acción de ventana desconocida.")
-    _ejecutar("xdotool", "windowminimize", str(int(identificador, 16)))
+
     for _ in range(5):
-        try:
-            if "_NET_WM_STATE_HIDDEN" in _ejecutar("xprop", "-id", identificador, "_NET_WM_STATE"):
+        if accion == "enfoca":
+            enfocada = activa()
+            if enfocada and enfocada["id"] == identificador:
                 return True
-        except RuntimeError:
-            break
+        else:
+            estado = set(re.findall(r"_NET_WM_STATE_[A-Z_]+",
+                                    _ejecutar("xprop", "-id", identificador, "_NET_WM_STATE")))
+            if accion == "minimiza" and "_NET_WM_STATE_HIDDEN" in estado:
+                return True
+            if accion == "maximiza" and maximizada <= estado:
+                return True
+            if accion == "restaura" and not estado.intersection(maximizada | {"_NET_WM_STATE_HIDDEN"}):
+                return True
         sleep(.12)
     return False

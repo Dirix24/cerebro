@@ -61,7 +61,11 @@ Prueba «Busca mis PDF de física, abre el más reciente, hazme un resumen y gu�
 
 «Abre Blender» busca aplicaciones en GIO. «Abre mi documento de matemáticas» busca el archivo por nombre en Documentos y Descargas. Si hay varias coincidencias, elige una. Cerebro solo guarda la selección cuando la confirmas. Con `CEREBRO_SIN_DOCUMENTOS=1` puedes desactivar esa capacidad al arrancar.
 
-En X11, «Minimiza esta ventana» y «Cierra LibreOffice» usan `wmctrl`, `xdotool` y `xprop`. Cerrar requiere confirmación. En Wayland falta un adaptador del compositor.
+En X11 puedes decir «Enfócame el navegador», «Maximiza Blender», «Minimiza esta ventana», «Restaura esa ventana» o «Muéstrame todas las ventanas abiertas». Cerebro consulta el estado de X11 después de cada acción. Para enfocar el navegador usa la asociación HTTPS y, cuando esta apunta al lanzador de XFCE, consulta la preferencia de XFCE.
+
+«Cierra LibreOffice» y «Cierra todas las ventanas de LibreOffice» requieren **Confirmar cierre** desde la conversación que inició la operación. Se envía una solicitud de cierre normal. Si una ventana sigue abierta, revisa si la aplicación pide guardar cambios. Puedes encadenar órdenes de aplicaciones y ventanas, como «Enfoca Blender, minimiza el navegador y pon LibreOffice delante». La secuencia pausa ante una selección o confirmación y se detiene si un paso falla.
+
+El control de ventanas requiere X11, `wmctrl`, `xdotool` y `xprop`. En Wayland se necesita un adaptador del compositor.
 
 **Modo táctil experimental.** En el panel local selecciona tu cámara y autorízala. **Ver cámara** muestra los puntos detectados y pausa el puntero. **Dibujar figura** permite trazar un contorno con una pinza. **Convertir a 3D** le da grosor y **Guardar OBJ** exporta la malla. **Pausar** libera la cámara.
 
