@@ -151,8 +151,8 @@ class Conversacion:
 
         rutas_directas = (
             (r"(?:busca|consulta) en internet(?:[: ]+(.+))?", "/internet"),
-            (r"extrae(?:r)?(?: (?:mis|los))? recuerdos?(?:[: ]+(.+))?", "/extraer-recuerdos"),
-            (r"inserta(?:r)?(?: un)? recuerdo(?:[: ]+(.+))?", "/insertar-recuerdo"),
+            (r"(?:extrae(?:r)?(?: (?:mis|los))? recuerdos?|exporta toda tu memoria)(?:[: ]+(.+))?", "/extraer-recuerdos"),
+            (r"(?:inserta(?:r)?(?: un)? recuerdo|guarda esta memoria)(?:[: ]+(.+))?", "/insertar-recuerdo"),
             (r"¿?qu[eé] recuerdas(?: (?:sobre|de) (.+?))?\??", "/recuerdo"),
             (r"deduce[: ]+(.+)", "/deducir"),
         )
@@ -160,6 +160,19 @@ class Conversacion:
             solicitud = re.fullmatch(patron, entrada, re.IGNORECASE)
             if solicitud:
                 return self._comando(f"{comando} {solicitud.group(1) or ''}")
+
+        from agent.dialogo_local import respuesta_breve
+        respuesta = respuesta_breve(entrada)
+        if respuesta == "capacidades":
+            return ("Puedo calcular, deducir a partir de premisas, guardar y recuperar recuerdos, "
+                    "aprender habilidades de ejemplos aprobados y consultar Wikipedia. "
+                    "Escribe /ayuda para ver cómo."), False
+        if respuesta == "creador":
+            return ("Para registrar la identidad declarada del creador, usa "
+                    "«/configurar-creador Nombre». Es una configuración de una sola vez."), False
+        if respuesta == "aclarar_definicion":
+            tema = entrada.split(maxsplit=2)[2].strip(" ?")
+            return f"¿Querías decir «qué es {tema}»? Para consultar Wikipedia, escribe «busca en internet {tema}».", False
 
         sencillas = {
             "ok": "De acuerdo. ¿Qué quieres hacer ahora?",
@@ -474,14 +487,22 @@ class Conversacion:
                         f"{regla} (revisión {revision}) → {valor}" + (" [extrapolación]" if fuera else "")
                         for regla, valor, revision, fuera in pasos
                     ), False
-                return teach(ruta, nombre, datos, revise=cmd == "/corregir-habilidad"), False
+                resultado = teach(ruta, nombre, datos, revise=cmd == "/corregir-habilidad")
+                from core.actividad_neuronal import publicar
+                publicar("aprendido", "herramienta")
+                return resultado, False
             except (OSError, ValueError, sqlite3.Error) as exc:
                 return f"No pude completar la habilidad: {exc}", False
 
         if cmd == "/deducir":
             from core.razonamiento_local import explicar_deduccion
             try:
-                return explicar_deduccion(resto), False
+                resultado = explicar_deduccion(resto)
+                from core.actividad_neuronal import publicar
+                publicar("razonando", "herramienta")
+                if "Conclusión:" in resultado:
+                    publicar("asociando", "relacion")
+                return resultado, False
             except ValueError as exc:
                 return str(exc), False
 
@@ -489,11 +510,14 @@ class Conversacion:
             from aprendizaje_internet import buscar_tema, explicar_error_red
             if not resto:
                 return "Uso: /internet tema público", False
+            from core.actividad_neuronal import publicar
+            publicar("investigando", "consulta")
             try:
                 dato = buscar_tema(resto)
             except ValueError as exc:
                 return str(exc), False
             except OSError as exc:
+                publicar("error", "fallo")
                 return "No pude consultar Wikipedia. " + explicar_error_red(exc), False
             if not dato:
                 return "Wikipedia no devolvió un artículo con extracto para esa consulta.", False
@@ -836,6 +860,8 @@ class Conversacion:
                         return "Uso: /aprender-ficha pregunta || respuesta", False
                     pregunta, respuesta = resto.split(" || ", 1)
                     anadir(ruta, pregunta, respuesta)
+                    from core.actividad_neuronal import publicar
+                    publicar("verificado", "herramienta")
                     return "Tarjeta guardada para repasos posteriores.", False
                 if cmd == "/repasar":
                     tarjetas = pendientes(ruta, limite=1)
@@ -871,6 +897,9 @@ class Conversacion:
                 recuerdos = {clave: entrada["valor"]
                              for clave, entrada in self.memoria.long_term_memory.items()
                              if isinstance(entrada, dict) and "valor" in entrada}
+            if recuerdos:
+                from core.actividad_neuronal import publicar
+                publicar("recuperando", "memoria")
             if cmd == "/extraer-recuerdos":
                 return json.dumps(recuerdos, ensure_ascii=False), False
             if not recuerdos:
@@ -893,6 +922,9 @@ class Conversacion:
                 cantidad = self.memoria.importar_recuerdos(recuerdos)
             except (OSError, ValueError, RecursionError) as exc:
                 return f"No pude insertar los recuerdos: {exc}", False
+            if cantidad:
+                from core.actividad_neuronal import publicar
+                publicar("aprendido", "memoria")
             return (f"Recuerdos nuevos guardados: {cantidad}." if cantidad
                     else "Esos recuerdos ya estaban guardados."), False
         if cmd in ("/memoria", "/memory"):

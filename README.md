@@ -57,6 +57,14 @@ Los recuerdos se conservan entre sesiones. Copia el JSON de `/extraer-recuerdos`
 
 `/internet` y «Busca en internet…» envían el tema que escribas a Wikipedia en español y devuelven un extracto con su enlace. Escribe solo temas públicos en ese comando. Para usar el asistente local desde un script, ejecuta `python3 cerebro.py iniciar --una-vez '/recuerdo proyecto'`.
 
+## Cerebro Universe
+
+```bash
+python3 cerebro.py universe
+```
+
+Abre la dirección que aparece en la terminal para usar Studio, Universe, Canvas y Body con el mismo núcleo. Consulta los [perfiles, la auditoría de integración y las pruebas](docs/UNIVERSE.md).
+
 ## 🧩 Todos los comandos de la aplicación
 
 | Comando | Qué hace |

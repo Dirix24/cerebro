@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Cerebro Universe</title>
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <div class="marca"><span class="isotipo" aria-hidden="true">◉</span> Cerebro <b>Universe</b></div>
+    <nav aria-label="Interfaces">
+      <button data-tab="studio" aria-pressed="true">Studio</button>
+      <button data-tab="universe" aria-pressed="false">Universe</button>
+      <button data-tab="canvas" aria-pressed="false">Canvas</button>
+      <button data-tab="body" aria-pressed="false">Body</button>
+    </nav>
+    <output id="conexion">Desconectado</output>
+  </header>
+  <main>
+    <form id="acceso" class="panel acceso">
+      <h1>Conectar al núcleo</h1>
+      <label for="clave">Clave de sesión</label>
+      <div class="fila"><input id="clave" type="password" required autocomplete="off"><button>Conectar</button></div>
+    </form>
+    <p id="aviso" role="status" aria-live="polite"></p>
+    <section id="studio" hidden>
+      <div class="titulo"><h1>Studio</h1><output id="identidad"></output></div>
+      <div class="studio">
+        <aside class="panel explorador">
+          <h2>Archivos</h2>
+          <form id="abrir-archivo"><label for="archivo">Ruta relativa</label><input id="archivo" placeholder="notas/proyecto.md" required><button>Abrir</button></form>
+          <div id="archivos"></div>
+        </aside>
+        <section class="panel conversacion" aria-labelledby="titulo-chat">
+          <h2 id="titulo-chat">Conversación</h2>
+          <div id="mensajes" role="log" aria-label="Mensajes"></div>
+          <form id="chat" class="fila">
+            <label for="mensaje" class="oculto">Mensaje para Cerebro</label><input id="mensaje" placeholder="Escribe a Cerebro" required><button>Enviar</button>
+          </form>
+          <div class="acciones"><button data-chat="¿Qué sabes hacer?">Capacidades</button>
+            <button id="exportar">Exportar recuerdos</button><label class="boton" for="importar">Importar</label>
+            <input id="importar" type="file" accept=".json,application/json" hidden>
+          </div>
+        </section>
+        <div class="columna">
+          <section class="panel editor">
+            <h2>Editor</h2>
+            <label for="contenido" class="oculto">Contenido del archivo</label>
+            <textarea id="contenido" spellcheck="false" placeholder="Crea una nota o edita código de tu espacio de trabajo."></textarea>
+            <div class="acciones"><button id="guardar">Guardar</button><button data-tarea="sintaxis">Validar Python</button></div>
+          </section>
+          <section class="panel tareas">
+            <h2>Terminal controlada</h2>
+            <div class="acciones"><button data-tarea="estado">Estado del núcleo</button><button id="limpiar-tareas">Limpiar historial</button></div>
+            <div id="tareas"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+    <section id="universe" hidden>
+      <div class="titulo"><h1>Universe</h1><span>Memoria y actividad observable</span></div>
+      <div class="grafo">
+        <div class="panel observatorio">
+          <div class="acciones">
+            <label for="buscar-nodo" class="oculto">Buscar nodos</label><input id="buscar-nodo" placeholder="Buscar nodos">
+            <label for="filtro" class="oculto">Filtrar nodos</label><select id="filtro"><option value="">Todos los tipos</option></select>
+            <label><input id="activar-grafo" type="checkbox" checked> 3D</label>
+            <label><input id="orbita" type="checkbox" checked> Rotación automática</label>
+          </div>
+          <canvas id="cerebro-3d" aria-label="Proyección tridimensional de los nodos. Usa la lista para seleccionar con el teclado."></canvas>
+          <p class="nota">Arrastra para girar y usa la rueda para acercar. La órbita y la silueta son decorativas.</p>
+          <div id="leyenda"></div>
+        </div>
+        <aside class="panel inspector"><h2>Nodos</h2><div id="nodos"></div><h2>Inspección</h2><pre id="detalle">Selecciona un nodo.</pre></aside>
+      </div>
+    </section>
+    <section id="canvas" hidden>
+      <div class="titulo"><h1>Canvas</h1><span>Dibujo y diagramas</span></div>
+      <section class="panel lienzo-panel">
+        <div class="acciones">
+          <label for="herramienta">Herramienta</label><select id="herramienta"><option value="trazo">Lápiz</option><option value="rectangulo">Rectángulo</option><option value="linea">Conector</option><option value="texto">Texto</option></select>
+          <label for="color">Color</label><input id="color" type="color" value="#48dabb">
+          <label for="texto-figura" class="oculto">Texto de la figura</label><input id="texto-figura" placeholder="Etiqueta">
+          <button id="deshacer">Deshacer</button><button id="organizar">Alinear figuras</button>
+          <button id="guardar-lienzo">Guardar</button><button id="exportar-svg">Exportar SVG</button>
+        </div>
+        <svg id="lienzo" viewBox="0 0 900 500" aria-label="Lienzo de diagramas" role="img"></svg>
+        <p class="nota">Edición en el navegador. Visión propia, generación de imágenes y automatización del escritorio están previstas.</p>
+      </section>
+    </section>
+    <section id="body" hidden>
+      <div class="titulo"><h1>Body</h1><span>Simulación CAZEL-1 y telemetría recibida</span></div>
+      <div class="grafo">
+        <section class="panel">
+          <h2>Simulador</h2><p id="estado-body"></p>
+          <div class="acciones"><button data-body="armar">Armar simulador</button><button data-body="parar" class="parar">Parada de emergencia</button></div>
+          <div class="acciones">
+            <label for="cm">Distancia en cm</label><input id="cm" type="number" min="0" max="50" value="10"><button data-body="avanzar">Avanzar</button>
+            <label for="grados">Giro en grados</label><input id="grados" type="number" min="-180" max="180" value="45"><button data-body="girar">Girar</button>
+          </div>
+          <svg id="simulador" viewBox="0 0 400 220" role="img" aria-label="Plano de la posición simulada"><g id="robot"><circle r="13"></circle><path d="M0 0 L22 0"></path></g></svg>
+          <p class="nota">Los movimientos y la parada actúan sobre el simulador.</p>
+        </section>
+        <aside class="panel"><h2>Dispositivos</h2><button id="puertos">Consultar puertos serie</button>
+          <pre id="dispositivos">Inventario pendiente.</pre><h2>Telemetría</h2><pre id="telemetria">Sin lecturas.</pre>
+          <p class="nota">Cámaras y actuadores físicos están pendientes de integración y validación.</p>
+        </aside>
+      </div>
+    </section>
+    <footer id="metricas" hidden></footer>
+  </main>
+</body>
+</html>

@@ -20,9 +20,11 @@ from core.mapa_memoria import grafo
 PALETA = {
     "analizando": 3, "aprendido": 4, "investigando": 3,
     "consolidado": 2, "asociando": 5, "observando": 6, "error": 1,
+    "razonando": 5, "recuperando": 6, "creando": 5, "verificado": 2,
 }
 SIMBOLOS = {"analizando": "?", "aprendido": "o", "investigando": "*",
-            "consolidado": "O", "asociando": "+", "observando": "@", "error": "!"}
+            "consolidado": "O", "asociando": "+", "observando": "@", "error": "!",
+            "razonando": "=", "recuperando": "<", "creando": "#", "verificado": "V"}
 
 
 def cargar_recuerdos():
