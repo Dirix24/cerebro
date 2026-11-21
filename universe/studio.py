@@ -4,12 +4,12 @@ from contextlib import suppress
 from pathlib import Path
 from queue import Empty, SimpleQueue
 from secrets import token_hex
-from threading import Thread
+from threading import Lock, Thread
 from tkinter import END, BOTH, LEFT, X, Y, Listbox, StringVar, Text, Tk, TclError
 from tkinter import filedialog, messagebox, ttk
 from urllib.parse import quote
 
-from universe.lanzador import api, abrir
+from universe.lanzador import api, abrir, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
 FONDO = "#121920"
@@ -18,7 +18,7 @@ TEXTO = "#e9f3f6"
 ACENTO = "#9fead9"
 
 
-def abrir_studio(sesion):
+def abrir_studio(sesion, solicitud=None):
     try:
         app = Tk()
     except TclError as exc:
@@ -42,6 +42,9 @@ def abrir_studio(sesion):
     pendientes = SimpleQueue()
     tareas_en_curso = set()
     identificador = token_hex(12)
+    presencia = Lock()
+    visible = True
+    generacion = 0
 
     def pedir(operacion, datos=None):
         return api(sesion, operacion, datos)
@@ -78,6 +81,8 @@ def abrir_studio(sesion):
     cabecera = ttk.Frame(app, padding=(16, 12))
     cabecera.pack(fill=X)
     ttk.Label(cabecera, text="Cerebro Studio", style="Titulo.TLabel").pack(side=LEFT, padx=(0, 15))
+    boton(cabecera, "Terminal", lanzar_terminal)
+    boton(cabecera, "Acompañante", app.iconify)
     boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"))
     boton(cabecera, "Universe web", lambda: abrir(sesion, "universe"))
     paginas = ttk.Notebook(app)
@@ -205,11 +210,33 @@ def abrir_studio(sesion):
         publicar(subir, adjunto)
 
     def informar(enfocar=False):
-        publicar(lambda: pedir("interfaz", {"id": identificador, "modo": "studio",
-                                            "visible": True, "enfocar": enfocar}))
+        nonlocal generacion
+        generacion += 1
+        turno, se_ve = generacion, visible
+
+        def enviar_presencia():
+            with presencia:
+                if turno == generacion:
+                    api(sesion, "interfaz", {"id": identificador, "modo": "studio",
+                                             "visible": se_ve, "enfocar": enfocar}, tiempo=2)
+
+        publicar(enviar_presencia)
+
+    def visibilidad(evento, mostrar):
+        nonlocal visible
+        if evento.widget is app:
+            visible = mostrar
+            informar(mostrar)
+            if not mostrar:
+                lanzar_acompanante()
 
     def pulso():
-        informar()
+        if solicitud is not None and solicitud.exists():
+            solicitud.unlink(missing_ok=True)
+            app.deiconify()
+            app.lift()
+        if visible:
+            informar()
         if tareas_en_curso:
             def mostrar_tareas(datos):
                 for tarea in datos:
@@ -232,9 +259,11 @@ def abrir_studio(sesion):
         app.after(75, procesar)
 
     def cerrar():
+        nonlocal generacion
         if editor.edit_modified() and not messagebox.askyesno("Cambios sin guardar", "¿Cerrar Studio?"):
             return
-        with suppress(OSError, RuntimeError):
+        generacion += 1
+        with presencia, suppress(OSError, RuntimeError):
             api(sesion, "interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
         app.destroy()
 
@@ -245,7 +274,9 @@ def abrir_studio(sesion):
     boton(barra_chat, "Adjuntar", adjuntar)
     lista.bind("<<ListboxSelect>>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())
-    app.bind("<FocusIn>", lambda evento: informar(True) if evento.widget is app else None)
+    app.bind("<FocusIn>", lambda evento: informar(True) if evento.widget is app and visible else None)
+    app.bind("<Map>", lambda evento: visibilidad(evento, True))
+    app.bind("<Unmap>", lambda evento: visibilidad(evento, False))
     app.protocol("WM_DELETE_WINDOW", cerrar)
     actualizar_archivos()
     publicar(lambda: pedir("historial"), lambda datos: mostrar(salida, "\n".join(

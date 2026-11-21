@@ -7,7 +7,11 @@ const modoWeb = location.pathname === "/chat" ? "chat" : "studio";
 const idInterfaz = Array.from(crypto.getRandomValues(new Uint8Array(12)),
   byte => byte.toString(16).padStart(2, "0")).join("");
 document.body.dataset.interfaz = modoWeb === "chat" ? "chat" : "estudio";
-if (modoWeb === "chat") $("titulo-interfaz").textContent = "Chat";
+if (modoWeb === "chat") {
+  document.title = "Cerebro Chat";
+  $("marca-modo").textContent = "Chat";
+  $("titulo-interfaz").textContent = "¿En qué te ayudo?";
+}
 
 function anunciar(visible, enfocar = false) {
   if (!token) return;
@@ -15,10 +19,18 @@ function anunciar(visible, enfocar = false) {
     Authorization: "Bearer " + token, "Content-Type": "application/json",
   }, body: JSON.stringify({id: idInterfaz, modo: modoWeb, visible, enfocar})}).catch(() => {});
 }
-document.addEventListener("visibilitychange", () => anunciar(!document.hidden, !document.hidden));
-window.addEventListener("focus", () => anunciar(!document.hidden, true));
+let acompananteSolicitado = false;
+function activarVista() {
+  acompananteSolicitado = false;
+  anunciar(!document.hidden && document.hasFocus(), true);
+}
+document.addEventListener("visibilitychange", activarVista);
+window.addEventListener("focus", activarVista);
+window.addEventListener("blur", () => anunciar(false));
 window.addEventListener("pagehide", () => anunciar(false));
-setInterval(() => { if (!document.hidden) anunciar(true); }, 2000);
+setInterval(() => {
+  if (!acompananteSolicitado && !document.hidden && document.hasFocus()) anunciar(true);
+}, 2000);
 let vista = "studio";
 let cambioVista = 0;
 let nodos = [];
@@ -89,12 +101,13 @@ async function conectar(nuevaClave) {
   $("clave").value = "";
   $("conexion").textContent = "Núcleo conectado";
   $("metricas").hidden = false;
-  anunciar(!document.hidden, true);
+  activarVista();
   await mostrar(location.pathname === "/universe" ? "universe" : "studio");
   const historial = await api("historial");
   if ($("mensajes").childElementCount === 0) {
     for (const turno of historial.turnos) agregarMensaje(turno.rol === "usuario" ? "Tú" : "Cerebro", turno.texto);
   }
+  $("sugerencias-chat").hidden = modoWeb !== "chat" || $("mensajes").childElementCount > 0;
   if (modoWeb === "studio") await actualizarArchivos();
 }
 
@@ -114,6 +127,17 @@ if (claveInicial) {
 $("ir-universe").addEventListener("click", () => {
   if (token) location.assign("/universe#" + token);
 });
+
+$("abrir-terminal").addEventListener("click", () => ejecutar($("abrir-terminal"), async () => {
+  await api("escritorio", {accion: "terminal"});
+  anunciar(false);
+  aviso("Terminal solicitada.");
+}));
+$("mostrar-acompanante").addEventListener("click", () => ejecutar($("mostrar-acompanante"), async () => {
+  await api("escritorio", {accion: "acompanante"});
+  acompananteSolicitado = true;
+  anunciar(false);
+}));
 
 async function estado() {
   const datos = await api("estado");
@@ -170,6 +194,8 @@ function agregarMensaje(rol, texto) {
 }
 
 async function conversar(texto) {
+  activarVista();
+  $("sugerencias-chat").hidden = true;
   agregarMensaje("Tú", texto);
   const salida = await api("chat", {mensaje: texto, modo: modoWeb});
   agregarMensaje("Cerebro", salida.respuesta);

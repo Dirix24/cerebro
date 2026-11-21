@@ -8,6 +8,7 @@ import os
 import re
 from pathlib import Path
 import secrets
+from shutil import which
 import subprocess
 import sys
 from threading import Event, Thread
@@ -98,7 +99,8 @@ def nucleo():
     internet = os.environ.get("CEREBRO_SIN_INTERNET") != "1"
     motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet)
     token = secrets.token_urlsafe(32)
-    with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio) as servidor:
+    with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio,
+                         abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante) as servidor:
         ruta = carpeta()
         datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
                  "version": version_local()}
@@ -110,16 +112,42 @@ def nucleo():
 
 
 def abrir(sesion, interfaz):
+    lanzar_acompanante()
     return abrir_web(f"{sesion['url']}/{interfaz}#{sesion['token']}")
 
 
-def lanzar_estudio():
-    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
-        return False
+def _hay_escritorio():
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def _lanzar_proceso(comando):
     with (carpeta() / "nucleo.log").open("ab") as log:
-        subprocess.Popen([sys.executable, "-m", "universe.lanzador", "studio"],
-                         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+        subprocess.Popen(comando, stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
     return True
+
+
+def lanzar_acompanante():
+    if not _hay_escritorio():
+        return False
+    return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "escritorio"])
+
+
+def lanzar_estudio():
+    if not _hay_escritorio():
+        return False
+    return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "studio"])
+
+
+def lanzar_terminal():
+    if not _hay_escritorio():
+        return False
+    if programa := which("xfce4-terminal"):
+        prefijo = [programa, "--disable-server", "--title=Cerebro · Terminal", "--execute"]
+    elif programa := which("x-terminal-emulator"):
+        prefijo = [programa, "-e"]
+    else:
+        return False
+    return _lanzar_proceso([*prefijo, sys.executable, "-m", "universe.lanzador", "terminal"])
 
 
 def terminal(sesion):
@@ -136,10 +164,7 @@ def terminal(sesion):
                 presencia(True)
 
     presencia(True, enfocar=True)
-    if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
-        with (carpeta() / "nucleo.log").open("ab") as log:
-            subprocess.Popen([sys.executable, "-m", "universe.lanzador", "escritorio"],
-                             stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    lanzar_acompanante()
     renovador = Thread(target=renovar, daemon=True)
     renovador.start()
     acento = "\033[38;5;79m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
@@ -261,7 +286,7 @@ def escritorio(sesion):
 
     entrada.bind("<Return>", enviar)
     for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
-                           ("Universe", lambda: abrir(sesion, "universe"))):
+                           ("Terminal", lanzar_terminal), ("Universe", lambda: abrir(sesion, "universe"))):
         tk.Button(barra, text=nombre, command=accion, bg="#25434b", fg="#e6faf5",
                   activebackground="#38635f", activeforeground="#ffffff", relief="flat",
                   padx=9, pady=5, borderwidth=0).pack(side="left", padx=4)
@@ -269,6 +294,22 @@ def escritorio(sesion):
     Thread(target=observar, daemon=True).start()
     ventana.after(150, actualizar)
     ventana.mainloop()
+
+
+def abrir_studio_local(sesion):
+    from universe.studio import abrir_studio
+
+    directorio = carpeta()
+    solicitud = directorio / "studio.mostrar"
+    with (directorio / "studio.lock").open("a") as cerrojo:
+        try:
+            fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            solicitud.touch(mode=0o600)
+            return
+        solicitud.unlink(missing_ok=True)
+        lanzar_acompanante()
+        abrir_studio(sesion, solicitud=solicitud)
 
 
 def apagar():
@@ -303,8 +344,7 @@ def main():
             if modo == "terminal":
                 terminal(sesion)
             elif modo == "studio":
-                from universe.studio import abrir_studio
-                abrir_studio(sesion)
+                abrir_studio_local(sesion)
             elif not abrir(sesion, modo):
                 raise RuntimeError("No se pudo abrir el navegador predeterminado.")
     except (OSError, ImportError, RuntimeError, ValueError) as exc:

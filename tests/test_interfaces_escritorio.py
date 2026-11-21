@@ -195,3 +195,46 @@ def test_malla_obj_invalida_no_se_aprende(tmp_path, obj):
     modelo.write_bytes(obj)
     with pytest.raises(ValueError):
         analizar_obj(modelo)
+
+
+def test_boton_terminal_usa_un_emulador_y_un_comando_fijos(monkeypatch):
+    from universe import lanzador
+
+    ejecuciones = []
+    monkeypatch.setattr(lanzador, "_hay_escritorio", lambda: True)
+    monkeypatch.setattr(lanzador, "which", lambda nombre: "/usr/bin/" + nombre)
+    monkeypatch.setattr(lanzador, "_lanzar_proceso", lambda argumentos: ejecuciones.append(argumentos) or True)
+    assert lanzador.lanzar_terminal()
+    assert ejecuciones == [[
+        "/usr/bin/xfce4-terminal", "--disable-server", "--title=Cerebro · Terminal", "--execute",
+        lanzador.sys.executable, "-m", "universe.lanzador", "terminal",
+    ]]
+
+
+def test_acciones_desde_chat_requieren_clave_y_lanzador_local(nucleo):
+    from threading import Thread
+    from universe import lanzador
+    from universe.servidor import crear_servidor
+
+    llamadas = []
+    try:
+        servidor = crear_servidor(0, nucleo, "panel",
+            abrir_terminal=lambda: llamadas.append("terminal") or True,
+            mostrar_acompanante=lambda: llamadas.append("acompanante") or True)
+    except PermissionError:
+        pytest.skip("El entorno no permite sockets de loopback.")
+    hilo = Thread(target=servidor.serve_forever)
+    hilo.start()
+    try:
+        sesion = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": "panel"}
+        with pytest.raises(RuntimeError):
+            lanzador.api({**sesion, "token": "incorrecta"}, "escritorio", {"accion": "terminal"})
+        with pytest.raises(RuntimeError):
+            lanzador.api(sesion, "escritorio", {"accion": "comando"})
+        for accion in ("terminal", "acompanante"):
+            assert lanzador.api(sesion, "escritorio", {"accion": accion}) == {"solicitado": True}
+        assert llamadas == ["terminal", "acompanante"]
+    finally:
+        servidor.shutdown()
+        hilo.join(timeout=2)
+        servidor.server_close()
