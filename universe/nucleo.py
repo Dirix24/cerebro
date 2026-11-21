@@ -292,6 +292,17 @@ class Nucleo:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
         if cliente is not None and (not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente)):
             raise ValueError("Identificador de conversación inválido.")
+        compuesto = re.fullmatch(
+            r"(?:cerebro[, ]+)?abre (?:el )?navegador (?:e|y) investiga (?:sobre )?(.+)", pregunta, re.I)
+        if compuesto:
+            from universe.consultas import tema_publico
+            if not self.internet:
+                raise PermissionError("El permiso de internet de esta sesión está desactivado.")
+            tema = tema_publico(compuesto[1])
+            if tema is None:
+                return {"respuesta": "Indica un tema público para investigar."}
+            consulta = self.conversar("Investiga " + tema, modo=modo, cliente=cliente)
+            return {"respuesta": consulta["respuesta"], "abrir": "navegador", "conservar_respuesta": True}
         if comando == "":
             resultado_escritorio = self.escritorio.consultar(pregunta, cliente)
             if resultado_escritorio is not None:

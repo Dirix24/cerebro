@@ -46,6 +46,12 @@ Para consultar un adjunto, adjúntalo y espera el análisis. Puedes preguntar «
 
 Prueba «Guarda esta memoria: proyecto = Atlas» en una interfaz y `/recuerdo proyecto` en otra. Las cuatro usan la misma memoria persistente. Si cambias de chat, el contexto inmediato pasa a la conversación elegida y los recuerdos guardados siguen disponibles. Chat web, Studio y la esfera se actualizan cuando otro cliente añade turnos al historial compartido. En Terminal, `/historial` muestra los intercambios guardados más recientes.
 
+### Aplicaciones y ventanas
+
+«Abre Blender» busca el nombre en las aplicaciones visibles de GIO. «Busca el archivo presupuesto» devuelve nombres de documentos en las carpetas habilitadas. «Abre el navegador e investiga la fotosíntesis» combina una consulta pública autorizada con la apertura del navegador.
+
+En XFCE/X11, «Minimiza esta ventana» y «Cierra LibreOffice» consultan las ventanas reales mediante `wmctrl`, `xprop` y `xdotool`. Si hay varias coincidencias, elige por número. El cierre requiere «Confirmar cierre» en la misma sesión y deja que la aplicación gestione sus cambios sin guardar. En Wayland, Cerebro informa que necesita un adaptador del compositor.
+
 ### Abrir y recordar documentos
 
 1. Escribe o dicta «Cerebro, abre mi documento de matemáticas». Cerebro busca por nombre en Documentos y Descargas y pide elegir por número si hay varias coincidencias.

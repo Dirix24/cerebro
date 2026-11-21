@@ -110,3 +110,25 @@ def test_revocar_escritura_bloquea_memoria_y_ejemplos_de_apertura(nucleo, monkey
     assert not (tmp_path / "data" / "ejemplos_aprobados.jsonl").exists()
     with pytest.raises(PermissionError):
         nucleo.conversar("Olvida el documento de calculo")
+
+
+def test_control_dinamico_y_cierre_confirmado(nucleo, monkeypatch):
+    from core import ventanas_x11
+
+    aplicaciones = [{"id": "org.ejemplo.Editor.desktop", "nombre": "Editor prueba", "formatos": []}]
+    ejecutadas = []
+    monkeypatch.setattr(aplicaciones_linux, "listar", lambda: aplicaciones)
+    monkeypatch.setattr(aplicaciones_linux, "lanzar_aplicacion", lambda id: ejecutadas.append(id) or True)
+    assert "aceptó" in nucleo.conversar("Cerebro, abre Editor prueba")["respuesta"]
+    assert ejecutadas == ["org.ejemplo.Editor.desktop"]
+    ventana = {"id": "0x123", "pid": "11", "clase": "demo.Editor", "titulo": "Editor prueba"}
+    monkeypatch.setattr(ventanas_x11, "listar", lambda: [ventana])
+    operaciones = []
+    monkeypatch.setattr(ventanas_x11, "actuar", lambda accion, v: operaciones.append((accion, v["id"])) or True)
+    cliente = "a" * 24
+    assert "Confirmar cierre" in nucleo.conversar("Cierra Editor prueba", cliente=cliente)["respuesta"]
+    nucleo.conversar("Confirmar cierre", cliente="b" * 24)
+    assert operaciones == []
+    assert "se cerró" in nucleo.conversar("Confirmar cierre", cliente=cliente)["respuesta"]
+    assert "Minimicé" in nucleo.conversar("Minimiza Editor prueba", cliente=cliente)["respuesta"]
+    assert operaciones == [("cierra", "0x123"), ("minimiza", "0x123")]

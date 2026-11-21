@@ -109,7 +109,10 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             destino = resultado.get("abrir")
             if destino in ("navegador", "youtube", "steam") and abrir_destino is not None:
                 abierto = abrir_destino(destino)
-                if destino == "steam":
+                if resultado.get("conservar_respuesta"):
+                    aviso = ("Solicité abrir el navegador." if abierto else "No pude abrir el navegador.")
+                    resultado["respuesta"] = aviso + "\n\n" + resultado["respuesta"]
+                elif destino == "steam":
                     resultado["respuesta"] = ("Solicité abrir Steam." if abierto
                                              else "No encontré Steam instalado o no pude abrirlo.")
                 elif abierto:
