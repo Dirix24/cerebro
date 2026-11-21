@@ -237,34 +237,82 @@ def escritorio(sesion):
         ventana = tk.Tk()
     except tk.TclError as exc:
         raise RuntimeError("Se necesita una sesión gráfica con Tk para abrir el acompañante.") from exc
-    ventana.title("Cerebro · Escritorio")
-    ventana.configure(bg="#102027")
+    ventana.title("Cerebro · Acompañante")
+    fondo, panel, texto = "#0b1425", "#15243b", "#edf5ff"
+    ventana.configure(bg=fondo)
     ventana.resizable(False, False)
     ventana.attributes("-topmost", True)
-    x = max(0, ventana.winfo_screenwidth() - 370)
-    y = max(0, ventana.winfo_screenheight() - 398)
-    ventana.geometry(f"340x367+{x}+{y}")
+
+    def ajustar_ventana(alto):
+        ancho = min(380, ventana.winfo_screenwidth())
+        margen = 16
+        x = max(0, ventana.winfo_screenwidth() - ancho - margen)
+        y = max(0, ventana.winfo_screenheight() - alto - 52)
+        ventana.geometry(f"{ancho}x{alto}+{x}+{y}")
+
+    def boton(padre, etiqueta, accion, color=panel):
+        return tk.Button(padre, text=etiqueta, command=accion, bg=color, fg=texto,
+                         activebackground="#315484", activeforeground="#ffffff",
+                         disabledforeground="#7792b3", relief="flat", cursor="hand2",
+                         highlightbackground=fondo, highlightcolor="#86bbff", padx=9, pady=5)
+
+    cabecera = tk.Frame(ventana, bg=fondo)
+    cabecera.pack(fill="x", padx=14, pady=(10, 0))
+    tk.Label(cabecera, text="Cerebro", fg=texto, bg=fondo,
+             font=("TkDefaultFont", 12, "bold")).pack(side="left")
+    contenido = tk.Frame(ventana, bg=fondo)
+    compacto = False
+
+    def alternar_panel():
+        nonlocal compacto
+        compacto = not compacto
+        if compacto:
+            contenido.pack_forget()
+        else:
+            contenido.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+            if not ocupado:
+                entrada.focus_set()
+        boton_panel.configure(text="Abrir chat" if compacto else "Recoger")
+        ajustar_ventana(161 if compacto else 432)
+
+    boton_panel = boton(cabecera, "Recoger", alternar_panel)
+    boton_panel.pack(side="right")
 
     from universe.orbita import Orbita
     nucleo_visual = Orbita(ventana)
-    nucleo_visual.pack()
+    nucleo_visual.pack(fill="x")
 
-    salida = tk.Text(ventana, height=5, wrap="word", bg="#142b32", fg="#e4fffa", relief="flat",
-                     padx=7, pady=4)
-    salida.pack(fill="x", padx=12)
-    salida.insert("1.0", "¿Qué quieres hacer? Puedes pedirme que investigue, recuerde algo o te ayude a programar.")
+    contenido.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+    ajustar_ventana(432)
+    conversacion = tk.Frame(contenido, bg=panel)
+    conversacion.pack(fill="both", expand=True)
+    salida = tk.Text(conversacion, height=5, wrap="word", bg=panel, fg=texto, relief="flat",
+                     padx=12, pady=8, highlightthickness=0, font=("TkDefaultFont", 10))
+    desplazamiento = tk.Scrollbar(conversacion, command=salida.yview)
+    desplazamiento.pack(side="right", fill="y")
+    salida.configure(yscrollcommand=desplazamiento.set)
+    salida.pack(side="left", fill="both", expand=True)
+    salida.tag_configure("Tú", foreground="#a8ceff", spacing1=7)
+    salida.tag_configure("Cerebro", foreground="#77d6ff", spacing1=7)
+    salida.insert("end", "¿En qué te ayudo?")
     salida.configure(state="disabled")
-    entrada = tk.Entry(ventana, bg="#142b32", fg="#e4fffa", insertbackground="white")
-    entrada.pack(fill="x", padx=12, pady=6)
-    barra_voz = tk.Frame(ventana, bg="#102027")
-    barra_voz.pack()
+
+    aviso = tk.StringVar()
+    tk.Label(contenido, textvariable=aviso, fg="#aec6e5", bg=fondo, anchor="w",
+             justify="left", wraplength=330).pack(fill="x")
+    compositor = tk.Frame(contenido, bg=fondo)
+    compositor.pack(fill="x", pady=(4, 6))
+    entrada = tk.Entry(compositor, bg=panel, fg=texto, insertbackground=texto,
+                       relief="flat", highlightbackground="#334e72", highlightcolor="#86bbff",
+                       highlightthickness=1, font=("TkDefaultFont", 11))
+    entrada.pack(side="left", fill="both", expand=True, padx=(0, 6))
+    barra = tk.Frame(contenido, bg=fondo)
+    barra.pack(fill="x")
     ultima_respuesta = ""
     voz_activada = False
     cancelar_audio = Event()
     microfono = tk.StringVar(value="default")
     ocupado = False
-    barra = tk.Frame(ventana, bg="#102027")
-    barra.pack()
     eventos = queue.SimpleQueue()
     detenido = Event()
 
@@ -289,7 +337,7 @@ def escritorio(sesion):
                 salida = api(sesion, "chat", {"mensaje": mensaje})
             eventos.put(("respuesta", salida["respuesta"]))
             if salida.get("abrir") == "studio":
-                abrir(sesion, "studio")
+                lanzar_estudio()
         except (OSError, RuntimeError) as exc:
             eventos.put(("respuesta", str(exc)))
 
@@ -300,12 +348,15 @@ def escritorio(sesion):
         estado = "disabled" if ocupado else "normal"
         entrada.configure(state=estado)
         boton_dictar.configure(state=estado)
-        boton_audio.configure(state=estado)
+        boton_enviar.configure(state=estado)
+        menu_acciones.entryconfigure("Elegir audio", state=estado)
 
     def enviar(_evento=None):
         texto = entrada.get().strip()
         if texto and not ocupado:
             entrada.delete(0, "end")
+            aviso.set("")
+            agregar_turno("Tú", texto)
             cambiar_estado("Procesando")
             Thread(target=despachar, args=(texto,), daemon=True).start()
 
@@ -318,6 +369,7 @@ def escritorio(sesion):
     def dictar():
         from core.local_voice import dictar as grabar
         dispositivo = microfono.get()
+        aviso.set("")
         cambiar_estado("Escuchando")
         Thread(target=tarea_de_voz, args=(lambda: grabar(dispositivo=dispositivo), "dictado"),
                daemon=True).start()
@@ -360,10 +412,13 @@ def escritorio(sesion):
             ttk.Label(cuadro, text=dispositivo, wraplength=340).pack(anchor="w")
         ttk.Button(cuadro, text="Listo", command=panel.destroy).pack(anchor="e", pady=(8, 0))
 
-    def mostrar_texto(texto):
+    def agregar_turno(rol, mensaje):
         salida.configure(state="normal")
-        salida.delete("1.0", "end")
-        salida.insert("end", texto)
+        salida.insert("end", f"\n\n{rol}\n", rol)
+        salida.insert("end", mensaje)
+        if int(salida.index("end-1c").split(".")[0]) > 500:
+            salida.delete("1.0", "101.0")
+        salida.see("end")
         salida.configure(state="disabled")
 
     def actualizar():
@@ -377,7 +432,7 @@ def escritorio(sesion):
                     ventana.withdraw()
             elif tipo == "respuesta":
                 ultima_respuesta = valor
-                mostrar_texto(valor)
+                agregar_turno("Cerebro", valor)
                 cambiar_estado("Disponible")
                 if voz_activada:
                     hablar_respuesta(valor)
@@ -387,11 +442,11 @@ def escritorio(sesion):
                     entrada.delete(0, "end")
                     entrada.insert(0, valor)
                     entrada.focus_set()
-                    mostrar_texto("Revisa lo que has dictado y pulsa Enter para enviarlo.")
+                    aviso.set("Revisa lo que has dictado y pulsa Enter para enviarlo.")
                 else:
-                    mostrar_texto("No reconocí palabras. Puedes volver a dictar o escribir tu petición.")
+                    aviso.set("No reconocí palabras. Puedes volver a dictar o escribir tu petición.")
             elif tipo == "error de voz":
-                mostrar_texto(valor)
+                aviso.set(valor)
                 cambiar_estado("Disponible")
             elif tipo == "audio listo":
                 cambiar_estado("Disponible")
@@ -405,21 +460,26 @@ def escritorio(sesion):
         detenido.set()
         ventana.destroy()
 
-    boton_dictar = tk.Button(barra_voz, text="Dictar · 5 s", command=dictar, bg="#25434b",
-                             fg="#e6faf5", relief="flat", padx=10, pady=4)
-    boton_leer = tk.Button(barra_voz, text="Voz apagada", command=alternar_voz, bg="#25434b",
-                           fg="#e6faf5", relief="flat", padx=10, pady=4)
-    boton_audio = tk.Button(barra_voz, text="Audio", command=audio, bg="#25434b", fg="#e6faf5",
-                            relief="flat", padx=10, pady=4)
-    boton_dictar.pack(side="left", padx=4, pady=(0, 4))
-    boton_leer.pack(side="left", padx=4, pady=(0, 4))
-    boton_audio.pack(side="left", padx=4, pady=(0, 4))
+    boton_enviar = boton(compositor, "Enviar", enviar, "#245496")
+    boton_enviar.pack(side="right")
+    boton_dictar = boton(barra, "Dictar", dictar)
+    boton_dictar.pack(side="left", padx=(0, 5))
+    boton_leer = boton(barra, "Voz apagada", alternar_voz)
+    boton_leer.pack(side="left")
     entrada.bind("<Return>", enviar)
+
+    accesos = tk.Menubutton(barra, text="Accesos ▾", bg=panel, fg=texto,
+                            activebackground="#315484", activeforeground=texto,
+                            takefocus=True, padx=9, pady=5)
+    menu_acciones = tk.Menu(accesos, tearoff=False, bg=panel, fg=texto,
+                           activebackground="#315484", activeforeground=texto)
     for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
                            ("Terminal", lanzar_terminal), ("Universe", lanzar_universe)):
-        tk.Button(barra, text=nombre, command=accion, bg="#25434b", fg="#e6faf5",
-                  activebackground="#38635f", activeforeground="#ffffff", relief="flat",
-                  padx=9, pady=5, borderwidth=0).pack(side="left", padx=4)
+        menu_acciones.add_command(label=nombre, command=accion)
+    menu_acciones.add_separator()
+    menu_acciones.add_command(label="Elegir audio", command=audio)
+    accesos.configure(menu=menu_acciones)
+    accesos.pack(side="right")
     ventana.protocol("WM_DELETE_WINDOW", cerrar)
     Thread(target=observar, daemon=True).start()
     ventana.after(150, actualizar)
