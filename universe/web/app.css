@@ -57,3 +57,19 @@ footer { margin-top: 1rem; border-top: 1px solid var(--linea); padding-top: .65r
 .oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 900px) { .studio { grid-template-columns: 1fr 2fr; }.columna { grid-column: 1/-1; } }
 @media (max-width: 620px) { .studio,.grafo { grid-template-columns: 1fr; } .conversacion { grid-row: 1; } }
+
+[data-interfaz="chat"] header nav, [data-interfaz="chat"] .explorador,
+[data-interfaz="chat"] .columna { display: none; }
+[data-interfaz="chat"] .studio { display: block; max-width: 810px; margin-inline: auto; }
+[data-interfaz="chat"] .titulo { max-width: 810px; margin-inline: auto; }
+[data-interfaz="chat"] #mensajes { height: clamp(300px, 62vh, 660px); }
+[data-interfaz="chat"] .marca b { color: #9bdaca; }
+
+[data-interfaz="estudio"] { background: radial-gradient(ellipse at top right, #14333b, #10151c 52%); min-height: 100vh; }
+[data-interfaz="estudio"] .editor { box-shadow: 0 0 0 1px #78e4bd22; }
+[data-interfaz="estudio"] .titulo h1 { letter-spacing: -.065em; color: #c4fae9; }
+[data-interfaz="chat"] #mensajes { border: 1px solid #26383c; background-color: #121e24; }
+
+#video-adjunto { width: 100%; max-height: 250px; background: #0b151a; border-radius: 8px; }
+
+#mensajes a { color: #a3e3d1; text-underline-offset: .15em; }

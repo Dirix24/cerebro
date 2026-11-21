@@ -151,6 +151,9 @@ def main(argv=None):
             confirmacion_datos = input("Para borrar recuerdos, datos y checkpoints escribe BORRAR MIS DATOS: ")
         resultado = desinstalar(RAIZ, confirmar=args.confirmar,
                                borrar_datos=args.borrar_datos, confirmacion_datos=confirmacion_datos)
+        if args.confirmar:
+            from universe.instalar_escritorio import retirar
+            retirar(RAIZ)
         print(resultado)
         return 0
     if args.accion == "diagnostico":

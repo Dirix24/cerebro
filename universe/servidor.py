@@ -7,16 +7,18 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
+from threading import Thread
 from urllib.parse import parse_qs, urlsplit
 
 from universe.nucleo import MIB, PERFILES, Nucleo
 
 WEB = Path(__file__).with_name("web")
-ESTATICOS = {"/": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
+ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/html"),
+             "/studio": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
              "/app.js": ("app.js", "text/javascript"), "/escena.js": ("escena.js", "text/javascript")}
 
 
-def crear_servidor(puerto, nucleo, clave, clave_robot=""):
+def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -35,7 +37,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot=""):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy",
-                             "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+                             "default-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
             self.end_headers()
             self.wfile.write(cuerpo)
@@ -65,7 +67,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot=""):
                 datos = {}
                 if escribir:
                     longitud = int(self.headers.get("Content-Length", "0"))
-                    if not 0 < longitud <= 6 * MIB or self.headers.get_content_type() != "application/json":
+                    limite = (24 if ruta == "/api/adjunto" else 6) * MIB
+                    if not 0 < longitud <= limite or self.headers.get_content_type() != "application/json":
                         self.enviar(413, {"error": "Se requiere un cuerpo JSON dentro del límite."})
                         return
                     datos = json.loads(self.rfile.read(longitud))
@@ -85,6 +88,13 @@ def crear_servidor(puerto, nucleo, clave, clave_robot=""):
                 self.enviar(500, {"error": "No se pudo completar la operación en el almacenamiento local."})
 
         def operar(self, ruta, escribir, datos, consulta):
+            if ruta == "/api/apagar" and escribir and permitir_cierre:
+                Thread(target=self.server.shutdown, daemon=True).start()
+                return {"cerrando": True}
+            if ruta == "/api/interfaz":
+                if escribir:
+                    return nucleo.interfaz(datos["id"], datos["modo"], datos["visible"])
+                return nucleo.interfaz()
             if ruta in {"/api/body", "/api/telemetria", "/api/dispositivos"}:
                 with nucleo.cerrojo_body:
                     if ruta == "/api/telemetria" and escribir:
@@ -103,6 +113,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot=""):
                 if escribir:
                     acciones = {
                         "/api/chat": lambda: nucleo.conversar(datos.get("mensaje")),
+                        "/api/adjunto": lambda: nucleo.adjuntar(datos.get("nombre"), datos.get("contenido")),
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),
                         "/api/tarea": lambda: nucleo.crear_tarea(datos.get("accion"), datos.get("nombre")),
                         "/api/canvas": lambda: nucleo.guardar_canvas(datos),
@@ -111,7 +122,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot=""):
                     }
                 else:
                     acciones = {
-                        "/api/estado": nucleo.estado, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
+                        "/api/estado": nucleo.estado, "/api/historial": nucleo.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
                         "/api/tareas": lambda: [tarea.copy() for tarea in reversed(nucleo.tareas)],
                         "/api/memoria": nucleo.respaldo,
                         "/api/archivo": lambda: nucleo.leer(consulta.get("nombre", [""])[0]),
@@ -131,6 +142,8 @@ def main():
     ap.add_argument("--modelo", action="store_true", help="cargar el checkpoint local de Cerebro")
     ap.add_argument("--internet", action="store_true", help="autorizar consultas públicas explícitas")
     ap.add_argument("--solo-lectura", action="store_true")
+    ap.add_argument("--investigacion-automatica", action="store_true",
+                    help="consultar temas públicos si el núcleo local no tiene respuesta")
     args = ap.parse_args()
     clave_configurada = os.environ.get("CEREBRO_UNIVERSE_TOKEN")
     clave_robot = os.environ.get("CEREBRO_ROBOT_TOKEN", "")
@@ -152,7 +165,8 @@ def main():
         if modelo is None:
             ap.error("No encontré un checkpoint propio de Cerebro.")
     nucleo = Nucleo(args.perfil, cuota=None if args.cuota_mib is None else args.cuota_mib * MIB,
-                    modelo=modelo, internet=args.internet, solo_lectura=args.solo_lectura, meta=meta)
+                    modelo=modelo, internet=args.internet, solo_lectura=args.solo_lectura, meta=meta,
+                    investigar_auto=args.investigacion_automatica)
     clave = clave_configurada or secrets.token_urlsafe(32)
     try:
         with crear_servidor(args.puerto, nucleo, clave, clave_robot) as servidor:

@@ -1,0 +1,36 @@
+# Cerebro en MX Linux
+
+Instala desde la carpeta del repositorio:
+
+```sh
+./instalar
+```
+
+La instalación inicial requiere Python 3 con soporte de entornos virtuales. En MX Linux, `python3-venv` aporta ese soporte y `python3-tk` permite abrir el acompañante. Para leer PDF con texto seleccionable, instala `poppler-utils`. Para consultar los formatos, pistas y duración de un vídeo, instala `ffmpeg`. Usa el gestor de paquetes de tu sistema para esas dependencias.
+
+El menú de aplicaciones muestra **Cerebro Terminal**, **Cerebro Escritorio**, **Cerebro Chat** y **Cerebro Studio**. También puedes escribir `cerebro` en terminal o añadir `escritorio`, `chat` o `studio`. Si la terminal abierta todavía no encuentra el comando, ejecuta `export PATH="$HOME/.local/bin:$PATH"` una vez en esa sesión. `./instalar --sin-autoinicio` desactiva el acompañante al iniciar sesión.
+
+- **Terminal** abre la conversación de texto dentro de la consola. Escribe «Salir» para volver al escritorio. Cuando Cerebro está visible en el navegador, la terminal conserva su ventana y pausa el envío de mensajes.
+- **Escritorio** muestra un acompañante de esquina. Se oculta al abrir la terminal de Cerebro o una vista web de Cerebro, y vuelve cuando esas vistas se cierran o se ocultan. El relevo puede tardar hasta siete segundos si un proceso termina sin avisar. Abrir otra aplicación del equipo deja el acompañante disponible.
+- **Chat** abre una página de conversación, historial, recuerdos y adjuntos.
+- **Studio** abre el espacio de trabajo con explorador, editor, validación de sintaxis y seguimiento de tareas. «Quiero programar» abre Studio desde el chat, la terminal o el acompañante. Studio conserva acceso al mapa Universe, Canvas y Body. El HUD y la organización de herramientas están inspirados en [Arquitectura-Arus](https://github.com/Dirix24/Arquitectura-Arus).
+
+Las cuatro entradas se conectan al mismo servicio autenticado en loopback. Comparten los recuerdos y el historial local. Los comandos y las peticiones reconocidas de recuperación de datos privados quedan fuera del historial compartido. El perfil de servidor independiente se sigue iniciando como se indica en [la guía de Universe](UNIVERSE.md). El comando `cerebro apagar` detiene el servicio de escritorio. Si dejas abierto el acompañante, este puede volver a iniciarlo al enviarle otro mensaje.
+
+## Qué puedes pedir
+
+| Frase | Resultado |
+| --- | --- |
+| «Investiga la fotosíntesis» | Busca en Wikipedia en español y cita el artículo. |
+| «¿Qué son los tardígrados?» | Primero intenta responder con recursos locales. Consulta Wikipedia si se queda sin respuesta y reconoce un tema público admisible. |
+| «Noticias de hoy» o «Investiga» | Consulta titulares publicados en el feed de BBC Mundo y muestra la fecha y el enlace de cada uno. |
+| «Escribe una función en Python para sumar dos números» | Genera una función de las operaciones aritméticas admitidas. |
+| «Resume adjuntos/informe.pdf» | Resume de forma extractiva el texto disponible, hasta 12 páginas. Admite también texto, CSV y DOCX. |
+| «Revisa adjuntos/prueba.py» | Identifica funciones, clases e importaciones sin ejecutar el archivo. |
+| «Analiza el vídeo adjuntos/clip.mp4» | Si FFprobe está instalado, muestra duración, resolución y pistas. Con `clip.srt` o `clip.vtt` adjunto, extrae los subtítulos. |
+
+Para adjuntar, selecciona el archivo en Chat o Studio. El análisis admite adjuntos de hasta 16 MiB, dentro de la cuota del espacio de trabajo. El navegador reproduce localmente los vídeos compatibles con sus códecs. Están pendientes el OCR de documentos escaneados, la interpretación visual de escenas y la transcripción propia de audio. Las operaciones aritméticas y las deducciones usan reglas comprobables. El modelo propio sigue teniendo un rendimiento limitado en conversación y programación general.
+
+El lanzador para escritorio habilita las consultas a fuentes públicas. Cerebro prepara la consulta usando la petición actual. El historial, los recuerdos y los adjuntos se procesan localmente. Para iniciar el núcleo sin acceso web, detén el servicio y ejecuta `CEREBRO_SIN_INTERNET=1 cerebro`. La actualidad se consulta cuando la pides y queda atribuida a su fuente.
+
+Para desinstalar, cierra el acompañante, ejecuta `cerebro apagar` y después `python3 cerebro.py desinstalar --confirmar` desde el repositorio. Se eliminan el entorno y las entradas que instaló este repositorio, y se conservan los recuerdos.

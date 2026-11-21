@@ -26,7 +26,7 @@
     </form>
     <p id="aviso" role="status" aria-live="polite"></p>
     <section id="studio" hidden>
-      <div class="titulo"><h1>Studio</h1><output id="identidad"></output></div>
+      <div class="titulo"><h1 id="titulo-interfaz">Studio</h1><output id="identidad"></output></div>
       <div class="studio">
         <aside class="panel explorador">
           <h2>Archivos</h2>
@@ -36,10 +36,13 @@
         <section class="panel conversacion" aria-labelledby="titulo-chat">
           <h2 id="titulo-chat">Conversación</h2>
           <div id="mensajes" role="log" aria-label="Mensajes"></div>
+          <video id="video-adjunto" controls preload="metadata" playsinline hidden aria-label="Vídeo local adjunto"></video>
           <form id="chat" class="fila">
-            <label for="mensaje" class="oculto">Mensaje para Cerebro</label><input id="mensaje" placeholder="Escribe a Cerebro" required><button>Enviar</button>
+            <label for="mensaje" class="oculto">Mensaje para Cerebro</label><input id="mensaje" placeholder="Escribe o pide «Investiga…»" required><button>Enviar</button>
           </form>
           <div class="acciones"><button data-chat="¿Qué sabes hacer?">Capacidades</button>
+            <label class="boton" for="adjunto">Adjuntar archivo</label>
+            <input id="adjunto" type="file" accept=".txt,.md,.csv,.json,.pdf,.docx,.py,.mp4,.mov,.mkv,.webm,.srt,.vtt" hidden>
             <button id="exportar">Exportar recuerdos</button><label class="boton" for="importar">Importar</label>
             <input id="importar" type="file" accept=".json,application/json" hidden>
           </div>

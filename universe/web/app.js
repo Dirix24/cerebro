@@ -3,6 +3,21 @@ import {colores, escena} from "./escena.js";
 const $ = id => document.getElementById(id);
 const botonesTab = [...document.querySelectorAll("[data-tab]")];
 let token = "";
+const modoWeb = location.pathname === "/chat" ? "chat" : "studio";
+const idInterfaz = Array.from(crypto.getRandomValues(new Uint8Array(12)),
+  byte => byte.toString(16).padStart(2, "0")).join("");
+document.body.dataset.interfaz = modoWeb === "chat" ? "chat" : "estudio";
+if (modoWeb === "chat") $("titulo-interfaz").textContent = "Chat";
+
+function anunciar(visible) {
+  if (!token) return;
+  fetch("/api/interfaz", {method: "POST", keepalive: true, headers: {
+    Authorization: "Bearer " + token, "Content-Type": "application/json",
+  }, body: JSON.stringify({id: idInterfaz, modo: modoWeb, visible})}).catch(() => {});
+}
+document.addEventListener("visibilitychange", () => anunciar(!document.hidden));
+window.addEventListener("pagehide", () => anunciar(false));
+setInterval(() => { if (!document.hidden) anunciar(true); }, 2000);
 let vista = "studio";
 let cambioVista = 0;
 let nodos = [];
@@ -73,8 +88,13 @@ async function conectar(nuevaClave) {
   $("clave").value = "";
   $("conexion").textContent = "Núcleo conectado";
   $("metricas").hidden = false;
+  anunciar(!document.hidden);
   await mostrar("studio");
-  await actualizarArchivos();
+  const historial = await api("historial");
+  if ($("mensajes").childElementCount === 0) {
+    for (const turno of historial.turnos) agregarMensaje(turno.rol === "usuario" ? "Tú" : "Cerebro", turno.texto);
+  }
+  if (modoWeb === "studio") await actualizarArchivos();
 }
 
 $("acceso").addEventListener("submit", evento => {
@@ -111,7 +131,7 @@ async function sondear() {
   sondeoOcupado = true;
   try {
     await estado();
-    if (vista === "studio") await actualizarTareas();
+    if (vista === "studio" && modoWeb === "studio") await actualizarTareas();
     if (vista === "universe") {
       nodos = (await api("nodos")).nodos;
       filtrar();
@@ -125,7 +145,20 @@ setInterval(sondear, 3000);
 function agregarMensaje(rol, texto) {
   const mensaje = document.createElement("p");
   mensaje.className = rol === "Tú" ? "usuario" : "cerebro";
-  mensaje.textContent = rol + " · " + texto;
+  mensaje.append(rol + " · ");
+  const partes = rol === "Cerebro" ? texto.split(/(https:\/\/[^\s<>"']+)/u) : [texto];
+  for (const [indice, parte] of partes.entries()) {
+    if (indice % 2 === 0) {
+      mensaje.append(parte);
+      continue;
+    }
+    const enlace = document.createElement("a");
+    enlace.href = parte;
+    enlace.textContent = parte;
+    enlace.target = "_blank";
+    enlace.rel = "noopener noreferrer";
+    mensaje.append(enlace);
+  }
   $("mensajes").append(mensaje);
   if ($("mensajes").children.length > 100) $("mensajes").firstElementChild.remove();
   $("mensajes").scrollTop = $("mensajes").scrollHeight;
@@ -135,6 +168,7 @@ async function conversar(texto) {
   agregarMensaje("Tú", texto);
   const salida = await api("chat", {mensaje: texto});
   agregarMensaje("Cerebro", salida.respuesta);
+  if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/studio#" + token);
 }
 
 $("chat").addEventListener("submit", evento => {
@@ -171,6 +205,33 @@ $("importar").addEventListener("change", async () => {
     aviso("Recuerdos nuevos: " + salida.importados);
   } catch (error) { aviso(error.message); }
   finally { $("importar").value = ""; }
+});
+
+let videoLocal;
+$("adjunto").addEventListener("change", async () => {
+  const archivo = $("adjunto").files[0];
+  if (!archivo) return;
+  try {
+    if (/\.(?:mp4|mov|webm|mkv)$/i.test(archivo.name)) {
+      const reproductor = $("video-adjunto");
+      if (videoLocal) URL.revokeObjectURL(videoLocal);
+      videoLocal = URL.createObjectURL(archivo);
+      reproductor.src = videoLocal;
+      reproductor.hidden = false;
+    }
+    if (archivo.size > 16 * 1048576) throw new Error("El análisis de adjuntos admite hasta 16 MiB.");
+    aviso("Guardando adjunto…");
+    const contenido = await new Promise((resolver, rechazar) => {
+      const lector = new FileReader();
+      lector.onload = () => resolver(lector.result.split(",", 2)[1]);
+      lector.onerror = () => rechazar(new Error("No se pudo leer el adjunto."));
+      lector.readAsDataURL(archivo);
+    });
+    const salida = await api("adjunto", {nombre: archivo.name, contenido});
+    if (!/\.(?:srt|vtt)$/i.test(salida.nombre)) $("mensaje").value = "Analiza " + salida.nombre;
+    aviso("Adjunto disponible: " + salida.nombre);
+  } catch (error) { aviso(error.message); }
+  finally { $("adjunto").value = ""; }
 });
 
 async function abrirArchivo(nombre) {

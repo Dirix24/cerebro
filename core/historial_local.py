@@ -1,5 +1,6 @@
 """Historial local JSONL con rutas confinadas y entradas limitadas."""
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,7 +17,8 @@ def guardar(ruta, rol, texto):
     destino.parent.mkdir(parents=True, exist_ok=True)
     entrada = {"fecha": datetime.now(timezone.utc).isoformat(),
                "rol": rol, "texto": texto}
-    with destino.open("a", encoding="utf-8") as f:
+    fd = os.open(destino, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
         f.write(json.dumps(entrada, ensure_ascii=False) + "\n")
     return entrada
 
@@ -25,7 +27,7 @@ def consultar(ruta, limite=30):
     if not isinstance(limite, int) or not 1 <= limite <= 200:
         raise ValueError("Límite fuera de rango")
     origen = Path(ruta)
-    if not origen.is_file():
+    if not origen.is_file() or origen.is_symlink():
         return []
     # Lectura acotada: evita cargar un historial arbitrariamente grande.
     with origen.open("rb") as f:

@@ -13,7 +13,7 @@ import sqlite3
 from statistics import median
 from tempfile import NamedTemporaryFile
 from threading import RLock
-from time import perf_counter
+from time import monotonic, perf_counter
 
 import config
 from agent.controlled_agent import ControlledAgent
@@ -49,7 +49,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -63,9 +63,13 @@ class Nucleo:
         self.memoria = AdvancedMemoryManager()
         self.chat = Conversacion(modelo, self.memoria, self.agente, info_checkpoint=meta, modo_local=True)
         self.internet = internet
+        self.investigar_auto = internet and investigar_auto
         self.solo_lectura = solo_lectura
         self.cerrojo = RLock()
         self.cerrojo_body = RLock()
+        self.cerrojo_interfaz = RLock()
+        self.interfaces = {}
+        self.ruta_historial = self.raiz / "data" / "historial_cerebro.jsonl"
         self.latencias = deque(maxlen=100)
         self.tareas = deque(maxlen=24)
         self.ejecutor = ThreadPoolExecutor(max_workers=1)
@@ -85,7 +89,8 @@ class Nucleo:
         return {
             "perfil": self.perfil, "entorno": entorno, "cuota": self.cuota,
             "uso": self._uso(), "identidad": leer_origen(self.raiz),
-            "internet": self.internet, "solo_lectura": self.solo_lectura,
+            "internet": self.internet, "investigar_auto": self.investigar_auto,
+            "solo_lectura": self.solo_lectura,
             "permisos": sorted(self.agente.permisos_concedidos),
             "recuerdos": len(self.memoria.long_term_memory), "turnos_medidos": len(self.latencias),
             "p50_ms": round(median(self.latencias), 2) if self.latencias else None,
@@ -94,6 +99,43 @@ class Nucleo:
                            if clave in {"paso", "val_bpb", "val_ppl"} and type(valor) in {int, float}
                            and math.isfinite(valor)},
         }
+
+    def interfaz(self, identificador=None, modo=None, visible=True):
+        orden = {"terminal": 1, "chat": 2, "studio": 2}
+        with self.cerrojo_interfaz:
+            ahora = monotonic()
+            self.interfaces = {clave: entrada for clave, entrada in self.interfaces.items()
+                               if ahora - entrada[1] < 7}
+            if identificador is not None:
+                if (not isinstance(identificador, str) or not re.fullmatch(r"[a-f0-9]{24}", identificador)
+                        or modo not in orden or type(visible) is not bool):
+                    raise ValueError("Interfaz inválida.")
+                if visible:
+                    if len(self.interfaces) >= 64 and identificador not in self.interfaces:
+                        raise ValueError("Hay demasiadas interfaces abiertas.")
+                    self.interfaces[identificador] = (modo, ahora)
+                else:
+                    self.interfaces.pop(identificador, None)
+            activa = max(self.interfaces.values(), key=lambda dato: (orden[dato[0]], dato[1]),
+                         default=("escritorio", ahora))
+            return {"activa": activa[0]}
+
+    def historial(self):
+        from core.historial_local import consultar
+        return {"turnos": consultar(self.ruta_historial, limite=60)}
+
+    def _registrar_turno(self, pregunta, respuesta):
+        from core.historial_local import guardar
+        # Los comandos de identidad, memoria y archivos pueden contener datos privados.
+        if not pregunta.startswith("/") and respuesta and not re.match(
+            r"(?i)¿?(?:recuerda que|guarda esta memoria|inserta|extrae|exporta|lee|resume|analiza|"
+            r"revisa|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
+        ):
+            try:
+                guardar(self.ruta_historial, "usuario", pregunta[:2000])
+                guardar(self.ruta_historial, "cerebro", respuesta[:2000])
+            except OSError:
+                publicar("error", "fallo")
 
     def conversar(self, pregunta):
         if not isinstance(pregunta, str) or not pregunta.strip() or len(pregunta) > 24000:
@@ -118,9 +160,15 @@ class Nucleo:
                 raise ValueError("Uso: /modelo pregunta")
             respuesta = self.chat.responder_modelo(texto)
         else:
-            respuesta, _ = self.chat.procesar(pregunta)
+            from universe.consultas import alternativa_publica, consulta_directa
+            respuesta = consulta_directa(self, pregunta)
+            if respuesta is None:
+                respuesta, _ = self.chat.procesar(pregunta)
+                respuesta = alternativa_publica(self, pregunta, respuesta)
         self.latencias.append((perf_counter() - inicio) * 1000)
-        return {"respuesta": respuesta}
+        self._registrar_turno(pregunta, respuesta)
+        from universe.consultas import desea_studio
+        return {"respuesta": respuesta, **({"abrir": "studio"} if desea_studio(pregunta) else {})}
 
     def nodos(self):
         self.memoria.cargar_memoria()
@@ -239,7 +287,7 @@ class Nucleo:
         return {"archivos": sorted(ruta.relative_to(self.estudio).as_posix() for ruta in self._archivos()
                                    if ruta.suffix in ARCHIVOS and ruta.name != "canvas.json")}
 
-    def ruta(self, nombre):
+    def ruta(self, nombre, *, lectura=False):
         if not isinstance(nombre, str) or not re.fullmatch(r"[\w ./-]{1,160}", nombre):
             raise ValueError("Ruta de archivo inválida.")
         partes = nombre.split("/")
@@ -250,7 +298,8 @@ class Nucleo:
             ruta = ruta / parte
             if ruta.is_symlink():
                 raise PermissionError("Los enlaces simbólicos están fuera del explorador.")
-        if ruta.suffix not in ARCHIVOS:
+        from universe.consultas import DOCUMENTOS, VIDEOS
+        if ruta.suffix.lower() not in (DOCUMENTOS | set(VIDEOS) if lectura else ARCHIVOS):
             raise ValueError("Tipo de archivo no admitido.")
         return ruta
 
@@ -285,6 +334,33 @@ class Nucleo:
                 tempora.unlink(missing_ok=True)
         publicar("creando", "herramienta")
         return {"guardado": nombre}
+
+    def adjuntar(self, nombre, contenido):
+        from base64 import b64decode
+        if self.solo_lectura:
+            raise PermissionError("La sesión es de solo lectura.")
+        if not isinstance(nombre, str) or "/" in nombre or not isinstance(contenido, str):
+            raise ValueError("Adjunta un archivo con nombre simple.")
+        ruta = self.ruta("adjuntos/" + nombre, lectura=True)
+        datos = b64decode(contenido, validate=True)
+        if not datos or len(datos) > 16 * MIB or self._uso() + len(datos) > self.cuota:
+            raise ValueError("El adjunto está vacío o excede el límite de 16 MiB o la cuota.")
+        if shutil.disk_usage(self.estudio).free < len(datos) + MIB:
+            raise ValueError("Espacio insuficiente para guardar el adjunto.")
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            archivo = ruta.open("xb")
+        except FileExistsError:
+            if ruta.is_file() and ruta.stat().st_size == len(datos) and ruta.read_bytes() == datos:
+                return {"nombre": ruta.relative_to(self.estudio).as_posix()}
+            raise ValueError("Ya hay un adjunto distinto con ese nombre.")
+        try:
+            with archivo:
+                archivo.write(datos)
+        except OSError:
+            ruta.unlink(missing_ok=True)
+            raise
+        return {"nombre": ruta.relative_to(self.estudio).as_posix()}
 
     def limpiar_cache(self):
         if self.solo_lectura:
