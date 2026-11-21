@@ -5,14 +5,24 @@ import subprocess
 import sys
 from unittest.mock import patch
 
+import pytest
+
 import cerebro
 
 
-def test_iniciar_launches_local_chat_without_training_or_network():
+@pytest.mark.parametrize("instalado", [False, True])
+def test_iniciar_launches_local_chat_without_training_or_network(tmp_path, monkeypatch, instalado):
+    monkeypatch.setattr(cerebro, "RAIZ", tmp_path)
+    python = sys.executable
+    if instalado:
+        interprete = tmp_path / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        interprete.parent.mkdir(parents=True)
+        interprete.touch()
+        python = str(interprete)
     with patch.object(cerebro, "_ejecutar", return_value=0) as run:
         assert cerebro.iniciar_automatico() == 0
     command, = run.call_args.args
-    assert command == [sys.executable, str(cerebro.RAIZ / "main.py"), "--local"]
+    assert command == [python, str(tmp_path / "main.py"), "--local"]
 
 
 def test_chat_cli_accepts_multiline_input_and_uses_learned_skills(tmp_path):
