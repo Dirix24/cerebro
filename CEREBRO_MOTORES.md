@@ -14,6 +14,29 @@ llama-server -m /ruta/al/modelo.gguf --host 127.0.0.1 --port 8080 -c 1024 -t 2 -
 
 Arranca una nueva sesión del núcleo de Cerebro con `CEREBRO_PROFESOR_PUERTO=8080`. Si las rutas locales no resuelven «Explícame …», Cerebro puede enviar el tema al profesor. La respuesta indica su origen. El adaptador limita cada consulta a una explicación de 96 tokens y una conexión de hasta 18 segundos de espera de socket. Envía solo el tema y recibe texto. El profesor carece de acceso a las herramientas y las solicitudes de herramientas en su salida se rechazan. [Documentación del servidor de llama.cpp](https://github.com/ggml-org/llama.cpp/tree/master/tools/server)
 
+## Competencias y ejercicios verificables
+
+- «Ejercicio de matemáticas» propone una práctica. También admite español, programación, razonamiento y herramientas. El profesor elige una variante numérica y Cerebro construye el ejercicio y su referencia de forma determinista.
+- «Explica ejercicio de matemáticas» y «Revisa al alumno en matemáticas» usan el último ejercicio de esa materia en la conversación, cuando existe. La nota usa la referencia local. El comentario del profesor se muestra como explicación y puede contener errores.
+- «Evalúa competencias» guarda las métricas del alumno con su huella. «Competencias del alumno», «Ponte a analizar» y Universe muestran aciertos y fallos. El banco reservado incluye dos preguntas por materia.
+- `entrenar_competencias.py --salida RUTA --ejecutar` entrena una copia. Puedes añadir `--variantes RUTA_JSON` con variantes numéricas revisadas y `--registrar` para incorporar el resultado al registro del hogar que esté activo. El informe distingue pérdida, acierto en validación y preguntas reservadas. El comando no promueve candidatos ni modifica los pesos activos.
+
+En la prueba autorizada, llama.cpp b12600 ejecutó Qwen2.5-1.5B-Instruct Q4_K_M en MX Linux con dos hilos, contexto 1.024 y una red Bubblewrap aislada. El modelo cargó en 2,87 s y alcanzó un pico de 1.796 MiB de RAM. Produjo cinco variantes verificables. Acertó un caso de orden lógico y dio una explicación de fotosíntesis con los conceptos pedidos y errores gramaticales. Resolvió 7 + 5 pero ignoró el formato exacto de dos líneas. [Versión del motor](https://github.com/ggml-org/llama.cpp/releases/tag/b12600)
+
+### Resultado del piloto
+
+| Prueba del profesor | Resultado | Latencia |
+|---|---|---:|
+| Explicación en español | Mencionó luz y oxígeno. Hubo errores gramaticales. | 10,92 s |
+| Instrucción compuesta | Obtuvo 12, pero devolvió una sola línea con puntuación añadida. | 5,04 s |
+| Orden lógico | Identificó al cocinero como último. | 2,96 s |
+
+El proceso del profesor consumió 101,04 segundos de CPU acumulados en la serie completa. En una revisión del alumno señaló la referencia correcta y dio una justificación parcialmente errónea. La calificación independiente siguió usando el valor verificado.
+
+El alumno entrenó tres pasos con cinco ejercicios parametrizados por el profesor. En las diez preguntas reservadas obtuvo 0/10 antes y después. Conservó 46,9 % de acierto en validación y su pérdida pasó de 0,1000 a 0,1001 bits por byte. El candidato se rechazó. Las huellas de los pesos originales se conservaron.
+
+Las 15 omisiones previas se debían al sandbox exterior. Catorce pruebas requerían escuchar en loopback y una requería que Bubblewrap pudiera iniciar su aislamiento. Todas pasaron al ejecutar la suite con esos permisos locales.
+
 ## Entrenamiento y evaluación del alumno
 
 `entrenamiento_guiado.py` puede arrancar desde `best.npz` cuando todavía no existe `last.npz`. Entrena en una copia con un hilo de BLAS y un límite configurable de tiempo. La validación fija exige que baje la pérdida en bits por byte y comprueba que el acierto exacto no empeore cuando hay preguntas reformuladas. Los pesos activos permanecen en su ubicación. `evaluate.py --ckpt RUTA --rapido` permite medir un candidato en el test reservado.

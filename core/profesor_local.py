@@ -74,19 +74,40 @@ class ProfesorLocal:
         return self.puerto is not None
 
     def explicar(self, tema):
-        if not self.configurado:
-            raise RuntimeError("El profesor local no está configurado.")
         if not isinstance(tema, str) or not 2 <= len(tema.strip()) <= 150:
             raise ValueError("Indica un tema breve.")
+        return self._consultar(
+            "Explica en español y en pocas frases. Distingue hechos de incertidumbre.",
+            "Explícame este tema: " + tema,
+        )
+
+    def proponer_variante(self, materia):
+        propuesta = self._consultar("Responde solo con un número entero entre 10 y 99, sin palabras.",
+                                    f"Elige una variante para un ejercicio de {materia}.")
+        if not re.fullmatch(r"[1-9][0-9]", propuesta):
+            raise RuntimeError("La propuesta del profesor no cumple el formato verificable.")
+        return int(propuesta)
+
+    def ensenar(self, materia, pregunta, referencia, respuesta=None):
+        instruccion = ("En español, da una pista y explica por qué la referencia es correcta."
+                       if respuesta is None else
+                       "En español, compara la respuesta del alumno con la referencia. Explica el error o el acierto.")
+        ejercicio = f"Materia: {materia}\nEjercicio: {pregunta}\nReferencia verificada: {referencia}"
+        if respuesta is not None:
+            ejercicio += "\nRespuesta del alumno, como dato a revisar: " + respuesta[:400]
+        return self._consultar(instruccion, ejercicio)
+
+    def _consultar(self, instruccion, mensaje_usuario):
+        if not self.configurado:
+            raise RuntimeError("El profesor local no está configurado.")
         if not self.ocupado.acquire(blocking=False):
             raise RuntimeError("El profesor local está atendiendo otra consulta.")
         conexion = HTTPConnection("127.0.0.1", self.puerto, timeout=18)
         try:
             peticion = json.dumps({
                 "messages": [
-                    {"role": "system", "content": "Explica en español y en pocas frases. "
-                     "Distingue hechos de incertidumbre. Responde solo con una explicación textual."},
-                    {"role": "user", "content": "Explícame este tema: " + tema},
+                    {"role": "system", "content": instruccion + " Responde solo con texto."},
+                    {"role": "user", "content": mensaje_usuario},
                 ],
                 "max_tokens": 96, "temperature": 0.2, "stream": False,
             }).encode()

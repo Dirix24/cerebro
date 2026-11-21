@@ -1,6 +1,6 @@
 """Estado y operaciones compartidos por las cuatro interfaces."""
 import ast
-from collections import deque
+from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from hashlib import sha256
@@ -22,6 +22,7 @@ from agent.lenguaje_natural import interpretar
 from chat import Conversacion
 from core.actividad_neuronal import publicar, ultimos
 from core.conversaciones import Conversaciones
+from core import competencias
 from core.entorno_portatil import detectar_entorno
 from core.legado_identidad import leer_origen
 from core.profesor_local import GIB, ProfesorLocal, diagnostico as diagnostico_profesor
@@ -78,6 +79,7 @@ class Nucleo:
         self.interfaces = {}
         self.archivo_en_contexto = None
         self.proyectos_studio = {}
+        self.ejercicios_recientes = OrderedDict()
         self.conversaciones = Conversaciones(conversaciones_dir or self.raiz / "data")
         if self.agente.tiene_permisos("READ"):
             self._recuperar_contexto(self.historial()["turnos"])
@@ -317,6 +319,10 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if not comando:
+            ensenanza = self._consultar_competencias(intencion, cliente)
+            if ensenanza is not None:
+                return ensenanza
         if not comando and re.fullmatch(r"(?:estado del profesor|profesor local|que profesor recomiendas)", intencion):
             self.exigir_permisos("READ")
             ficha = diagnostico_profesor(self.raiz)
@@ -359,7 +365,8 @@ class Nucleo:
             informe = self.analizar_aprendizaje()
             objetivos = "\n".join("• " + tarea["objetivo"] for tarea in informe["propuestas"])
             return {"respuesta": (f"Evaluaciones registradas: {informe['evaluaciones']}. "
-                                  f"Correcciones pendientes: {informe['correcciones_pendientes']}.\n" + objetivos)}
+                                  f"Correcciones pendientes: {informe['correcciones_pendientes']}.\n"
+                                  + informe["resumen_competencias"] + "\n" + objetivos)}
         if re.fullmatch(r"(?:cerebro[, ]+)?(?:activa|abre) (?:el )?modo t[aá]ctil[.!]?", pregunta, re.I):
             self.exigir_permisos("READ")
             return {"respuesta": "Abre el modo táctil desde el lanzador local.", "abrir": "tactil"}
@@ -436,6 +443,68 @@ class Nucleo:
         return {"respuesta": respuesta, **({"origen": origen} if origen else {}),
                 **({"abrir": "studio"} if desea_studio(pregunta) else {})}
 
+    def _consultar_competencias(self, intencion, cliente):
+        tema = re.fullmatch(r"(ejercicio de|explica ejercicio de|revisa al alumno en) (.+)", intencion)
+        if intencion in {"competencias del alumno", "progreso del alumno"}:
+            self.exigir_permisos("READ")
+            historia = competencias.historial(self.raiz)
+            return {"respuesta": competencias.resumen(historia[0] if historia else None),
+                    "competencias": historia[:2]}
+        if intencion in {"evalua competencias", "evalua las competencias"}:
+            self.exigir_permisos("READ", "WRITE")
+            if self.chat.modelo is None:
+                return {"respuesta": "Carga el modelo alumno para evaluar competencias."}
+            informe = competencias.evaluar(self.chat.modelo)
+            self.exigir_permisos("WRITE")
+            competencias.guardar(self.raiz, informe)
+            return {"respuesta": competencias.resumen(informe), "competencias": [informe]}
+        materias = {"matematicas": "matemáticas", "espanol": "español", "programacion": "programación",
+                    "razonamiento": "razonamiento", "herramientas": "herramientas"}
+        if not tema or tema[2] not in materias:
+            return None
+        self.exigir_permisos("READ")
+        materia = materias[tema[2]]
+        clave = (cliente, materia)
+        if tema[1] == "ejercicio de":
+            variante = None
+            if self.profesor.configurado:
+                try:
+                    variante = self.profesor.proponer_variante(materia)
+                except RuntimeError:
+                    pass
+            with self.cerrojo:
+                self.ejercicios_recientes[clave] = variante
+                self.ejercicios_recientes.move_to_end(clave)
+                if len(self.ejercicios_recientes) > 64:
+                    self.ejercicios_recientes.popitem(last=False)
+        else:
+            with self.cerrojo:
+                variante = self.ejercicios_recientes.get(clave)
+        pregunta, referencia = competencias.ejercicio(materia, variante)
+        texto = pregunta
+        if tema[1] == "ejercicio de":
+            origen = "variante_profesor_verificada" if variante is not None else "catalogo_local"
+            return {"respuesta": texto, "materia": materia, "origen": origen}
+        salida = None
+        if tema[1] == "explica ejercicio de":
+            texto += "\nReferencia verificada: " + referencia
+        if tema[1] == "revisa al alumno en":
+            if self.chat.modelo is None:
+                return {"respuesta": "Carga el modelo alumno para revisar su respuesta."}
+            nota = competencias.revisar(self.chat.modelo, pregunta, referencia)
+            salida = nota["respuesta"]
+            texto += f"\nAlumno: {salida or '(sin respuesta)'}. Referencia: {referencia}."
+            texto += "\nResultado independiente: " + ("correcto." if nota["correcta"] else "incorrecto.")
+        if self.profesor.configurado:
+            self.exigir_permisos("READ")
+            try:
+                explicacion = self.profesor.ensenar(materia, pregunta, referencia, salida)
+            except RuntimeError as exc:
+                texto += "\nProfesor local: " + str(exc)
+            else:
+                texto += "\nComentario del profesor local: " + explicacion
+        return {"respuesta": texto, "materia": materia}
+
     def analizar_aprendizaje(self):
         from collections import Counter
         from core.automejora import analizar
@@ -445,6 +514,9 @@ class Nucleo:
         informe = analizar(self.raiz)
         informe["tipos"] = dict(tipos)
         informe["profesor_configurado"] = self.profesor.configurado
+        progreso = competencias.historial(self.raiz)
+        informe["competencias"] = progreso[:2]
+        informe["resumen_competencias"] = competencias.resumen(progreso[0] if progreso else None)
         return informe
 
     def evaluar_alumno(self):
