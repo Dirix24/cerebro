@@ -421,6 +421,12 @@ class Nucleo:
                 return {"respuesta": respuesta, "compartir_temporal": True}
             if respuesta is None:
                 respuesta, _ = self.chat.procesar(pregunta)
+                memoria_solicitada = comando == "/recuerdo" or re.fullmatch(
+                    r"que recuerdas(?: (?:sobre|de) .+)?", intencion)
+                if memoria_solicitada:
+                    origen = ("consulta_memoria" if respuesta in {"No tengo recuerdos sobre ese tema.",
+                                                                  "Permiso READ requerido."}
+                              else "memoria")
                 if tema and self.profesor.configurado and respuesta.startswith((
                         "No tengo una respuesta fiable", "No encontré una definición")):
                     self.exigir_permisos("READ")

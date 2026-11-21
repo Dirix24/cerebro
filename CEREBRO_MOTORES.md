@@ -37,6 +37,23 @@ El alumno entrenó tres pasos con cinco ejercicios parametrizados por el profeso
 
 Las 15 omisiones previas se debían al sandbox exterior. Catorce pruebas requerían escuchar en loopback y una requería que Bubblewrap pudiera iniciar su aislamiento. Todas pasaron al ejecutar la suite con esos permisos locales.
 
+## Currículo progresivo y mediciones
+
+El experimento previo de cinco ejercicios proporcionaba 228 tokens de corpus y 31 tokens objetivo, incluidos separadores y prefijos del asistente. El Transformer de 190.528 parámetros tiene 3 capas, dimensión 64, vocabulario BPE de 512 y contexto 112. El generador de lotes toma ventanas sobre el corpus concatenado. Con solo tres actualizaciones de AdamW, los documentos se repiten y se observan pocas variantes. La pérdida cruzada evalúa los tokens objetivo, mientras que el acierto exacto exige que la secuencia completa cumpla la instrucción. La versión inicial de los diálogos del currículo necesitaba hasta 131 tokens. Al acortar las instrucciones, el máximo del currículo principal quedó en 106.
+
+Qwen propuso 35 semillas sin conexión. El currículo verificó referencias con plantillas deterministas y produjo 779 ejemplos únicos en tres etapas: fundamentos, reformulaciones e instrucciones compuestas, y continuación de diálogos. La continuación recibe el turno previo con su respuesta de referencia. No mide una conversación autónoma completa. Se mezcló repaso del corpus anterior sin incluir sus validaciones ni las preguntas inéditas. La inferencia de prueba usa solo los pesos del alumno y separa ejercicios incluidos en el corpus de los dos conjuntos inéditos.
+
+| Medición | Base | Candidato A, 255 pasos | Candidato B, 435 pasos |
+|---|---:|---:|---:|
+| Banco reservado, tras repetir con el mismo decodificador | 0/90 | 8/90 | 4/90 |
+| Segundo banco reservado | 0/90 | 12/90 | 4/90 |
+| Retención anterior, acierto exacto en 32 reformulaciones | 46,9 % | 28,1 % | 46,9 % |
+| Pérdida en la validación anterior, bits por byte | 0,1000 | 0,1433 | 0,1110 |
+
+El segundo banco confirma una mejora acotada en programación y selección de herramientas. Matemáticas, español y razonamiento siguieron en cero en estos bancos. Ambos candidatos quedaron rechazados. A utilizó 120 documentos de repaso, LR 0,0006 y tardó 38,1 s. B utilizó 480, LR 0,00032 y tardó 55,5 s. Los dos entrenamientos usaron un hilo de BLAS y dejaron los checkpoints de origen intactos. Como siguiente escalón de arquitectura queda el perfil `v2` ya previsto en el repositorio: aproximadamente 540.480 parámetros, contexto 192 y objetivo BPE de 768. Todavía falta entrenarlo y compararlo con el perfil actual.
+
+Ejecuta el currículo de forma aislada con `OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 timeout 220 python entrenar_curriculo.py --semillas RUTA_JSON --salida CARPETA --ejecutar`. El JSON debe incluir semillas numéricas por materia. Usa `--registrar HOGAR` para que Universe y ANALIZAR muestren la comparación entre el modelo de referencia y el candidato. Ningún resultado se promueve de forma automática.
+
 ## Entrenamiento y evaluación del alumno
 
 `entrenamiento_guiado.py` puede arrancar desde `best.npz` cuando todavía no existe `last.npz`. Entrena en una copia con un hilo de BLAS y un límite configurable de tiempo. La validación fija exige que baje la pérdida en bits por byte y comprueba que el acierto exacto no empeore cuando hay preguntas reformuladas. Los pesos activos permanecen en su ubicación. `evaluate.py --ckpt RUTA --rapido` permite medir un candidato en el test reservado.

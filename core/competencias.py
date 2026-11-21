@@ -121,9 +121,33 @@ def historial(raiz):
         return [json.loads(datos) for (datos,) in bd.execute("SELECT datos FROM informes ORDER BY id DESC LIMIT 30")]
 
 
+def _resumen_curriculo(informe):
+    antes = informe["antes"]["reservadas"]
+    despues = informe["despues"]["reservadas"]
+    advertencia = ("elegible para revisión manual" if informe["elegible_para_revision"] else "rechazado")
+    lineas = [f"Currículo evaluado sin profesor, memoria ni herramientas. Candidato {advertencia}."]
+    for materia in PRACTICA:
+        inicial = sum(datos[materia]["aciertos"] for datos in antes.values())
+        final = sum(datos[materia]["aciertos"] for datos in despues.values())
+        total = sum(datos[materia]["total"] for datos in despues.values())
+        apoyo = " · el modelo base sigue necesitando apoyo" if inicial < total else ""
+        lineas.append(f"{materia.capitalize()}: {inicial}/{total} base → {final}/{total} candidato{apoyo}")
+    retencion = informe["antes"]["retencion"]["exactas"], informe["despues"]["retencion"]["exactas"]
+    lineas.append(f"Retención: {retencion[0]:.1%} → {retencion[1]:.1%}.")
+    adicional = informe.get("verificacion_adicional")
+    if adicional:
+        base = sum(m["aciertos"] for etapa in adicional["antes"].values() for m in etapa.values())
+        candidato = sum(m["aciertos"] for etapa in adicional["despues"].values() for m in etapa.values())
+        n = sum(m["total"] for etapa in adicional["despues"].values() for m in etapa.values())
+        lineas.append(f"Verificación adicional: {base}/{n} → {candidato}/{n}.")
+    return "\n".join(lineas)
+
+
 def resumen(informe):
     if not informe:
         return "Aún no hay una evaluación de competencias guardada."
+    if informe.get("tipo") == "curriculo":
+        return _resumen_curriculo(informe)
     lineas = []
     for tema, datos in informe["materias"].items():
         fallos = [r["esperada"] for r in datos["resultados"] if not r["correcta"]]
