@@ -96,7 +96,12 @@ async function mostrar(tab) {
 async function conectar(nuevaClave) {
   token = nuevaClave;
   try { await estado(); }
-  catch (error) { token = ""; throw error; }
+  catch (error) {
+    token = "";
+    sessionStorage.removeItem("cerebro-sesion");
+    throw error;
+  }
+  sessionStorage.setItem("cerebro-sesion", token);
   $("acceso").hidden = true;
   $("clave").value = "";
   $("conexion").textContent = "Núcleo conectado";
@@ -118,15 +123,20 @@ $("acceso").addEventListener("submit", evento => {
 for (const elemento of botonesTab) elemento.addEventListener("click", () => {
   if (token) ejecutar(elemento, () => mostrar(elemento.dataset.tab));
 });
-const claveInicial = location.hash.slice(1);
-if (claveInicial) {
-  history.replaceState(null, "", location.pathname);
-  conectar(claveInicial).catch(error => aviso(error.message));
-}
+const claveDelEnlace = location.hash.slice(1);
+const claveInicial = claveDelEnlace || sessionStorage.getItem("cerebro-sesion");
+if (claveDelEnlace) history.replaceState(null, "", location.pathname);
+if (claveInicial) conectar(claveInicial).catch(error => aviso(error.message));
 
-$("ir-universe").addEventListener("click", () => {
-  if (token) location.assign("/universe#" + token);
-});
+$("ir-universe").addEventListener("click", () => ejecutar($("ir-universe"), async () => {
+  if (!token) return;
+  if (modoWeb === "chat") {
+    await api("escritorio", {accion: "universe"});
+    anunciar(false);
+  } else {
+    await mostrar("universe");
+  }
+}));
 
 $("abrir-terminal").addEventListener("click", () => ejecutar($("abrir-terminal"), async () => {
   await api("escritorio", {accion: "terminal"});

@@ -82,28 +82,72 @@ def transcribir_pcm(datos, modelo=None):
     return " ".join(fragmento for fragmento in textos if fragmento).strip()
 
 
-def dictar(segundos=5):
+def dictar(segundos=5, dispositivo="default"):
     import shutil
     import subprocess
 
     if not isinstance(segundos, int) or not 1 <= segundos <= 15:
         raise ValueError("El dictado admite de 1 a 15 segundos.")
-    grabador = shutil.which("arecord")
-    if not grabador:
-        raise RuntimeError("Instala alsa-utils para habilitar el dictado en MX Linux.")
     modelo = _cargar_modelo(_buscar_modelo())
     try:
-        audio = subprocess.run([grabador, "-q", "-t", "raw", "-f", "S16_LE", "-r", "16000",
-                                "-c", "1", "-d", str(segundos)], capture_output=True,
-                               timeout=segundos + 4, check=True)
+        if dispositivo.startswith("pulse:"):
+            grabador = shutil.which("parec")
+            if not grabador:
+                raise RuntimeError("Para seleccionar una entrada de PipeWire o PulseAudio, instala pulseaudio-utils.")
+            try:
+                audio = subprocess.run([grabador, "--raw", "--format=s16le", "--rate=16000", "--channels=1",
+                                        "--device=" + dispositivo.removeprefix("pulse:")],
+                                       capture_output=True, timeout=segundos, check=True).stdout
+            except subprocess.TimeoutExpired as exc:
+                audio = exc.output or b""
+        else:
+            grabador = shutil.which("arecord")
+            if not grabador:
+                raise RuntimeError("Instala alsa-utils para habilitar el dictado en MX Linux.")
+            audio = subprocess.run([grabador, "-q", "-D", dispositivo, "-t", "raw", "-f", "S16_LE",
+                                    "-r", "16000", "-c", "1", "-d", str(segundos)], capture_output=True,
+                                   timeout=segundos + 4, check=True).stdout
     except subprocess.SubprocessError as exc:
-        raise RuntimeError("No pude grabar. Comprueba el micrófono y la entrada predeterminada.") from exc
-    return transcribir_pcm(audio.stdout, modelo=modelo)
+        raise RuntimeError("No pude grabar. Comprueba el micrófono y la entrada seleccionada.") from exc
+    if not audio:
+        raise RuntimeError("No recibí audio. Abre Audio y elige otro micrófono.")
+    return transcribir_pcm(audio, modelo=modelo)
 
 
-def leer_en_espanol(texto):
+def dispositivos_audio():
+    """Enumera entradas ALSA y detecta las salidas físicas sin abrirlas."""
     import shutil
     import subprocess
+
+    def listado(programa, *opciones):
+        ejecutable = shutil.which(programa)
+        if not ejecutable:
+            return ""
+        try:
+            return subprocess.run([ejecutable, *opciones], capture_output=True, text=True,
+                                  timeout=3, check=True).stdout
+        except (OSError, subprocess.SubprocessError):
+            return ""
+
+    entradas = ["default"]
+    for linea in listado("pactl", "list", "short", "sources").splitlines():
+        campos = linea.split("\t")
+        if len(campos) > 1 and campos[1] and not campos[1].endswith(".monitor"):
+            entradas.append("pulse:" + campos[1])
+    for linea in listado("arecord", "-L").splitlines():
+        if linea.startswith(("hw:", "plughw:", "sysdefault:")) and linea not in entradas:
+            entradas.append(linea)
+    salidas = [linea.split("\t")[1] for linea in listado("pactl", "list", "short", "sinks").splitlines()
+               if len(linea.split("\t")) > 1]
+    if not salidas:
+        salidas = [linea for linea in listado("aplay", "-l").splitlines() if "[" in linea]
+    return {"entradas": entradas[:48], "salidas": salidas[:12]}
+
+
+def leer_en_espanol(texto, cancelar=None):
+    import shutil
+    import subprocess
+    from time import monotonic
 
     texto = texto.strip()
     if not texto:
@@ -111,8 +155,27 @@ def leer_en_espanol(texto):
     sintetizador = shutil.which("espeak-ng") or shutil.which("espeak")
     if not sintetizador:
         raise RuntimeError("Instala espeak-ng para escuchar las respuestas en MX Linux.")
-    try:
-        subprocess.run([sintetizador, "-v", "es", "--stdin"], input=texto[:1800],
-                       text=True, capture_output=True, timeout=120, check=True)
-    except subprocess.SubprocessError as exc:
-        raise RuntimeError("No pude reproducir el audio. Comprueba la salida del sistema.") from exc
+    if cancelar is not None and cancelar.is_set():
+        return
+    with subprocess.Popen([sintetizador, "-v", "es", "-p", "30", "-s", "155", "--stdin"],
+                          stdin=subprocess.PIPE, text=True, stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL) as proceso:
+        limite = monotonic() + 120
+        entrada = texto[:1800]
+        while True:
+            if (cancelar is not None and cancelar.is_set()) or monotonic() >= limite:
+                proceso.terminate()
+                try:
+                    proceso.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    proceso.kill()
+                    proceso.wait()
+                return
+            try:
+                proceso.communicate(input=entrada, timeout=.15)
+            except subprocess.TimeoutExpired:
+                entrada = None
+                continue
+            if proceso.returncode:
+                raise RuntimeError("No pude reproducir el audio. Comprueba la salida del sistema.")
+            return

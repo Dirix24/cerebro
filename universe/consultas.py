@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 from core.actividad_neuronal import publicar
 
@@ -73,6 +73,8 @@ def destino_desktop(pregunta):
         return "navegador"
     if re.fullmatch(r"(?:abre|[aá]breme) (?:la p[aá]gina de )?you ?tube", texto, re.I):
         return "youtube"
+    if re.fullmatch(r"(?:abre|[aá]breme|inicia|lanza) (?:el )?(?:steam|esteam)", texto, re.I):
+        return "steam"
     return None
 
 
@@ -176,7 +178,36 @@ def investigacion_externa(nucleo, pregunta):
         return str(exc) if isinstance(exc, ValueError) else "No pude conectar con la fuente pública."
 
 
+def consulta_documento_usuario(nucleo, pregunta):
+    peticion = re.fullmatch(r"(?:busca|encuentra)(?:me)?\s+(?:(?:un|el|mi)\s+)?"
+                            r"documento(?:\s+llamado)?\s+(.+)", pregunta, re.I)
+    if not peticion:
+        if re.fullmatch(r"(?:busca|encuentra)(?:me)? (?:(?:un|el|mi) )?documento[.]?", pregunta, re.I):
+            return "Dime el nombre o parte del nombre del documento."
+        return None
+    if not nucleo.documentos_usuario or "READ" not in nucleo.agente.permisos_concedidos:
+        return "La búsqueda en Documentos y Descargas requiere el lanzador local y permiso de lectura."
+    from core.documentos_usuario import buscar
+    try:
+        nombre = re.sub(r"\s+y\s+(?:anal[ií]zalo|res[uú]melo)[.]?$", "", peticion[1], flags=re.I)
+        encontrados = buscar(nombre.strip(" ¿?"))
+        if not encontrados:
+            return "No encontré ese documento en Documentos o Descargas. Prueba con parte del nombre."
+        if len(encontrados) > 1:
+            opciones = "\n".join(f"- {ruta.relative_to(Path.home())}" for ruta in encontrados)
+            return "Encontré varios documentos. Indica el nombre exacto:\n" + opciones
+        ruta = encontrados[0]
+        texto = _leer_texto(ruta)
+        publicar("recuperando", "herramienta")
+        return f"Encontré {ruta.relative_to(Path.home())}\n\nAnálisis del texto disponible\n" + _extracto(texto)
+    except (OSError, ValueError, KeyError, BadZipFile, subprocess.SubprocessError, ElementTree.ParseError) as exc:
+        return f"No pude leer ese documento: {exc}"
+
+
 def consulta_directa(nucleo, pregunta, modo=None):
+    documento = consulta_documento_usuario(nucleo, pregunta)
+    if documento is not None:
+        return documento
     investigacion = investigacion_externa(nucleo, pregunta)
     if investigacion is not None:
         return investigacion
@@ -315,8 +346,6 @@ def _extracto(texto):
 
 def analizar_ruta(nucleo, nombre, *, explicar=False):
     from core.analizador_codigo_local import analizar
-    from zipfile import BadZipFile
-
     ruta = nucleo.ruta(nombre, lectura=True)
     if not ruta.is_file():
         raise ValueError("Adjunta el archivo primero o ponlo en el espacio de trabajo de Studio.")

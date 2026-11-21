@@ -19,7 +19,7 @@ ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/htm
 
 
 def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
-                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None):
+                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -58,6 +58,12 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             try:
                 url = urlsplit(self.path)
                 ruta = url.path
+                if not escribir and abrir_estudio is not None and ruta in ("/", "/studio", "/universe"):
+                    self.send_response(302)
+                    self.send_header("Location", "/chat")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    return
                 if not escribir and ruta in ESTATICOS:
                     nombre, tipo = ESTATICOS[ruta]
                     self.enviar(200, (WEB / nombre).read_bytes(), tipo)
@@ -98,9 +104,13 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 if abrir_estudio():
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
             destino = resultado.get("abrir")
-            if destino in ("navegador", "youtube") and abrir_destino is not None:
-                if abrir_destino(destino):
-                    resultado["respuesta"] = ("Abrí YouTube." if destino == "youtube" else "Abrí el navegador.")
+            if destino in ("navegador", "youtube", "steam") and abrir_destino is not None:
+                abierto = abrir_destino(destino)
+                if destino == "steam":
+                    resultado["respuesta"] = ("Solicité abrir Steam." if abierto
+                                             else "No encontré Steam instalado o no pude abrirlo.")
+                elif abierto:
+                    resultado["respuesta"] = "Abrí YouTube." if destino == "youtube" else "Abrí el navegador."
                 else:
                     resultado["respuesta"] = "No pude abrir el navegador predeterminado."
             return resultado
@@ -114,6 +124,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     ejecutar = abrir_terminal
                 elif accion == "acompanante":
                     ejecutar = mostrar_acompanante
+                elif accion == "universe":
+                    ejecutar = abrir_universe
                 else:
                     raise ValueError("Acción de escritorio desconocida.")
                 if ejecutar is None or nucleo.solo_lectura:

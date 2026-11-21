@@ -4,13 +4,17 @@ El acompañante usa el mismo núcleo para una petición escrita y para una dicta
 Puedes escribir y pulsar Enter como siempre. **Dictar · 5 s** activa el
 micrófono durante cinco segundos y deja la transcripción en el cuadro de texto.
 Revísala o corrígela y pulsa Enter para enviarla. El audio permanece en memoria
-mientras se transcribe. **Leer respuesta** reproduce el texto en español cuando
-lo solicitas.
+mientras se transcribe. Pulsa **Voz apagada** una vez para que Cerebro lea las
+respuestas en español automáticamente. Pulsa **Voz activa** para silenciar las
+siguientes y cortar la reproducción en curso. La voz local de eSpeak utiliza un
+tono más grave y un ritmo más pausado.
 
-Prueba «Cerebro, abre YouTube» o «Abre el navegador» en cualquier interfaz
-conectada mediante el lanzador local. El núcleo utiliza el navegador
-predeterminado del escritorio y abre únicamente estas dos opciones fijas.
-YouTube requiere que el acceso a internet esté habilitado. También puedes
+Prueba «Cerebro, abre YouTube», «Abre el navegador» o «Abre Steam» en cualquier
+interfaz conectada mediante el lanzador local. Cerebro usa el navegador
+predeterminado y abre Steam si está instalado como aplicación nativa o Flatpak.
+YouTube requiere que el acceso a internet esté habilitado. Con «Busca un
+documento presupuesto» busca por nombre en Documentos y Descargas y, si
+encuentra uno, resume el texto sin enviarlo fuera del equipo. También puedes
 dictar las consultas de memoria, matemáticas, investigación y documentos que
 ya admite Cerebro.
 
@@ -20,7 +24,7 @@ La instalación habitual permite escribir. Para añadir voz:
 
 ```sh
 cd ~/cerebro
-sudo apt install alsa-utils espeak-ng unzip
+sudo apt install alsa-utils espeak-ng unzip pulseaudio-utils
 .venv/bin/python -m pip install vosk
 ```
 
@@ -35,7 +39,9 @@ el núcleo propio de Cerebro.
 
 Cierra y vuelve a abrir el acompañante con
 `~/.local/bin/cerebro escritorio`. Al dictar, el círculo indicará
-**Escuchando**; durante la lectura indicará **Hablando**. Si la entrada de
+**Escuchando**; durante la lectura indicará **Hablando**. El botón **Audio**
+enumera las entradas y salidas que detecta MX Linux y permite elegir el
+micrófono. La reproducción usa la salida predeterminada del sistema. Si la entrada de
 micrófono falla, la caja de texto sigue disponible. Esta entrega incorpora
 dictado y lectura por pulsación. Las órdenes compuestas de búsqueda y descarga,
 el estudio autónomo y el sistema profesor–alumno pertenecen a fases posteriores.

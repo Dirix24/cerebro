@@ -49,7 +49,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -64,6 +64,7 @@ class Nucleo:
         self.chat = Conversacion(modelo, self.memoria, self.agente, info_checkpoint=meta, modo_local=True)
         self.internet = internet
         self.investigar_auto = internet and investigar_auto
+        self.documentos_usuario = documentos_usuario
         self.solo_lectura = solo_lectura
         self.cerrojo = RLock()
         self.cerrojo_body = RLock()
@@ -131,7 +132,7 @@ class Nucleo:
         from core.historial_local import guardar
         # Los comandos de identidad, memoria y archivos pueden contener datos privados.
         if not pregunta.startswith("/") and respuesta and not re.match(
-            r"(?i)¿?(?:aprende de (?:este|el) modelo|recuerda que|guarda (?:esta memoria|lo aprendido|un resumen)|recuerda (?:lo aprendido|un resumen)|inserta|extrae|exporta|lee|resume|analiza|"
+            r"(?i)¿?(?:(?:busca|encuentra)(?:me)? (?:(?:un|el|mi) )?documento|aprende de (?:este|el) modelo|recuerda que|guarda (?:esta memoria|lo aprendido|un resumen)|recuerda (?:lo aprendido|un resumen)|inserta|extrae|exporta|lee|resume|analiza|"
             r"revisa|expl[ií]ca(?:me|lo)?|hazme preguntas|corrige mi respuesta|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
         ):
             try:
