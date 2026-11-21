@@ -75,7 +75,11 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     if not isinstance(datos, dict):
                         raise ValueError("El cuerpo debe ser un objeto JSON.")
                 resultado = self.operar(ruta, escribir, datos, parse_qs(url.query))
-                self.enviar(200, resultado)
+                try:
+                    self.enviar(200, resultado)
+                finally:
+                    if ruta == "/api/apagar" and escribir and permitir_cierre:
+                        Thread(target=self.server.shutdown, daemon=True).start()
             except PermissionError as exc:
                 self.enviar(403, {"error": str(exc)})
             except (ValueError, RuntimeError, RecursionError) as exc:
@@ -96,7 +100,6 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
 
         def operar(self, ruta, escribir, datos, consulta):
             if ruta == "/api/apagar" and escribir and permitir_cierre:
-                Thread(target=self.server.shutdown, daemon=True).start()
                 return {"cerrando": True}
             if ruta == "/api/interfaz":
                 if escribir:

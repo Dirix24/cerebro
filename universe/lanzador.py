@@ -2,6 +2,7 @@
 import contextlib
 import fcntl
 from hashlib import sha256
+from http.client import IncompleteRead
 import json
 import os
 import re
@@ -45,6 +46,8 @@ def api(sesion, ruta, datos=None, tiempo=25):
             return json.load(respuesta)
     except HTTPError as exc:
         raise RuntimeError(json.load(exc).get("error", "Cerebro devolvió un error.")) from exc
+    except IncompleteRead as exc:
+        raise ConnectionError("El núcleo se desconectó antes de enviar la respuesta completa.") from exc
 
 
 def version_local():

@@ -111,3 +111,51 @@ def test_instalador_crea_cuatro_entradas_y_retira_solo_las_propias(tmp_path, mon
     instalar_escritorio.retirar(Path(instalar_escritorio.__file__).resolve().parent.parent)
     assert list(entradas.iterdir()) == [ajeno]
     assert not (tmp_path / ".local" / "bin" / "cerebro").exists()
+
+
+def test_lanzador_recupera_cierre_anticipado_al_cambiar_version(tmp_path, monkeypatch):
+    from http.client import IncompleteRead
+    from universe import lanzador
+
+    registro = tmp_path / "sesion.json"
+    antigua = {"url": "http://127.0.0.1:1234", "token": "antigua", "version": "anterior"}
+    nueva = {"url": "http://127.0.0.1:1235", "token": "nueva", "version": "actual"}
+    registro.write_text(json.dumps(antigua))
+
+    def abrir(req, timeout):
+        if req.full_url.endswith("/api/apagar"):
+            raise IncompleteRead(b"", 18)
+        return io.BytesIO(b'{"activa":"escritorio"}')
+
+    def iniciar(*args, **kwargs):
+        assert not registro.exists()
+        registro.write_text(json.dumps(nueva))
+        return type("Proceso", (), {"poll": lambda self: None})()
+
+    monkeypatch.setattr(lanzador, "carpeta", lambda: tmp_path)
+    monkeypatch.setattr(lanzador, "version_local", lambda: "actual")
+    monkeypatch.setattr(lanzador.CLIENTE_LOCAL, "open", abrir)
+    monkeypatch.setattr(lanzador.subprocess, "Popen", iniciar)
+    assert lanzador.conectar() == nueva
+
+
+def test_apagado_devuelve_respuesta_completa_antes_de_cerrar(nucleo):
+    from threading import Thread
+    from universe import lanzador
+    from universe.servidor import crear_servidor
+
+    try:
+        servidor = crear_servidor(0, nucleo, "panel", permitir_cierre=True)
+    except PermissionError:
+        pytest.skip("El entorno no permite sockets de loopback.")
+    hilo = Thread(target=servidor.serve_forever)
+    hilo.start()
+    try:
+        sesion = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": "panel"}
+        assert lanzador.api(sesion, "apagar", {}, tiempo=2) == {"cerrando": True}
+        hilo.join(timeout=2)
+        assert not hilo.is_alive()
+    finally:
+        servidor.shutdown()
+        hilo.join(timeout=2)
+        servidor.server_close()
