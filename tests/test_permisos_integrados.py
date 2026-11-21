@@ -43,3 +43,17 @@ def test_revocacion_de_recuerdos_en_todas_las_interfaces(nucleo, modo):
     nucleo.agente.permisos_concedidos.discard("READ")
     assert "READ" in nucleo.conversar("/memoria", modo=modo)["respuesta"]
     assert "4" in nucleo.conversar("/calc 2+2", modo=modo)["respuesta"]
+
+
+def test_dos_preguntas_usan_herramientas_y_calculo_respeta_permiso(nucleo):
+    respuesta = nucleo.conversar("¿Qué hora es? ¿Cuánto es dos más dos?")["respuesta"]
+    assert "Fecha y hora del equipo" in respuesta and "= 4" in respuesta
+    nucleo.agente.permisos_concedidos.discard("CALCULATE")
+    assert "4" not in nucleo.conversar("¿Cuánto es dos más dos?")["respuesta"]
+
+
+def test_evaluacion_local_sin_alumno_y_con_revocacion(nucleo):
+    assert nucleo.evaluar_alumno()["evaluadas"] == 0
+    nucleo.agente.permisos_concedidos.discard("READ")
+    with pytest.raises(PermissionError, match="READ"):
+        nucleo.evaluar_alumno()

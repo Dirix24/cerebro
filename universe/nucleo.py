@@ -137,7 +137,7 @@ class Nucleo:
             return {"activa": activa[0]}
 
     def operar_proyecto(self, datos):
-        from core.proyecto_studio import ProyectoStudio
+        from core.proyecto_studio import ProyectoStudio, comprobar_python
 
         cliente = datos.get("cliente")
         if not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente):
@@ -167,7 +167,7 @@ class Nucleo:
         if accion == "analizar":
             return proyecto.analizar()
         if accion == "validar":
-            ast.parse(proyecto.leer(nombre), filename=nombre)
+            comprobar_python(proyecto.leer(nombre), nombre)
             return {"salida": "Sintaxis Python válida."}
         if accion in {"guardar", "aplicar", "pruebas"}:
             self.exigir_permisos("WRITE")
@@ -301,6 +301,21 @@ class Nucleo:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
         if cliente is not None and (not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente)):
             raise ValueError("Identificador de conversación inválido.")
+        if not comando:
+            from agent.preguntas_locales import calculo_dictado, preguntas_multiples
+
+            preguntas = preguntas_multiples(pregunta)
+            if preguntas:
+                respuestas = []
+                for indice, item in enumerate(preguntas, 1):
+                    respuesta = self.conversar(item, modo=modo, cliente=cliente)["respuesta"]
+                    respuestas.append(f"{indice}. {item}\n{respuesta}")
+                return {"respuesta": "\n\n".join(respuestas)}
+            expresion = calculo_dictado(pregunta)
+            if expresion is not None:
+                respuesta, _ = self.chat.procesar("/calc " + expresion)
+                self._registrar_turno(pregunta, respuesta)
+                return {"respuesta": respuesta}
         if re.fullmatch(r"(?:cerebro[, ]+)?(?:ponte a analizar|analiza (?:el )?aprendizaje)[.!]?", pregunta, re.I):
             informe = self.analizar_aprendizaje()
             objetivos = "\n".join("• " + tarea["objetivo"] for tarea in informe["propuestas"])
@@ -363,6 +378,28 @@ class Nucleo:
         informe = analizar(self.raiz)
         informe["tipos"] = dict(tipos)
         return informe
+
+    def evaluar_alumno(self):
+        from tempfile import TemporaryDirectory
+        from core.autoevaluacion import ejecutar
+
+        self.exigir_permisos("READ")
+        if self.chat.modelo is None:
+            return {"evaluadas": 0, "aciertos": 0, "aviso": "El núcleo no tiene un modelo alumno cargado."}
+        with TemporaryDirectory(prefix="cerebro-evaluar-") as temporal:
+            memoria_prueba = AdvancedMemoryManager(filepath=str(Path(temporal) / "memoria.json"))
+            evaluador = Conversacion(self.chat.modelo, memoria_prueba, self.agente, seed=0, modo_local=True)
+            evaluador.gen["temperatura"] = 0
+            evaluador.gen["max_nuevos"] = min(40, evaluador.gen["max_nuevos"])
+
+            def responder(pregunta):
+                memoria_prueba.limpiar_corto_plazo()
+                return evaluador.responder_modelo(pregunta)
+
+            notas = ejecutar(self.raiz / "data" / "repaso_espaciado.json", responder, limite=3)
+        return {"evaluadas": len(notas), "aciertos": sum(nota["correcto"] for nota in notas),
+                "aviso": ("Coincidencia exacta sobre fichas locales. No mide el rendimiento general."
+                          if notas else "No hay fichas aprobadas para evaluar.")}
 
     def nodos(self):
         self.exigir_permisos("READ")

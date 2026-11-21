@@ -189,6 +189,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                         "/api/conversaciones": nucleo.estado_conversaciones,
                         "/api/conversacion-activa": nucleo.conversaciones.version_activa,
                         "/api/analizar-aprendizaje": nucleo.analizar_aprendizaje,
+                        "/api/evaluar-alumno": nucleo.evaluar_alumno,
                         "/api/tareas": nucleo.consultar_tareas,
                         "/api/memoria": nucleo.respaldo,
                         "/api/archivo": lambda: nucleo.leer(consulta.get("nombre", [""])[0]),

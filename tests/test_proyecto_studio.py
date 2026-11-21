@@ -80,3 +80,21 @@ def test_documento_contextual_responde_con_pasaje_y_respeta_read(tmp_path, monke
             nucleo.conversar(pregunta)
     finally:
         nucleo.ejecutor.shutdown()
+
+
+def test_compilacion_y_propuestas_distintas_de_dos_puntos(tmp_path):
+    from core.proyecto_studio import ProyectoStudio
+
+    (tmp_path / "lista.py").write_text("numeros = [1, 2\n")
+    (tmp_path / "logica.py").write_text("return 2\n")
+    (tmp_path / "datos.py").write_text('ajustes = {"a": 1, "a": 2}\n')
+    (tmp_path / "ambiguo.py").write_text("datos = [{\n")
+    proyecto = ProyectoStudio(str(tmp_path))
+    informe = proyecto.analizar()
+    assert informe["revisados"] == 4
+    assert any("outside function" in item for item in informe["hallazgos"])
+    assert any("clave de diccionario repetida" in item for item in informe["hallazgos"])
+    (propuesta,) = informe["propuestas"]
+    assert propuesta["archivo"] == "lista.py" and "+]" in propuesta["diff"]
+    proyecto.aplicar(propuesta["id"])
+    assert (tmp_path / "lista.py").read_text().endswith("]\n")

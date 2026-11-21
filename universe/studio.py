@@ -163,7 +163,17 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
         publicar(lambda: pedir("analizar-aprendizaje"), responder)
 
-    mapa = MapaStudio(paginas, actualizar_mapa, analizar_universe)
+    def evaluar_universe():
+        def mostrar_nota(nota):
+            estado.set("Evaluación terminada.")
+            messagebox.showinfo("Evaluación del alumno",
+                                f"Aciertos: {nota['aciertos']} de {nota['evaluadas']}.\n{nota['aviso']}",
+                                parent=app)
+
+        estado.set("Evaluando el modelo con fichas locales…")
+        publicar(lambda: pedir("evaluar-alumno"), mostrar_nota)
+
+    mapa = MapaStudio(paginas, actualizar_mapa, analizar_universe, evaluar_universe)
     paginas.add(mapa, text="Universe")
 
     def pagina_activa(_evento):
@@ -407,7 +417,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         def analizado(datos):
             if base != proyecto_activo:
                 return
-            lineas = [f"Revisé {datos['revisados']} archivos Python.",
+            lineas = [f"Revisé {datos['revisados']} archivos Python de {datos['archivos']} archivos visibles.",
                       *datos["hallazgos"], f"Propuestas verificadas por sintaxis: {len(datos['propuestas'])}."]
             if datos["limitado"]:
                 lineas.append("El inventario o la revisión alcanzó el límite.")

@@ -46,7 +46,7 @@ El adaptador experimental requiere Linux X11, `xdotool`, OpenCV, MediaPipe Tasks
 
 Pulsa **Abrir proyecto**, elige una carpeta de trabajo y confirma el acceso. El explorador muestra rutas relativas de archivos de texto y permite filtrarlas. Abre un archivo para editarlo. Studio pide confirmación al guardar en el proyecto y comprueba que el archivo siga coincidiendo con la versión que abriste.
 
-Escribe «Cerebro, analiza este proyecto y corrige sus errores» o pulsa **Analizar**. Studio revisa la sintaxis de Python y muestra los diagnósticos. Para una cabecera con dos puntos ausentes, ofrece un diff si el archivo corregido puede analizarse completo. **Aplicar propuesta** requiere una confirmación por archivo. **Pruebas** ejecuta el descubrimiento de `unittest` tras confirmar y muestra el resultado en **Validaciones**. Usa esa acción con proyectos de confianza, ya que ejecuta código con los permisos del usuario.
+Escribe «Cerebro, analiza este proyecto y corrige sus errores» o pulsa **Analizar**. Studio revisa la sintaxis de Python y muestra los diagnósticos. Puede proponer dos puntos ausentes o un delimitador final cuando el compilador acepta el archivo corregido. **Aplicar propuesta** requiere una confirmación por archivo. **Pruebas** ejecuta `unittest` en Bubblewrap sobre una copia de solo lectura, sin red del equipo ni acceso a la carpeta personal. Si el aislamiento no puede arrancar, Studio no ejecuta el proyecto. El resultado se muestra en **Validaciones**.
 
 Para consultar un adjunto, adjúntalo y espera el análisis. Puedes preguntar «¿Qué dice el PDF adjunto sobre el presupuesto?». Cerebro devuelve pasajes del archivo con coincidencias y el alcance de la extracción. Los PDF escaneados necesitan OCR fuera de este flujo.
 

@@ -12,7 +12,7 @@ COLORES = {
 
 
 class MapaStudio(ttk.Frame):
-    def __init__(self, padre, actualizar, analizar=None):
+    def __init__(self, padre, actualizar, analizar=None, evaluar=None):
         super().__init__(padre, padding=10)
         self._nodos = []
         self._puntos = {}
@@ -28,6 +28,8 @@ class MapaStudio(ttk.Frame):
         ttk.Button(controles, text="Actualizar mapa", command=actualizar).pack(side="left")
         if analizar is not None:
             ttk.Button(controles, text="Analizar", command=analizar).pack(side="left", padx=(6, 0))
+        if evaluar is not None:
+            ttk.Button(controles, text="Evaluar alumno", command=evaluar).pack(side="left", padx=(6, 0))
         ttk.Label(controles, text="Arrastra para girar · Rueda para ampliar · Selecciona para inspeccionar").pack(
             side="left", padx=8
         )

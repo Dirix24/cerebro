@@ -1,11 +1,13 @@
 """Acceso acotado a una carpeta seleccionada y propuestas verificables de Python."""
 import ast
 import difflib
+from io import StringIO
 import os
 from pathlib import Path, PurePosixPath
 import re
 import secrets
 import stat
+import tokenize
 from tempfile import NamedTemporaryFile
 
 FORMATOS = {".py", ".txt", ".md", ".json", ".toml", ".yaml", ".yml", ".cfg", ".ini", ".css", ".js", ".html"}
@@ -102,10 +104,12 @@ class ProyectoStudio:
             revisados += 1
             try:
                 original = self.leer(nombre)
-                ast.parse(original, filename=nombre)
+                comprobar_python(original, nombre)
+                arbol = ast.parse(original, filename=nombre)
+                hallazgos.extend(_claves_duplicadas(arbol, nombre))
             except SyntaxError as error:
                 hallazgos.append(f"{nombre}:{error.lineno} · {error.msg}")
-                candidato = _agregar_dos_puntos(original, nombre, error)
+                candidato = _proponer_reparacion(original, nombre, error)
                 if candidato is not None and len(propuestas) < 20:
                     identificador = secrets.token_hex(12)
                     self.propuestas[identificador] = nombre, original, candidato
@@ -114,7 +118,8 @@ class ProyectoStudio:
                     propuestas.append({"id": identificador, "archivo": nombre, "diff": diff})
             except (OSError, ValueError, RecursionError) as error:
                 hallazgos.append(f"{nombre} · no se pudo revisar ({error})")
-        return {"revisados": revisados, "hallazgos": hallazgos, "propuestas": propuestas,
+        return {"archivos": len(inventario["archivos"]), "revisados": revisados,
+                "hallazgos": hallazgos, "propuestas": propuestas,
                 "limitado": inventario["limitado"]}
 
     def aplicar(self, identificador):
@@ -126,8 +131,58 @@ class ProyectoStudio:
         return {"archivo": nombre}
 
 
-def _agregar_dos_puntos(original, nombre, error):
-    if error.msg != "expected ':'" or not error.lineno:
+def comprobar_python(texto, nombre):
+    """Comprueba restricciones del compilador sin ejecutar el archivo."""
+    compile(texto, nombre, "exec", dont_inherit=True)
+
+
+def _claves_duplicadas(arbol, nombre):
+    for nodo in ast.walk(arbol):
+        if isinstance(nodo, ast.Dict):
+            vistas = set()
+            for clave in nodo.keys:
+                if isinstance(clave, ast.Constant) and type(clave.value) in (str, int, bool):
+                    if clave.value in vistas:
+                        yield f"{nombre}:{clave.lineno} · clave de diccionario repetida; prevalece la última."
+                    vistas.add(clave.value)
+
+
+def _proponer_reparacion(original, nombre, error):
+    candidato = (_agregar_dos_puntos(original, error)
+                 if error.msg == "expected ':'" else _cerrar_delimitador(original, error))
+    if candidato is None:
+        return None
+    try:
+        comprobar_python(candidato, nombre)
+    except (SyntaxError, ValueError, RecursionError):
+        return None
+    return candidato
+
+
+def _cerrar_delimitador(original, error):
+    if "was never closed" not in error.msg:
+        return None
+    cierres = {"(": ")", "[": "]", "{": "}"}
+    aperturas = []
+    try:
+        for token in tokenize.generate_tokens(StringIO(original).readline):
+            if token.type != tokenize.OP:
+                continue
+            if token.string in cierres:
+                aperturas.append((token, cierres[token.string]))
+            elif token.string in cierres.values():
+                if not aperturas or aperturas.pop()[1] != token.string:
+                    return None
+    except tokenize.TokenError as exc:
+        if "multi-line statement" not in str(exc):
+            return None
+    if len(aperturas) != 1 or aperturas[0][0].start[0] != error.lineno:
+        return None
+    return original.rstrip("\r\n") + "\n" + aperturas[0][1] + "\n"
+
+
+def _agregar_dos_puntos(original, error):
+    if not error.lineno:
         return None
     lineas = original.splitlines(keepends=True)
     linea = lineas[error.lineno - 1]
@@ -138,12 +193,7 @@ def _agregar_dos_puntos(original, nombre, error):
     if not re.match(r"\s*(?:async\s+)?(?:def|class|if|elif|else|for|while|try|except|finally|with|match|case)\b", cabecera):
         return None
     lineas[error.lineno - 1] = cabecera + ":" + linea[len(cabecera):]
-    candidato = "".join(lineas)
-    try:
-        ast.parse(candidato, filename=nombre)
-    except SyntaxError:
-        return None
-    return candidato
+    return "".join(lineas)
 
 
 def ejecutar_pruebas(raiz):

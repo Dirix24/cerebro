@@ -4,63 +4,75 @@ Uso: python3 entrenamiento_guiado.py --pasos 100
 No descarga modelos, no ejecuta automáticamente al instalar o fusionar.
 """
 import argparse
+import math
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+from tempfile import mkdtemp
 
 import config
-from core.seguridad_aprendizaje import respaldar, restaurar, evaluar_fijo
+from core.entorno_portatil import preparar_almacenamiento
+from core.seguridad_aprendizaje import evaluar_fijo
 
 RAIZ = Path(__file__).resolve().parent
 
 
-def decidir_aceptacion(antes, despues, tolerancia=0.02):
-    """No aceptar pérdidas no medibles ni regresiones mayores a tolerancia."""
-    if despues is None:
-        return False
-    if antes is None:
-        return True
-    return despues <= antes * (1 + tolerancia)
+def decidir_aceptacion(antes, despues):
+    """Solo considera candidato evaluable si reduce la pérdida fija."""
+    return (antes is not None and despues is not None
+            and math.isfinite(antes) and math.isfinite(despues) and despues < antes)
 
 
 def entrenar_guiado(pasos, lr):
-    """Continúa los pesos actuales; revierte ambos checkpoints ante fallos."""
+    """Entrena una copia local y conserva el candidato solo si mejora."""
     if not 1 <= pasos <= 1000:
         raise ValueError("Los pasos deben estar entre 1 y 1000")
     if not 0 < lr <= 0.001:
         raise ValueError("La tasa de aprendizaje debe estar entre 0 y 0.001")
-    ultimo = Path(config.CKPT_ULTIMO)
-    mejor = Path(config.CKPT_MEJOR)
+    ultimo, mejor = Path(config.CKPT_ULTIMO), Path(config.CKPT_MEJOR)
     validacion = Path(config.VALIDACION_FILE)
-    if not ultimo.is_file():
-        raise FileNotFoundError("Falta checkpoints/last.npz: entrena primero el modelo original.")
+    if not ultimo.is_file() or not mejor.is_file():
+        raise FileNotFoundError("Se necesitan last.npz y best.npz para medir un candidato.")
     if not validacion.is_file():
         raise FileNotFoundError("Falta data/validacion.txt: no entrenamos sin validación fija.")
-    # El corpus guiado se incluye automáticamente desde data/corpus/ por train.py.
-    if not (RAIZ / "data/corpus/entrenamiento_guiado.txt").is_file():
-        raise FileNotFoundError("Falta el currículo de entrenamiento guiado.")
-    rutas = [ultimo, mejor]
-    carpeta, copias = respaldar(rutas)
+    base = Path(config.raiz_datos()) / "data"
+    candidatos = Path(config.raiz_datos()) / "learning" / "candidatos"
+    candidatos.mkdir(parents=True, exist_ok=True)
+    carpeta = Path(mkdtemp(prefix="guiado-", dir=candidatos))
+    conservar = False
     try:
-        antes = {ruta: evaluar_fijo(ruta, validacion) for ruta in rutas}
+        preparar_almacenamiento(carpeta)
+        datos = carpeta / "data"
+        for nombre in ("corpus.txt", "test.txt", "generalizacion.txt"):
+            origen = base / nombre
+            if origen.is_file():
+                shutil.copy2(origen, datos / nombre)
+        if (base / "corpus").is_dir():
+            shutil.copytree(base / "corpus", datos / "corpus")
+        validacion_copia = datos / "validacion.txt"
+        shutil.copy2(validacion, validacion_copia)
+        referencia = carpeta / "referencia.npz"
+        shutil.copy2(mejor, referencia)
+        shutil.copy2(ultimo, carpeta / "checkpoints" / "last.npz")
+        shutil.copy2(referencia, carpeta / "checkpoints" / "best.npz")
+        antes = evaluar_fijo(referencia, validacion_copia)
         comando = [sys.executable, str(RAIZ / "train.py"), "--resume",
                    "--pasos", str(pasos), "--lr", str(lr)]
-        print("Validación anterior:", {p.name: v for p, v in antes.items()}, flush=True)
-        subprocess.run(comando, cwd=RAIZ, check=True)
-        despues = {ruta: evaluar_fijo(ruta, validacion) for ruta in rutas}
-        print("Validación posterior:", {p.name: v for p, v in despues.items()}, flush=True)
-        if not all(decidir_aceptacion(antes[r], despues[r]) for r in rutas):
-            restaurar(copias)
-            print("Entrenamiento rechazado: checkpoints restaurados.", flush=True)
+        subprocess.run(comando, cwd=RAIZ, env={**os.environ, "CEREBRO_HOME": str(carpeta)}, check=True)
+        candidato = carpeta / "checkpoints" / "best.npz"
+        despues = evaluar_fijo(candidato, validacion_copia)
+        print(f"Validación fija · activo: {antes} · candidato: {despues}", flush=True)
+        if not decidir_aceptacion(antes, despues):
+            print("Candidato descartado: no mejoró la pérdida fija.", flush=True)
             return False
-        print("Entrenamiento aceptado. Los pesos se han actualizado.", flush=True)
+        conservar = True
+        print(f"Candidato conservado para revisión: {candidato}.", flush=True)
         return True
-    except BaseException:
-        restaurar(copias)
-        raise
     finally:
-        shutil.rmtree(carpeta, ignore_errors=True)
+        if not conservar:
+            shutil.rmtree(carpeta, ignore_errors=True)
 
 
 def main():
