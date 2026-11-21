@@ -242,3 +242,22 @@ header { background: var(--panel); gap: .75rem; }
 [data-interfaz="chat"] .conversacion:has(#mensajes:empty) .conversaciones { margin-bottom: clamp(1rem, 4vh, 2.75rem); }
 
 button[aria-pressed="true"], .navegacion-principal [aria-current="page"] { border-color: #168BFF; }
+
+#gestor-chats {
+  width: min(500px, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  padding: 1rem;
+}
+#gestor-chats::backdrop { background: #05070bca; }
+.cabecera-gestor, .pie-gestor { justify-content: space-between; }
+.cabecera-gestor h2, #aviso-chats { margin: 0; }
+.marcar-chats { display: block; margin-top: .85rem; color: var(--acento); }
+#chats-guardados { max-height: min(48dvh, 360px); overflow: auto; padding: 0; list-style: none; }
+#chats-guardados label { display: block; padding: .65rem .35rem; border-bottom: 1px solid var(--linea); }
+#gestor-chats input { accent-color: #168BFF; }
+#borrar-chats-marcados { color: #ff9da8; }
+#aviso-chats:not(:empty) { margin-top: .65rem; }

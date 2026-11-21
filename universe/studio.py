@@ -424,6 +424,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     boton(barra_chat, "Adjuntar", adjuntar)
     boton(barra_conversaciones, "Nuevo chat", gestionar_chat)
     boton(barra_conversaciones, "Eliminar chat", lambda: gestionar_chat(borrar=True), "Eliminar.TButton")
+    def ver_chats():
+        from universe.dialogo_chats import gestionar_conversaciones
+        gestionar_conversaciones(app, pedir, mostrar_chat)
+
+    boton(barra_conversaciones, "Chats", ver_chats)
     selector.bind("<<ComboboxSelected>>", seleccionar_chat)
     lista.bind("<<ListboxSelect>>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())

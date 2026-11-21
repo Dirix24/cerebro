@@ -152,3 +152,27 @@ def test_conversaciones_independientes_reinicio_y_migracion(servidor):
     assert api("/api/historial")["turnos"] == []
     otra = api("/api/conversaciones", {"accion": "seleccionar", "id": identificador})
     assert otra["turnos"][0]["texto"] == "Segunda conversación"
+
+
+def test_borrado_de_chat_por_lotes(servidor):
+    api, _, nucleo = servidor
+    nucleo._registrar_turno("Original", "Respuesta")
+    anterior = api("/api/conversaciones", {"accion": "nueva"})["activa"]
+    nucleo._registrar_turno("Anterior", "Respuesta")
+    actual = api("/api/conversaciones", {"accion": "nueva"})["activa"]
+    nucleo._registrar_turno("Actual", "Respuesta")
+    for datos in (
+        {"confirmar": False, "ids": ["original"]},
+        {"confirmar": True, "ids": ["original", "f" * 32]},
+        {"confirmar": True, "ids": ["original", "../otro"]},
+    ):
+        with pytest.raises(HTTPError, match="400"):
+            api("/api/borrar-conversaciones", datos)
+    assert len(api("/api/conversaciones")["chats"]) == 3
+    estado = api("/api/borrar-conversaciones", {"confirmar": True, "ids": [anterior, anterior]})
+    assert estado["eliminadas"] == 1
+    assert estado["activa"] == actual and estado["turnos"][0]["texto"] == "Actual"
+    estado = api("/api/borrar-conversaciones", {"confirmar": True, "ids": ["original", actual]})
+    assert estado["eliminadas"] == 2 and not estado["turnos"]
+    assert estado["activa"] != actual
+    assert [chat["id"] for chat in estado["chats"]] == [estado["activa"]]

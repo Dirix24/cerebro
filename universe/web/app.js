@@ -212,7 +212,7 @@ function agregarMensaje(rol, texto) {
 async function conversar(texto) {
   if (chatOcupado) return false;
   chatOcupado = true;
-  const controles = [$("enviar-chat"), $("borrar-chat"), $("nuevo-chat"), $("lista-chats"), ...document.querySelectorAll("[data-chat]")];
+  const controles = [$("enviar-chat"), $("ver-chats"), $("borrar-chat"), $("nuevo-chat"), $("lista-chats"), ...document.querySelectorAll("[data-chat]")];
   controles.forEach(control => { control.disabled = true; });
   $("estado-chat").hidden = false;
   activarVista();
@@ -272,6 +272,62 @@ $("borrar-chat").addEventListener("click", () => {
     return api("conversaciones");
   });
 });
+
+const gestorChats = $("gestor-chats");
+const casillasChats = () => [...$("chats-guardados").querySelectorAll("input")];
+function actualizarSeleccionChats() {
+  const casillas = casillasChats();
+  const cantidad = casillas.filter(casilla => casilla.checked).length;
+  $("marcar-chats").checked = cantidad > 0 && cantidad === casillas.length;
+  $("marcar-chats").indeterminate = cantidad > 0 && cantidad < casillas.length;
+  $("marcar-chats").disabled = casillas.length === 0;
+  $("cantidad-chats").textContent = cantidad + " de " + casillas.length + " seleccionados";
+  $("borrar-chats-marcados").disabled = cantidad === 0;
+  $("abrir-chat-marcado").disabled = cantidad !== 1;
+}
+
+$("ver-chats").addEventListener("click", () => ejecutar($("ver-chats"), async () => {
+  const datos = await api("conversaciones");
+  $("chats-guardados").replaceChildren(...datos.chats.map(chat => {
+    const fila = document.createElement("li");
+    const etiqueta = document.createElement("label");
+    const casilla = document.createElement("input");
+    casilla.type = "checkbox";
+    casilla.value = chat.id;
+    etiqueta.append(casilla, " " + chat.titulo + (chat.id === datos.activa ? " · Actual" : ""));
+    fila.append(etiqueta);
+    return fila;
+  }));
+  $("aviso-chats").textContent = datos.chats.length ? "" : "Todavía no hay conversaciones guardadas.";
+  actualizarSeleccionChats();
+  gestorChats.showModal();
+}));
+$("chats-guardados").addEventListener("change", actualizarSeleccionChats);
+$("marcar-chats").addEventListener("change", evento => {
+  for (const casilla of casillasChats()) casilla.checked = evento.target.checked;
+  actualizarSeleccionChats();
+});
+
+function operarChats(boton, borrar) {
+  const ids = casillasChats().filter(casilla => casilla.checked).map(casilla => casilla.value);
+  if (chatOcupado || (borrar ? !ids.length : ids.length !== 1)) return;
+  if (borrar && !window.confirm("¿Eliminar " + ids.length + " conversaciones seleccionadas?")) return;
+  gestionarChat(boton, async () => {
+    try {
+      const datos = borrar ? await api("borrar-conversaciones", {confirmar: true, ids})
+        : await api("conversaciones", {accion: "seleccionar", id: ids[0]});
+      gestorChats.close();
+      if (borrar) aviso("Conversaciones eliminadas: " + datos.eliminadas + ".");
+      return datos;
+    } catch (error) {
+      $("aviso-chats").textContent = error.message;
+      throw error;
+    }
+  });
+}
+
+$("abrir-chat-marcado").addEventListener("click", evento => operarChats(evento.currentTarget, false));
+$("borrar-chats-marcados").addEventListener("click", evento => operarChats(evento.currentTarget, true));
 
 const compositor = $("mensaje");
 compositor.addEventListener("keydown", evento => {

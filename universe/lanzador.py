@@ -281,7 +281,24 @@ def terminal(sesion):
                     for indice, chat in enumerate(chats, 1):
                         print(f"  {indice}. {chat['titulo']}")
                     if chats:
-                        opcion = input("Abrir número (Enter cancela): ").strip()
+                        opcion = input("Número para abrir, «borrar» para elegir chats (Enter cancela): ").strip()
+                        if opcion.casefold() == "borrar":
+                            entrada_ids = input("Números separados por coma o «todos»: ").strip().casefold()
+                            if entrada_ids == "todos":
+                                indices = range(len(chats))
+                            elif re.fullmatch(r"[0-9]{1,8}(?:\s*,\s*[0-9]{1,8})*", entrada_ids):
+                                indices = list(dict.fromkeys(int(numero) - 1 for numero in entrada_ids.split(",")))
+                            else:
+                                print("Selección inválida.")
+                                continue
+                            if any(not 0 <= indice < len(chats) for indice in indices):
+                                print("Hay números fuera de la lista.")
+                                continue
+                            ids = [chats[indice]["id"] for indice in indices]
+                            if input(f"¿Eliminar {len(ids)} conversaciones? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
+                                datos = api(sesion, "borrar-conversaciones", {"confirmar": True, "ids": ids})
+                                print(f"Conversaciones eliminadas: {datos['eliminadas']}.")
+                            continue
                         if opcion.isascii() and opcion.isdigit() and len(opcion) <= 8 and 1 <= int(opcion) <= len(chats):
                             api(sesion, "conversaciones", {"accion": "seleccionar", "id": chats[int(opcion) - 1]["id"]})
                             mostrar_historial(12)
@@ -451,6 +468,7 @@ def escritorio(sesion):
         menu_acciones.entryconfigure("Elegir audio", state=estado)
         boton_borrar.configure(state=estado)
         boton_nuevo.configure(state=estado)
+        boton_chats.configure(state=estado)
 
     def enviar(_evento=None):
         texto = entrada.get().strip()
@@ -607,6 +625,14 @@ def escritorio(sesion):
     boton_nuevo.pack(side="left", padx=(0, 5))
     boton_borrar = boton(barra_chat, "Eliminar chat", lambda: gestionar_chat(borrar=True))
     boton_borrar.pack(side="left")
+
+    def ver_chats():
+        from universe.dialogo_chats import gestionar_conversaciones
+        gestionar_conversaciones(ventana, lambda ruta, datos=None: api(sesion, ruta, datos, tiempo=4),
+                                 lambda datos: eventos.put(("conversación", datos)))
+
+    boton_chats = boton(barra_chat, "Chats", ver_chats)
+    boton_chats.pack(side="left", padx=5)
     entrada.bind("<Return>", enviar)
 
     accesos = tk.Menubutton(barra, text="Accesos ▾", bg=panel, fg=texto,

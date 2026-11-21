@@ -165,6 +165,25 @@ class Nucleo:
         self._limpiar_contexto()
         return {"turnos": []}
 
+    def borrar_conversaciones(self, confirmar, identificadores):
+        if self.solo_lectura:
+            raise PermissionError("La sesión es de solo lectura.")
+        if confirmar is not True:
+            raise ValueError("Confirma la eliminación de las conversaciones seleccionadas.")
+        if (not isinstance(identificadores, list) or not identificadores
+                or any(not isinstance(valor, str) for valor in identificadores)):
+            raise ValueError("Selecciona al menos una conversación.")
+        ids = list(dict.fromkeys(identificadores))
+        rutas = [self.conversaciones.ruta(valor) for valor in ids]
+        if any(ruta.is_symlink() or not ruta.is_file() for ruta in rutas):
+            raise ValueError("La lista cambió. Actualiza la selección e inténtalo otra vez.")
+        if self.conversaciones.activa() in ids:
+            self.conversaciones.nueva()
+            self._limpiar_contexto()
+        for ruta in rutas:
+            ruta.unlink()
+        return {**self.conversaciones.estado(), "eliminadas": len(rutas)}
+
     def _limpiar_contexto(self):
         self.memoria.limpiar_corto_plazo()
         self.chat.tema_local = None

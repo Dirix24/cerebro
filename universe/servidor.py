@@ -158,6 +158,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     acciones = {
                         "/api/chat": lambda: self.responder_chat(datos),
                         "/api/historial": lambda: nucleo.borrar_historial(datos.get("confirmar"), datos.get("id")),
+                        "/api/borrar-conversaciones": lambda: nucleo.borrar_conversaciones(
+                            datos.get("confirmar"), datos.get("ids")),
                         "/api/conversaciones": lambda: nucleo.cambiar_conversacion(datos.get("accion"), datos.get("id")),
                         "/api/adjunto": lambda: nucleo.adjuntar(datos.get("nombre"), datos.get("contenido")),
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),

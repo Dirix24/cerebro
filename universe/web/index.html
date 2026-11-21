@@ -27,6 +27,20 @@
     </div>
     <output id="conexion">Desconectado</output>
   </header>
+  <dialog id="gestor-chats" aria-labelledby="titulo-gestor-chats">
+    <form method="dialog" class="acciones cabecera-gestor">
+      <h2 id="titulo-gestor-chats">Conversaciones guardadas</h2>
+      <button aria-label="Cerrar lista de conversaciones">Cerrar</button>
+    </form>
+    <label class="marcar-chats"><input type="checkbox" id="marcar-chats"> Seleccionar todo</label>
+    <ul id="chats-guardados"></ul>
+    <div class="acciones pie-gestor">
+      <output id="cantidad-chats" aria-live="polite"></output>
+      <button type="button" id="abrir-chat-marcado">Abrir</button>
+      <button type="button" id="borrar-chats-marcados">Eliminar selección</button>
+    </div>
+    <p id="aviso-chats" role="status"></p>
+  </dialog>
   <main>
     <form id="acceso" class="panel acceso">
       <h1>Conectar al núcleo</h1>
@@ -62,6 +76,7 @@
             <label for="lista-chats" class="oculto">Conversaciones guardadas</label>
             <select id="lista-chats" aria-label="Conversaciones guardadas"></select>
             <button type="button" id="borrar-chat">Eliminar chat</button>
+            <button type="button" id="ver-chats">Todos los chats</button>
           </div>
           <div class="inicio-chat">
             <span class="isotipo" aria-hidden="true"></span>
