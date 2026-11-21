@@ -292,6 +292,13 @@ class Nucleo:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
         if cliente is not None and (not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente)):
             raise ValueError("Identificador de conversación inválido.")
+        if re.fullmatch(r"(?:cerebro[, ]+)?(?:ponte a analizar|analiza (?:el )?aprendizaje)[.!]?", pregunta, re.I):
+            informe = self.analizar_aprendizaje()
+            objetivos = "\n".join("• " + tarea["objetivo"] for tarea in informe["propuestas"])
+            return {"respuesta": (f"Evaluaciones registradas: {informe['evaluaciones']}. "
+                                  f"Correcciones pendientes: {informe['correcciones_pendientes']}.\n" + objetivos)}
+        if re.fullmatch(r"(?:cerebro[, ]+)?(?:activa|abre) (?:el )?modo t[aá]ctil[.!]?", pregunta, re.I):
+            return {"respuesta": "Abre el modo táctil desde el lanzador local.", "abrir": "tactil"}
         compuesto = re.fullmatch(
             r"(?:cerebro[, ]+)?abre (?:el )?navegador (?:e|y) investiga (?:sobre )?(.+)", pregunta, re.I)
         if compuesto:
@@ -332,6 +339,17 @@ class Nucleo:
         self._registrar_turno(pregunta, respuesta)
         from universe.consultas import desea_studio
         return {"respuesta": respuesta, **({"abrir": "studio"} if desea_studio(pregunta) else {})}
+
+    def analizar_aprendizaje(self):
+        from collections import Counter
+        from core.automejora import analizar
+
+        if "READ" not in self.agente.permisos_concedidos:
+            raise PermissionError("Se requiere permiso de lectura para revisar el aprendizaje.")
+        tipos = Counter(nodo["tipo"] for nodo in self.nodos()["nodos"])
+        informe = analizar(self.raiz)
+        informe["tipos"] = dict(tipos)
+        return informe
 
     def nodos(self):
         self.memoria.cargar_memoria()

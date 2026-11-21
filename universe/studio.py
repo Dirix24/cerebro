@@ -147,7 +147,18 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     def actualizar_mapa():
         publicar(lambda: pedir("nodos"), mapa.actualizar)
 
-    mapa = MapaStudio(paginas, actualizar_mapa)
+    def analizar_universe():
+        def responder(informe):
+            resumen = "\n".join(
+                [f"Evaluaciones: {informe['evaluaciones']}",
+                 f"Correcciones pendientes: {informe['correcciones_pendientes']}",
+                 f"Entrenamientos registrados: {informe['entrenamientos_registrados']}", "",
+                 *[f"{tarea['objetivo']}. {tarea['accion']}" for tarea in informe["propuestas"]]])
+            messagebox.showinfo("Análisis de aprendizaje", resumen, parent=app)
+
+        publicar(lambda: pedir("analizar-aprendizaje"), responder)
+
+    mapa = MapaStudio(paginas, actualizar_mapa, analizar_universe)
     paginas.add(mapa, text="Universe")
 
     def pagina_activa(_evento):

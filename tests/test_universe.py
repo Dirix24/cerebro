@@ -209,3 +209,14 @@ def test_cuatro_interfaces_comparten_memoria_historial_y_contexto(servidor):
     api("/api/conversaciones", {"accion": "nueva"})
     assert not nucleo.memoria.short_term_context
     assert "Atlas" in conversar("escritorio", "/recuerdo proyecto_prueba")["respuesta"]
+
+
+def test_informe_universe_y_modo_tactil_sin_captura(servidor):
+    api, _, nucleo = servidor
+    nucleo.memoria.guardar_largo_plazo("recuerdo_prueba", "valor")
+    informe = api("/api/analizar-aprendizaje")
+    assert informe["modo"] == "solo propuestas" and informe["tipos"]["memoria"] >= 1
+    assert "Evaluaciones registradas" in api("/api/chat", {"mensaje": "Cerebro, ponte a analizar"})["respuesta"]
+    tactil = api("/api/chat", {"mensaje": "Cerebro, activa el modo táctil"})
+    assert tactil["abrir"] == "tactil"
+    assert "lanzador local" in tactil["respuesta"]

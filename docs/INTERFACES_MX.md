@@ -34,6 +34,14 @@ Las cuatro entradas se conectan al mismo servicio autenticado en loopback. Compa
 
 Al adjuntar desde Chat o Studio, Cerebro analiza el archivo automáticamente. Después puedes decir «Explícame» para ver los pasajes principales y los temas detectados. «Guarda lo aprendido de este archivo» guarda el análisis en la memoria compartida. El último archivo analizado se conserva en el núcleo mientras está en ejecución. El análisis admite adjuntos de hasta 16 MiB, dentro de la cuota del espacio de trabajo. El navegador reproduce localmente los vídeos compatibles con sus códecs. Están pendientes el OCR de documentos escaneados, la interpretación visual de escenas y la transcripción propia de audio. Las operaciones aritméticas y las deducciones usan reglas comprobables. El modelo propio sigue teniendo un rendimiento limitado en conversación y programación general.
 
+### Modo táctil experimental y revisión de aprendizaje
+
+«Cerebro, activa el modo táctil» abre un panel local. Elige una cámara, pulsa **Activar cámara** y confirma. El panel indica cuándo hay captura y permite detenerla con **Pausar** o Esc mientras está enfocado. La cámara se libera al detener el seguimiento. Las imágenes se procesan en memoria.
+
+El adaptador experimental requiere Linux X11, `xdotool`, OpenCV, MediaPipe Tasks y un archivo local `hand_landmarker.task` indicado por `CEREBRO_MODELO_MANOS`. Comprueba la compatibilidad de estas dependencias con tu Python antes de instalarlas. La primera versión usa una zona central fija para mover el puntero, pinza breve para pulsar, pinza mantenida para arrastrar y una segunda mano para desplazar. La comprobación con una cámara y manos reales queda pendiente.
+
+**Analizar** en Universe muestra el número de evaluaciones, correcciones y entrenamientos registrados, y genera propuestas a partir de esos datos. El entrenamiento de pesos sigue siendo una operación separada.
+
 ### Proyectos Python en Studio nativo
 
 Pulsa **Abrir proyecto**, elige una carpeta de trabajo y confirma el acceso. El explorador muestra rutas relativas de archivos de texto y permite filtrarlas. Abre un archivo para editarlo. Studio pide confirmación al guardar en el proyecto y comprueba que el archivo siga coincidiendo con la versión que abriste.

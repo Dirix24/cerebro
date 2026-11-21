@@ -112,7 +112,7 @@ def nucleo():
     token = secrets.token_urlsafe(32)
     with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio,
                          abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante,
-                         abrir_destino=lanzar_destino, abrir_universe=lanzar_universe) as servidor:
+                         abrir_destino=lanzar_destino, abrir_universe=lanzar_universe, abrir_tactil=lanzar_tactil) as servidor:
         ruta = carpeta()
         datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
                  "version": version_local()}
@@ -177,6 +177,10 @@ def lanzar_universe():
     if not _hay_escritorio():
         return False
     return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "universe"])
+
+
+def lanzar_tactil():
+    return _hay_escritorio() and _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "tactil"])
 
 
 def lanzar_terminal():
@@ -688,11 +692,20 @@ def apagar():
 
 def main():
     modo = sys.argv[1] if len(sys.argv) > 1 else "terminal"
+    if modo == "tactil":
+        from universe.tactil import abrir
+        with (carpeta() / "tactil.lock").open("a") as cerrojo:
+            try:
+                fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return 0
+            abrir()
+        return 0
     if modo == "_nucleo":
         nucleo()
         return 0
     if modo not in {"terminal", "escritorio", "chat", "studio", "universe", "apagar", "_escritorio"}:
-        print("Uso: cerebro [terminal|escritorio|chat|studio|universe|apagar]")
+        print("Uso: cerebro [terminal|escritorio|chat|studio|universe|tactil|apagar]")
         return 0 if modo in {"-h", "--help"} else 2
     try:
         if modo == "apagar":

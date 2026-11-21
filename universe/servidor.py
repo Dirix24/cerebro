@@ -19,7 +19,7 @@ ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/htm
 
 
 def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
-                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None):
+                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None, abrir_tactil=None):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -106,6 +106,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
                 if abrir_estudio():
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
+            if resultado.get("abrir") == "tactil" and abrir_tactil is not None and abrir_tactil():
+                resultado["respuesta"] = "Solicité el modo táctil. Elige una cámara y autoriza su uso en la ventana local."
             destino = resultado.get("abrir")
             if destino in ("navegador", "youtube", "steam") and abrir_destino is not None:
                 abierto = abrir_destino(destino)
@@ -184,6 +186,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                         "/api/estado": nucleo.estado, "/api/historial": nucleo.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
                         "/api/conversaciones": nucleo.conversaciones.estado,
                         "/api/conversacion-activa": nucleo.conversaciones.version_activa,
+                        "/api/analizar-aprendizaje": nucleo.analizar_aprendizaje,
                         "/api/tareas": lambda: [tarea.copy() for tarea in reversed(nucleo.tareas)],
                         "/api/memoria": nucleo.respaldo,
                         "/api/archivo": lambda: nucleo.leer(consulta.get("nombre", [""])[0]),
