@@ -14,11 +14,11 @@ from universe.nucleo import MIB, PERFILES, Nucleo
 
 WEB = Path(__file__).with_name("web")
 ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/html"),
-             "/studio": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
+             "/studio": ("index.html", "text/html"), "/universe": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
              "/app.js": ("app.js", "text/javascript"), "/escena.js": ("escena.js", "text/javascript")}
 
 
-def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False):
+def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -87,13 +87,20 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             except (OSError, sqlite3.Error):
                 self.enviar(500, {"error": "No se pudo completar la operación en el almacenamiento local."})
 
+        def responder_chat(self, datos):
+            resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"))
+            if resultado.get("abrir") == "studio" and abrir_estudio is not None:
+                if abrir_estudio():
+                    resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
+            return resultado
+
         def operar(self, ruta, escribir, datos, consulta):
             if ruta == "/api/apagar" and escribir and permitir_cierre:
                 Thread(target=self.server.shutdown, daemon=True).start()
                 return {"cerrando": True}
             if ruta == "/api/interfaz":
                 if escribir:
-                    return nucleo.interfaz(datos["id"], datos["modo"], datos["visible"])
+                    return nucleo.interfaz(datos["id"], datos["modo"], datos["visible"], datos.get("enfocar", False))
                 return nucleo.interfaz()
             if ruta in {"/api/body", "/api/telemetria", "/api/dispositivos"}:
                 with nucleo.cerrojo_body:
@@ -112,7 +119,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             with nucleo.cerrojo:
                 if escribir:
                     acciones = {
-                        "/api/chat": lambda: nucleo.conversar(datos.get("mensaje")),
+                        "/api/chat": lambda: self.responder_chat(datos),
                         "/api/adjunto": lambda: nucleo.adjuntar(datos.get("nombre"), datos.get("contenido")),
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),
                         "/api/tarea": lambda: nucleo.crear_tarea(datos.get("accion"), datos.get("nombre")),

@@ -95,7 +95,7 @@ def nucleo():
     internet = os.environ.get("CEREBRO_SIN_INTERNET") != "1"
     motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet)
     token = secrets.token_urlsafe(32)
-    with crear_servidor(0, motor, token, permitir_cierre=True) as servidor:
+    with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio) as servidor:
         ruta = carpeta()
         datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
                  "version": version_local()}
@@ -110,19 +110,29 @@ def abrir(sesion, interfaz):
     return abrir_web(f"{sesion['url']}/{interfaz}#{sesion['token']}")
 
 
+def lanzar_estudio():
+    if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+        return False
+    with (carpeta() / "nucleo.log").open("ab") as log:
+        subprocess.Popen([sys.executable, "-m", "universe.lanzador", "studio"],
+                         stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+    return True
+
+
 def terminal(sesion):
     identificador = secrets.token_hex(12)
     cerrar = Event()
 
-    def presencia(visible):
-        return api(sesion, "interfaz", {"id": identificador, "modo": "terminal", "visible": visible}, tiempo=2)
+    def presencia(visible, enfocar=False):
+        return api(sesion, "interfaz", {"id": identificador, "modo": "terminal",
+                                       "visible": visible, "enfocar": enfocar}, tiempo=2)
 
     def renovar():
         while not cerrar.wait(2):
             with contextlib.suppress(OSError, RuntimeError):
                 presencia(True)
 
-    presencia(True)
+    presencia(True, enfocar=True)
     if os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"):
         with (carpeta() / "nucleo.log").open("ab") as log:
             subprocess.Popen([sys.executable, "-m", "universe.lanzador", "escritorio"],
@@ -132,7 +142,8 @@ def terminal(sesion):
     acento = "\033[38;5;79m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
     fin = "\033[0m" if acento else ""
     print(f"{acento}╭─ Cerebro · Terminal ──────────────────╮{fin}")
-    print("  Escribe con naturalidad. «Salir» vuelve al escritorio.")
+    print("  Programación · Revisa un archivo, pide una función o abre Studio.")
+    print("  «Salir» devuelve el foco al acompañante.")
     try:
         for turno in api(sesion, "historial")["turnos"][-4:]:
             print(f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}")
@@ -143,10 +154,8 @@ def terminal(sesion):
             if not entrada:
                 continue
             try:
-                if presencia(True)["activa"] != "terminal":
-                    print("Cerebro está en el navegador. Cierra u oculta su pestaña para volver a la terminal.")
-                    continue
-                respuesta = api(sesion, "chat", {"mensaje": entrada})
+                presencia(True, enfocar=True)
+                respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal"})
                 print(respuesta["respuesta"])
                 if respuesta.get("abrir") == "studio":
                     abrir(sesion, "studio")
@@ -175,15 +184,19 @@ def escritorio(sesion):
     ventana.attributes("-topmost", True)
     x = max(0, ventana.winfo_screenwidth() - 370)
     y = max(0, ventana.winfo_screenheight() - 330)
-    ventana.geometry(f"340x260+{x}+{y}")
+    ventana.geometry(f"340x292+{x}+{y}")
 
     cara = tk.Canvas(ventana, width=330, height=87, bg="#102027", highlightthickness=0)
     cara.pack()
-    cara.create_oval(124, 6, 206, 84, outline="#3b776f", width=2)
+    cara.create_oval(119, 3, 211, 85, outline="#284b54", width=1, dash=(2, 4))
+    cara.create_oval(129, 10, 201, 80, outline="#3f938a", width=2, fill="#173139")
+    for cx, cy in ((125, 23), (204, 28), (125, 64), (204, 68)):
+        cara.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill="#78d3bd", outline="")
     cara.create_arc(138, 31, 193, 67, start=218, extent=104, outline="#5ee5b7", width=2, style="arc")
     ojos = [cara.create_oval(pos, 32, pos + 9, 45, fill="#9ef7d4", outline="")
             for pos in (148, 174)]
-    cara.create_text(20, 15, text="CEREBRO", anchor="w", fill="#8fcbbb", font=("TkDefaultFont", 9, "bold"))
+    cara.create_text(17, 17, text="CEREBRO", anchor="w", fill="#9be8d3", font=("TkDefaultFont", 10, "bold"))
+    cara.create_text(17, 39, text="Asistente local", anchor="w", fill="#a9c1c9", font=("TkDefaultFont", 8))
 
     def parpadear():
         for ojo in ojos:
@@ -194,6 +207,7 @@ def escritorio(sesion):
     salida = tk.Text(ventana, height=5, wrap="word", bg="#142b32", fg="#e4fffa", relief="flat",
                      padx=7, pady=4)
     salida.pack(fill="x", padx=12)
+    salida.insert("1.0", "¿Qué quieres hacer? Puedes pedirme que investigue, recuerde algo o te ayude a programar.")
     salida.configure(state="disabled")
     entrada = tk.Entry(ventana, bg="#142b32", fg="#e4fffa", insertbackground="white")
     entrada.pack(fill="x", padx=12, pady=6)
@@ -255,8 +269,11 @@ def escritorio(sesion):
         ventana.destroy()
 
     entrada.bind("<Return>", enviar)
-    for ruta, nombre in (("chat", "Chat web"), ("studio", "Programar")):
-        tk.Button(barra, text=nombre, command=lambda modo=ruta: abrir(sesion, modo)).pack(side="left", padx=4)
+    for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
+                           ("Universe", lambda: abrir(sesion, "universe"))):
+        tk.Button(barra, text=nombre, command=accion, bg="#25434b", fg="#e6faf5",
+                  activebackground="#38635f", activeforeground="#ffffff", relief="flat",
+                  padx=9, pady=5, borderwidth=0).pack(side="left", padx=4)
     ventana.protocol("WM_DELETE_WINDOW", cerrar)
     Thread(target=observar, daemon=True).start()
     ventana.after(150, actualizar)
@@ -278,8 +295,8 @@ def main():
     if modo == "_nucleo":
         nucleo()
         return 0
-    if modo not in {"terminal", "escritorio", "chat", "studio", "apagar"}:
-        print("Uso: cerebro [terminal|escritorio|chat|studio|apagar]")
+    if modo not in {"terminal", "escritorio", "chat", "studio", "universe", "apagar"}:
+        print("Uso: cerebro [terminal|escritorio|chat|studio|universe|apagar]")
         return 0 if modo in {"-h", "--help"} else 2
     try:
         if modo == "apagar":
@@ -295,6 +312,9 @@ def main():
             sesion = conectar()
             if modo == "terminal":
                 terminal(sesion)
+            elif modo == "studio":
+                from universe.studio import abrir_studio
+                abrir_studio(sesion)
             elif not abrir(sesion, modo):
                 raise RuntimeError("No se pudo abrir el navegador predeterminado.")
     except (OSError, ImportError, RuntimeError, ValueError) as exc:

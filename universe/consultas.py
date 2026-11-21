@@ -66,7 +66,7 @@ def actualidad(habilitada):
 
 
 def desea_studio(pregunta):
-    return bool(re.fullmatch(r"(?:quiero programar|abre (?:el )?estudio|abre studio)", pregunta, re.I))
+    return bool(re.fullmatch(r"(?:quiero programar|abre (?:el )?estudio|abre studio)", pregunta.strip(" ¿?!."), re.I))
 
 
 def ejemplo_codigo(pregunta):
@@ -86,7 +86,53 @@ def ejemplo_codigo(pregunta):
     return codigo
 
 
-def consulta_directa(nucleo, pregunta):
+def deduccion_en_frase(nucleo, pregunta):
+    persona = r"([\w-]+(?: [\w-]+){0,4})"
+    clase = r"([\w-]+(?: [\w-]+){0,4}?)"
+    articulo = r"(?:(?:un|una|el|la) )?"
+    premisas = re.fullmatch(
+        rf"si {persona} es {articulo}{clase} y (?:todo|toda) {clase} es {articulo}{clase},"
+        rf"\s*¿?{persona} es {articulo}{clase}\??", pregunta, re.I
+    )
+    if not premisas:
+        return None
+    individuo, categoria, origen, destino, consulta, objetivo = premisas.groups()
+    if individuo.casefold() != consulta.casefold():
+        return f"Las premisas hablan de {individuo}. No hay una premisa sobre {consulta}."
+    return nucleo.chat.procesar(f"/deducir {individuo} es {categoria}; {origen} implica {destino} ? {objetivo}")[0]
+
+
+def consulta_directa(nucleo, pregunta, modo=None):
+    explicacion = re.fullmatch(r"¿?(?:expl[ií]ca(?:me|lo)?|res[uú]me(?:lo)?|qu[eé] dice)"
+                              r"(?: (?:m[aá]s|esto|eso|el (?:archivo|documento|v[ií]deo)|qu[eé] dice))?[?.]?",
+                              pregunta, re.I)
+    if explicacion:
+        if not nucleo.archivo_en_contexto:
+            return "Adjunta un archivo o pídeme que lo revise primero."
+        try:
+            return analizar_ruta(nucleo, nucleo.archivo_en_contexto, explicar=True)
+        except (OSError, ValueError, SyntaxError, subprocess.SubprocessError, ElementTree.ParseError) as exc:
+            return f"No pude explicar el archivo: {exc}"
+    if modo in ("terminal", "studio") and re.fullmatch(r"¿?(?:qu[eé] sabes hacer|ayuda para programar)\??", pregunta, re.I):
+        return ("Puedo generar funciones sencillas de Python, inspeccionar funciones e importaciones de tus archivos "
+                "y comprobar su sintaxis en Studio. Prueba «Revisa src/ejemplo.py» o "
+                "«Escribe una función en Python para sumar dos números».")
+    if re.fullmatch(r"(?:guarda|recuerda) (?:lo aprendido|un resumen) (?:de este archivo|del archivo)", pregunta, re.I):
+        if "WRITE" not in nucleo.agente.permisos_concedidos:
+            raise PermissionError("Falta el permiso de escritura para guardar en memoria.")
+        nombre = nucleo.archivo_en_contexto
+        if not nombre:
+            return "Primero adjunta un archivo y deja que lo analice."
+        try:
+            resumen = analizar_ruta(nucleo, nombre, explicar=True)
+            clave = "archivo_" + Path(nombre).name
+            cantidad = nucleo.memoria.importar_recuerdos({clave: resumen[:3600]})
+        except (OSError, ValueError, SyntaxError, subprocess.SubprocessError, ElementTree.ParseError) as exc:
+            return f"No pude guardar ese análisis: {exc}"
+        if cantidad:
+            publicar("aprendido", "memoria")
+            return f"Guardé el análisis como recuerdo «{clave}»."
+        return f"El análisis ya estaba guardado como «{clave}»."
     actual = re.fullmatch(r"¿?(?:investiga(?: y dime)?(?: la actualidad| las noticias(?: de hoy)?)?"
                           r"|(?:dime |cu[eé]ntame )?(?:las )?noticias de hoy"
                           r"|qu[eé] (?:ha pasado|est[aá] pasando) hoy)\??", pregunta, re.I)
@@ -107,9 +153,15 @@ def consulta_directa(nucleo, pregunta):
                          r"([\w ./-]+\.[a-zA-Z0-9]{2,5})", pregunta, re.I)
     if medio:
         try:
-            return analizar_ruta(nucleo, medio[1].strip())
+            nombre = medio[1].strip()
+            respuesta = analizar_ruta(nucleo, nombre)
+            nucleo.archivo_en_contexto = nombre
+            return respuesta
         except (ValueError, OSError, subprocess.SubprocessError, SyntaxError, ElementTree.ParseError) as exc:
             return f"No pude analizar el archivo: {exc}"
+    razonamiento = deduccion_en_frase(nucleo, pregunta)
+    if razonamiento:
+        return razonamiento
     codigo = ejemplo_codigo(pregunta)
     if codigo:
         return codigo
@@ -169,7 +221,7 @@ def _extracto(texto):
     return resumir(texto[:8000])
 
 
-def analizar_ruta(nucleo, nombre):
+def analizar_ruta(nucleo, nombre, *, explicar=False):
     from core.analizador_codigo_local import analizar
     from zipfile import BadZipFile
 
@@ -180,9 +232,19 @@ def analizar_ruta(nucleo, nombre):
     if sufijo == ".py":
         hallazgos = analizar(_leer_texto(ruta))
         publicar("razonando", "herramienta")
-        return nombre + "\nAnálisis estático de Python\n" + "\n".join(
-            f"{clave.capitalize()}: {', '.join(valores) or 'ninguna'}" for clave, valores in hallazgos.items()
-        )
+        informe = "\n".join(f"{clave.capitalize()}: {', '.join(valores) or 'ninguna'}"
+                            for clave, valores in hallazgos.items())
+        if explicar:
+            from ast import AsyncFunctionDef, ClassDef, FunctionDef, get_docstring, parse
+            arbol = parse(_leer_texto(ruta))
+            anotaciones = [f"{nodo.name}: {doc.splitlines()[0][:180]}"
+                          for nodo in arbol.body if isinstance(nodo, (FunctionDef, AsyncFunctionDef, ClassDef))
+                          and (doc := get_docstring(nodo))]
+            if anotaciones:
+                informe += "\n\nDescripción declarada en el código\n" + "\n".join(anotaciones[:8])
+            else:
+                informe += "\n\nPuedo identificar la estructura del programa. No hay descripciones en sus funciones o clases."
+        return nombre + "\nAnálisis estático de Python\n" + informe
     if sufijo in VIDEOS:
         extractor = shutil.which("ffprobe")
         partes = [f"Vídeo: {nombre}"]
@@ -211,4 +273,10 @@ def analizar_ruta(nucleo, nombre):
     except (BadZipFile, KeyError) as exc:
         raise ValueError("El documento DOCX no es válido.") from exc
     publicar("recuperando", "herramienta")
+    if explicar:
+        from core.estudio_local import palabras_clave, resumir
+        palabras = palabras_clave(texto[:8000], limite=6)
+        puntos = resumir(" ".join(texto[:8000].split()), max_frases=4)
+        return (f"Qué dice {nombre}\n\nPasajes principales\n{puntos or 'No hay texto legible.'}"
+                + ("\n\nTemas del archivo: " + ", ".join(palabras) if palabras else ""))
     return nombre + "\nExtracto del texto disponible\n\n" + _extracto(texto)

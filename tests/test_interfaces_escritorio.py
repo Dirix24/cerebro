@@ -26,6 +26,9 @@ def test_presencia_navegador_terminal_y_escritorio(nucleo, monkeypatch):
     assert nucleo.interfaz(terminal, "terminal")["activa"] == "terminal"
     assert nucleo.interfaz(navegador, "chat")["activa"] == "chat"
     assert nucleo.interfaz(terminal, "terminal")["activa"] == "chat"
+    assert nucleo.interfaz(terminal, "terminal", enfocar=True)["activa"] == "terminal"
+    assert nucleo.interfaz(navegador, "chat")["activa"] == "terminal"
+    assert nucleo.interfaz(navegador, "chat", enfocar=True)["activa"] == "chat"
     assert nucleo.interfaz(navegador, "chat", False)["activa"] == "terminal"
     import time
     monkeypatch.setattr("universe.nucleo.monotonic", lambda: time.monotonic() + 8)
@@ -42,6 +45,9 @@ def test_investigacion_solo_pregunta_publica_e_historial(nucleo):
         buscar.assert_not_called()
         assert "Fuente:" in nucleo.conversar("Investiga los tardígrados")["respuesta"]
     assert nucleo.conversar("Quiero programar")["abrir"] == "studio"
+    assert "Conclusión: Ada es animal" in nucleo.conversar(
+        "Si Ada es un ave y toda ave es un animal, ¿Ada es un animal?"
+    )["respuesta"]
     assert "return a + b" in nucleo.conversar("Escribe una función en Python para sumar dos números")["respuesta"]
     otro_cliente = nucleo.historial()["turnos"]
     assert any(turno["texto"] == "Investiga los tardígrados" for turno in otro_cliente)
@@ -54,6 +60,13 @@ def adjuntar(nucleo, nombre, datos):
 def test_documento_y_subtitulos_sin_inferencia_externa(nucleo):
     archivo = adjuntar(nucleo, "informe.txt", b"Este informe identifica los tiempos del proyecto.")
     assert "tiempos del proyecto" in nucleo.conversar(f"Resume {archivo}")["respuesta"]
+    explicacion = nucleo.conversar("Explícame", modo="chat")["respuesta"]
+    assert "Pasajes principales" in explicacion and "tiempos del proyecto" in explicacion
+    assert not any("tiempos del proyecto" in turno["texto"] for turno in nucleo.historial()["turnos"])
+    afirmacion = nucleo.conversar("Guarda lo aprendido de este archivo")["respuesta"]
+    assert "archivo_informe.txt" in afirmacion
+    assert "tiempos del proyecto" in nucleo.conversar("/recuerdo archivo_informe.txt")["respuesta"]
+    assert "inspeccionar funciones" in nucleo.conversar("¿Qué sabes hacer?", modo="terminal")["respuesta"]
     comprimido = io.BytesIO()
     with ZipFile(comprimido, "w") as documento:
         documento.writestr("word/document.xml", """

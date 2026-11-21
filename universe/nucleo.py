@@ -69,6 +69,7 @@ class Nucleo:
         self.cerrojo_body = RLock()
         self.cerrojo_interfaz = RLock()
         self.interfaces = {}
+        self.archivo_en_contexto = None
         self.ruta_historial = self.raiz / "data" / "historial_cerebro.jsonl"
         self.latencias = deque(maxlen=100)
         self.tareas = deque(maxlen=24)
@@ -100,24 +101,26 @@ class Nucleo:
                            and math.isfinite(valor)},
         }
 
-    def interfaz(self, identificador=None, modo=None, visible=True):
-        orden = {"terminal": 1, "chat": 2, "studio": 2}
+    def interfaz(self, identificador=None, modo=None, visible=True, enfocar=False):
+        modos = ("terminal", "chat", "studio")
         with self.cerrojo_interfaz:
             ahora = monotonic()
             self.interfaces = {clave: entrada for clave, entrada in self.interfaces.items()
                                if ahora - entrada[1] < 7}
             if identificador is not None:
                 if (not isinstance(identificador, str) or not re.fullmatch(r"[a-f0-9]{24}", identificador)
-                        or modo not in orden or type(visible) is not bool):
+                        or modo not in modos or type(visible) is not bool or type(enfocar) is not bool):
                     raise ValueError("Interfaz inválida.")
                 if visible:
                     if len(self.interfaces) >= 64 and identificador not in self.interfaces:
                         raise ValueError("Hay demasiadas interfaces abiertas.")
-                    self.interfaces[identificador] = (modo, ahora)
+                    previa = self.interfaces.get(identificador)
+                    activada = ahora if enfocar or previa is None else previa[2]
+                    self.interfaces[identificador] = (modo, ahora, activada)
                 else:
                     self.interfaces.pop(identificador, None)
-            activa = max(self.interfaces.values(), key=lambda dato: (orden[dato[0]], dato[1]),
-                         default=("escritorio", ahora))
+            activa = max(self.interfaces.values(), key=lambda dato: dato[2],
+                         default=("escritorio", ahora, ahora))
             return {"activa": activa[0]}
 
     def historial(self):
@@ -128,8 +131,8 @@ class Nucleo:
         from core.historial_local import guardar
         # Los comandos de identidad, memoria y archivos pueden contener datos privados.
         if not pregunta.startswith("/") and respuesta and not re.match(
-            r"(?i)¿?(?:recuerda que|guarda esta memoria|inserta|extrae|exporta|lee|resume|analiza|"
-            r"revisa|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
+            r"(?i)¿?(?:recuerda que|guarda (?:esta memoria|lo aprendido|un resumen)|recuerda (?:lo aprendido|un resumen)|inserta|extrae|exporta|lee|resume|analiza|"
+            r"revisa|expl[ií]ca(?:me|lo)?|hazme preguntas|corrige mi respuesta|qu[eé] recuerdas|c[oó]mo me llamo|cu[aá]l es mi nombre)\b", pregunta
         ):
             try:
                 guardar(self.ruta_historial, "usuario", pregunta[:2000])
@@ -137,7 +140,7 @@ class Nucleo:
             except OSError:
                 publicar("error", "fallo")
 
-    def conversar(self, pregunta):
+    def conversar(self, pregunta, modo=None):
         if not isinstance(pregunta, str) or not pregunta.strip() or len(pregunta) > 24000:
             raise ValueError("Escribe un mensaje de hasta 24 000 caracteres.")
         pregunta = pregunta.strip()
@@ -161,7 +164,7 @@ class Nucleo:
             respuesta = self.chat.responder_modelo(texto)
         else:
             from universe.consultas import alternativa_publica, consulta_directa
-            respuesta = consulta_directa(self, pregunta)
+            respuesta = consulta_directa(self, pregunta, modo=modo)
             if respuesta is None:
                 respuesta, _ = self.chat.procesar(pregunta)
                 respuesta = alternativa_publica(self, pregunta, respuesta)

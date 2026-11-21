@@ -9,13 +9,14 @@ const idInterfaz = Array.from(crypto.getRandomValues(new Uint8Array(12)),
 document.body.dataset.interfaz = modoWeb === "chat" ? "chat" : "estudio";
 if (modoWeb === "chat") $("titulo-interfaz").textContent = "Chat";
 
-function anunciar(visible) {
+function anunciar(visible, enfocar = false) {
   if (!token) return;
   fetch("/api/interfaz", {method: "POST", keepalive: true, headers: {
     Authorization: "Bearer " + token, "Content-Type": "application/json",
-  }, body: JSON.stringify({id: idInterfaz, modo: modoWeb, visible})}).catch(() => {});
+  }, body: JSON.stringify({id: idInterfaz, modo: modoWeb, visible, enfocar})}).catch(() => {});
 }
-document.addEventListener("visibilitychange", () => anunciar(!document.hidden));
+document.addEventListener("visibilitychange", () => anunciar(!document.hidden, !document.hidden));
+window.addEventListener("focus", () => anunciar(!document.hidden, true));
 window.addEventListener("pagehide", () => anunciar(false));
 setInterval(() => { if (!document.hidden) anunciar(true); }, 2000);
 let vista = "studio";
@@ -88,8 +89,8 @@ async function conectar(nuevaClave) {
   $("clave").value = "";
   $("conexion").textContent = "Núcleo conectado";
   $("metricas").hidden = false;
-  anunciar(!document.hidden);
-  await mostrar("studio");
+  anunciar(!document.hidden, true);
+  await mostrar(location.pathname === "/universe" ? "universe" : "studio");
   const historial = await api("historial");
   if ($("mensajes").childElementCount === 0) {
     for (const turno of historial.turnos) agregarMensaje(turno.rol === "usuario" ? "Tú" : "Cerebro", turno.texto);
@@ -109,6 +110,10 @@ if (claveInicial) {
   history.replaceState(null, "", location.pathname);
   conectar(claveInicial).catch(error => aviso(error.message));
 }
+
+$("ir-universe").addEventListener("click", () => {
+  if (token) location.assign("/universe#" + token);
+});
 
 async function estado() {
   const datos = await api("estado");
@@ -166,7 +171,7 @@ function agregarMensaje(rol, texto) {
 
 async function conversar(texto) {
   agregarMensaje("Tú", texto);
-  const salida = await api("chat", {mensaje: texto});
+  const salida = await api("chat", {mensaje: texto, modo: modoWeb});
   agregarMensaje("Cerebro", salida.respuesta);
   if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/studio#" + token);
 }
@@ -228,8 +233,10 @@ $("adjunto").addEventListener("change", async () => {
       lector.readAsDataURL(archivo);
     });
     const salida = await api("adjunto", {nombre: archivo.name, contenido});
-    if (!/\.(?:srt|vtt)$/i.test(salida.nombre)) $("mensaje").value = "Analiza " + salida.nombre;
     aviso("Adjunto disponible: " + salida.nombre);
+    if (!/\.(?:srt|vtt)$/i.test(salida.nombre)) {
+      await conversar("Analiza " + salida.nombre);
+    }
   } catch (error) { aviso(error.message); }
   finally { $("adjunto").value = ""; }
 });

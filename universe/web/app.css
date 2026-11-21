@@ -73,3 +73,24 @@ footer { margin-top: 1rem; border-top: 1px solid var(--linea); padding-top: .65r
 #video-adjunto { width: 100%; max-height: 250px; background: #0b151a; border-radius: 8px; }
 
 #mensajes a { color: #a3e3d1; text-underline-offset: .15em; }
+
+#inicio-chat { display: none; }
+[data-interfaz="chat"] {
+  background: #f7f2e9; color: #292720; min-height: 100vh; color-scheme: light;
+  --linea: #d9cdba; --muted: #635849; --panel: #fffaf2; --acento: #894429;
+}
+[data-interfaz="chat"] .marca b { color: #894429; }
+[data-interfaz="chat"] header { background: #f3eadb; }
+[data-interfaz="chat"] .titulo { margin-bottom: 1.5rem; justify-content: space-between; }
+[data-interfaz="chat"] h1 { font: 500 clamp(2.25rem, 6vw, 4.45rem) Georgia, serif; letter-spacing: -.055em; }
+[data-interfaz="chat"] #inicio-chat { display: block; color: #665848; margin: .4rem 0 0; }
+[data-interfaz="chat"] .panel { border-radius: 17px; padding: clamp(.65rem, 2vw, 1.35rem); }
+[data-interfaz="chat"] #mensajes { border: none; background: #fffaf2; padding: .45rem .1rem; }
+[data-interfaz="chat"] #mensajes p { background: #f2ebdf; border-color: #b67355; border-radius: 0 10px 10px 0; }
+[data-interfaz="chat"] #mensajes p.usuario { background: #eae0d1; border-color: #a28e73; }
+[data-interfaz="chat"] #mensajes a { color: #863a22; }
+[data-interfaz="chat"] button, [data-interfaz="chat"] input, [data-interfaz="chat"] .boton {
+  background: #fcf5e8; border-color: #d9c8ad; color: #4a3628;
+}
+[data-interfaz="chat"] #chat button { background: #7c412e; color: #fff9ed; }
+[data-interfaz="chat"] #aviso { color: #7c412e; }

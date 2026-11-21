@@ -47,10 +47,20 @@ export function escena(canvas, elegir) {
       }
       contexto.stroke();
     }
-    contexto.fillStyle = "#3b6769";
+    const radioNucleo = 19 * zoom;
+    const halo = contexto.createRadialGradient(centro.x, centro.y, 0, centro.x, centro.y, radioNucleo * 2.1);
+    halo.addColorStop(0, "#dbfff0");
+    halo.addColorStop(.25, "#61e4c8");
+    halo.addColorStop(.48, "#2e878c88");
+    halo.addColorStop(1, "#2e878c00");
+    contexto.fillStyle = halo;
     contexto.beginPath();
-    contexto.arc(centro.x, centro.y, 10 * zoom, 0, Math.PI * 2);
+    contexto.arc(centro.x, centro.y, radioNucleo * 2.1, 0, Math.PI * 2);
     contexto.fill();
+    contexto.strokeStyle = "#91e3d29a";
+    contexto.beginPath();
+    contexto.arc(centro.x, centro.y, radioNucleo, 0, Math.PI * 2);
+    contexto.stroke();
     visibles = objetos.map(objeto => ({...objeto, ...proyectar(objeto, ancho, alto)}))
       .sort((a, b) => b.z - a.z);
     const porId = new Map(visibles.map(nodo => [nodo.nodo.id, nodo]));
