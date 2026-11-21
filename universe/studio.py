@@ -53,6 +53,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     presencia = Lock()
     visible = True
     generacion = 0
+    revision_chat = 0
 
     def pedir(operacion, datos=None):
         return api(sesion, operacion, datos)
@@ -202,11 +203,27 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         mostrar(salida, "\nTú · " + texto + "\n", anexar=True)
         estado.set("Procesando…")
 
+        revision = revision_chat
+
         def respondido(dato):
+            if revision != revision_chat:
+                return
             mostrar(salida, "Cerebro · " + dato["respuesta"] + "\n", anexar=True)
             estado.set("Núcleo conectado")
 
-        publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio"}), respondido)
+        publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador}), respondido)
+
+    def borrar_chat():
+        if not messagebox.askyesno("Eliminar chat", "¿Eliminar el historial compartido?", parent=app):
+            return
+
+        def borrado(_):
+            nonlocal revision_chat
+            revision_chat += 1
+            mostrar(salida, "")
+            estado.set("Historial eliminado.")
+
+        publicar(lambda: pedir("historial", {"confirmar": True}), borrado)
 
     def adjuntar():
         archivo = filedialog.askopenfilename(title="Seleccionar documento o vídeo")
@@ -302,6 +319,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     boton(barra_editor, "Validar Python", revisar)
     boton(barra_chat, "Enviar", enviar)
     boton(barra_chat, "Adjuntar", adjuntar)
+    boton(barra_chat, "Eliminar chat", borrar_chat)
     lista.bind("<<ListboxSelect>>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())
 

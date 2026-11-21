@@ -113,3 +113,15 @@ def test_tareas_simulador_y_telemetria(servidor):
     assert api("/api/body")["telemetria"]["banco"]["sensores"]["temperatura"] == 21
     with pytest.raises(HTTPError, match="401"):
         api("/api/telemetria", {"id": "banco", "sensores": {}})
+
+
+def test_borrado_de_historial_requiere_autenticacion_y_confirmacion(servidor):
+    api, _, nucleo = servidor
+    nucleo._registrar_turno("Hola", "Hola")
+    with pytest.raises(HTTPError, match="401"):
+        api("/api/historial", {"confirmar": True}, clave="robot")
+    with pytest.raises(HTTPError, match="400"):
+        api("/api/historial", {"confirmar": False})
+    assert len(api("/api/historial")["turnos"]) == 2
+    assert api("/api/historial", {"confirmar": True}) == {"turnos": []}
+    assert api("/api/historial") == {"turnos": []}

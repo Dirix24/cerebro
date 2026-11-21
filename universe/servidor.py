@@ -99,7 +99,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 self.enviar(500, {"error": "No se pudo completar la operación en el almacenamiento local."})
 
         def responder_chat(self, datos):
-            resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"))
+            resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"), cliente=datos.get("cliente"))
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
                 if abrir_estudio():
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
@@ -155,6 +155,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 if escribir:
                     acciones = {
                         "/api/chat": lambda: self.responder_chat(datos),
+                        "/api/historial": lambda: nucleo.borrar_historial(datos.get("confirmar")),
                         "/api/adjunto": lambda: nucleo.adjuntar(datos.get("nombre"), datos.get("contenido")),
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),
                         "/api/tarea": lambda: nucleo.crear_tarea(datos.get("accion"), datos.get("nombre")),

@@ -207,12 +207,12 @@ function agregarMensaje(rol, texto) {
 async function conversar(texto) {
   if (chatOcupado) return false;
   chatOcupado = true;
-  const controles = [$("enviar-chat"), ...document.querySelectorAll("[data-chat]")];
+  const controles = [$("enviar-chat"), $("borrar-chat"), ...document.querySelectorAll("[data-chat]")];
   controles.forEach(control => { control.disabled = true; });
   $("estado-chat").hidden = false;
   activarVista();
   try {
-    const salida = await api("chat", {mensaje: texto, modo: modoWeb});
+    const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz});
     $("sugerencias-chat").hidden = true;
     agregarMensaje("Tú", texto);
     agregarMensaje("Cerebro", salida.respuesta);
@@ -224,6 +224,22 @@ async function conversar(texto) {
     $("estado-chat").hidden = true;
   }
 }
+
+$("borrar-chat").addEventListener("click", () => {
+  if (chatOcupado || !window.confirm("¿Eliminar el historial compartido?")) return;
+  ejecutar($("borrar-chat"), async () => {
+    chatOcupado = true;
+    $("enviar-chat").disabled = true;
+    try {
+      await api("historial", {confirmar: true});
+      $("mensajes").replaceChildren();
+      $("sugerencias-chat").hidden = modoWeb !== "chat";
+    } finally {
+      $("enviar-chat").disabled = false;
+      chatOcupado = false;
+    }
+  });
+});
 
 const compositor = $("mensaje");
 compositor.addEventListener("keydown", evento => {

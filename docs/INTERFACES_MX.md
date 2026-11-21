@@ -34,6 +34,15 @@ Las cuatro entradas se conectan al mismo servicio autenticado en loopback. Compa
 
 Al adjuntar desde Chat o Studio, Cerebro analiza el archivo automáticamente. Después puedes decir «Explícame» para ver los pasajes principales y los temas detectados. «Guarda lo aprendido de este archivo» guarda el análisis en la memoria compartida. El último archivo analizado se conserva en el núcleo mientras está en ejecución. El análisis admite adjuntos de hasta 16 MiB, dentro de la cuota del espacio de trabajo. El navegador reproduce localmente los vídeos compatibles con sus códecs. Están pendientes el OCR de documentos escaneados, la interpretación visual de escenas y la transcripción propia de audio. Las operaciones aritméticas y las deducciones usan reglas comprobables. El modelo propio sigue teniendo un rendimiento limitado en conversación y programación general.
 
+### Abrir y recordar documentos
+
+1. Escribe o dicta «Cerebro, abre mi documento de matemáticas». Cerebro busca por nombre en Documentos y Descargas y pide elegir por número si hay varias coincidencias.
+2. GIO identifica el formato por el nombre y solicita la apertura a la aplicación predeterminada de la sesión Linux. Este flujo requiere `python3-gi`. «¿Qué aplicaciones tengo instaladas?» muestra programas visibles y los tipos MIME que declaran.
+3. Si ves el archivo en pantalla, responde «Sí, recuérdalo» para guardar la selección. Después de reiniciar, «Abre el documento de matemáticas otra vez» funciona en cualquiera de las interfaces. «Olvida el documento de matemáticas» elimina la selección.
+4. Universe muestra un registro del formato y el programa confirmado. Tras guardar la selección, «Aprueba ejemplo de apertura» añade al banco del alumno una frase genérica sin nombres, rutas ni contenido del documento. El entrenamiento se ejecuta por separado con `entrenar_ejemplos_aprobados.py`.
+
+Para desactivar la búsqueda y apertura de archivos personales, detén el servicio e inicia el lanzador con `CEREBRO_SIN_DOCUMENTOS=1`. Las acciones de apertura usan nombres y asociaciones del escritorio. **Eliminar chat** borra el historial compartido tras confirmar. En Terminal el control es `/eliminar-chat`. Los recuerdos guardados tienen su propio control de olvido.
+
 ### Aprender de modelos 3D
 
 Adjunta un archivo Wavefront `.obj` en Chat o Studio y espera el análisis. Cerebro cuenta vértices y caras, mide la caja envolvente en X, Y y Z y señala caras con referencias repetidas. «Explícame» detalla qué significan esas medidas. «Aprende de este modelo» conserva los resultados y la huella SHA-256 en la memoria compartida. El mismo contenido se guarda una sola vez aunque lo adjuntes con otro nombre.

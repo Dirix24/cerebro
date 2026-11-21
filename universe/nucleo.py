@@ -3,6 +3,7 @@ import ast
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from hashlib import sha256
 import json
 import math
 import os
@@ -25,6 +26,7 @@ from core.legado_identidad import leer_origen
 from core.repaso_espaciado import cargar
 from memory.advanced_memory import AdvancedMemoryManager
 from universe.cazel import construir_orden, parsear_ayuda
+from universe.escritorio import CATEGORIA as CATEGORIA_DOCUMENTO, Escritorio
 
 MIB = 1024 * 1024
 PERFILES = {"usb": 32, "local": 256, "servidor": 512, "robot": 16}
@@ -65,6 +67,7 @@ class Nucleo:
         self.internet = internet
         self.investigar_auto = internet and investigar_auto
         self.documentos_usuario = documentos_usuario
+        self.escritorio = Escritorio(self)
         self.solo_lectura = solo_lectura
         self.cerrojo = RLock()
         self.cerrojo_body = RLock()
@@ -128,6 +131,19 @@ class Nucleo:
         from core.historial_local import consultar
         return {"turnos": consultar(self.ruta_historial, limite=60)}
 
+    def borrar_historial(self, confirmar):
+        if self.solo_lectura:
+            raise PermissionError("La sesión es de solo lectura.")
+        if confirmar is not True:
+            raise ValueError("Confirma el borrado del historial de conversación.")
+        self.ruta_historial.unlink(missing_ok=True)
+        self.memoria.limpiar_corto_plazo()
+        self.chat.tema_local = None
+        self.chat.pregunta_repaso = None
+        self.escritorio.limpiar()
+        self.archivo_en_contexto = None
+        return {"turnos": []}
+
     def _registrar_turno(self, pregunta, respuesta):
         from core.historial_local import guardar
         # Los comandos de identidad, memoria y archivos pueden contener datos privados.
@@ -141,7 +157,7 @@ class Nucleo:
             except OSError:
                 publicar("error", "fallo")
 
-    def conversar(self, pregunta, modo=None):
+    def conversar(self, pregunta, modo=None, cliente=None):
         if not isinstance(pregunta, str) or not pregunta.strip() or len(pregunta) > 24000:
             raise ValueError("Escribe un mensaje de hasta 24 000 caracteres.")
         pregunta = pregunta.strip()
@@ -154,6 +170,12 @@ class Nucleo:
             raise PermissionError("El permiso de internet de esta sesión está desactivado.")
         if self.solo_lectura:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
+        if cliente is not None and (not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente)):
+            raise ValueError("Identificador de conversación inválido.")
+        if comando == "":
+            resultado_escritorio = self.escritorio.consultar(pregunta, cliente)
+            if resultado_escritorio is not None:
+                return {"respuesta": resultado_escritorio}
         from universe.consultas import destino_desktop
         destino = destino_desktop(pregunta)
         if destino:
@@ -186,10 +208,18 @@ class Nucleo:
         categorias = {}
         for clave, entrada in list(self.memoria.long_term_memory.items())[-120:]:
             if isinstance(entrada, dict):
-                nodos.append({"id": "memoria:" + clave, "tipo": "memoria", "titulo": clave,
-                              "detalle": str(entrada.get("valor", ""))[:500],
-                              "origen": "Memoria de largo plazo"})
                 categoria = entrada.get("categoria", "general")
+                valor = entrada.get("valor")
+                if categoria == CATEGORIA_DOCUMENTO and isinstance(valor, dict):
+                    identificador = sha256(clave.encode()).hexdigest()[:24]
+                    nodos.append({"id": "documento:" + identificador, "tipo": "aprendizaje",
+                                  "titulo": "Selección de documento confirmada",
+                                  "detalle": f"Formato: {valor.get('formato', '')} · {valor.get('aplicacion', '')}",
+                                  "origen": "Apertura aceptada y confirmada por el usuario",
+                                  "fecha": entrada.get("fecha")})
+                    continue
+                nodos.append({"id": "memoria:" + clave, "tipo": "memoria", "titulo": clave,
+                              "detalle": str(entrada.get("valor", ""))[:500], "origen": "Memoria de largo plazo"})
                 if isinstance(categoria, str):
                     categorias.setdefault(categoria, []).append("memoria:" + clave)
                 valor = entrada.get("valor")

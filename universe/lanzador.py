@@ -98,7 +98,7 @@ def nucleo():
     modelo, meta, _ = cargar_modelo()
     internet = os.environ.get("CEREBRO_SIN_INTERNET") != "1"
     motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet,
-                   documentos_usuario=True)
+                   documentos_usuario=os.environ.get("CEREBRO_SIN_DOCUMENTOS") != "1")
     token = secrets.token_urlsafe(32)
     with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio,
                          abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante,
@@ -209,7 +209,7 @@ def terminal(sesion):
         "/web": lambda: abrir(sesion, "chat"),
     }
     print(f"{acento}Cerebro Terminal{fin}  ·  {Path.cwd()}")
-    print("  /studio   /web   /historial   /ayuda   /salir")
+    print("  /studio   /web   /historial   /eliminar-chat   /ayuda   /salir")
     if sys.stdin.isatty():
         with contextlib.suppress(ImportError):
             __import__("readline")
@@ -226,11 +226,18 @@ def terminal(sesion):
                 if comando == "/historial":
                     mostrar_historial(12)
                     continue
+                if comando == "/eliminar-chat":
+                    if input("¿Eliminar el historial compartido? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
+                        api(sesion, "historial", {"confirmar": True})
+                        if sys.stdout.isatty():
+                            print("\033[3J\033[2J\033[H", end="")
+                        print("Historial eliminado.")
+                    continue
                 if comando in accesos:
                     if not accesos[comando]():
                         print("No se pudo abrir la interfaz desde esta sesión.", file=sys.stderr)
                     continue
-                respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal"})
+                respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal", "cliente": identificador})
                 print(respuesta["respuesta"])
                 if respuesta.get("abrir") == "studio":
                     lanzar_estudio()
@@ -248,6 +255,7 @@ def terminal(sesion):
 def escritorio(sesion):
     import queue
     import tkinter as tk
+    from tkinter import messagebox
 
     try:
         ventana = tk.Tk()
@@ -331,6 +339,7 @@ def escritorio(sesion):
     ocupado = False
     eventos = queue.SimpleQueue()
     detenido = Event()
+    identificador = secrets.token_hex(12)
 
     def observar():
         while not detenido.is_set():
@@ -347,10 +356,10 @@ def escritorio(sesion):
     def despachar(mensaje):
         try:
             try:
-                salida = api(sesion, "chat", {"mensaje": mensaje})
+                salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador})
             except OSError:
                 sesion.update(conectar())
-                salida = api(sesion, "chat", {"mensaje": mensaje})
+                salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador})
             eventos.put(("respuesta", salida["respuesta"]))
             if salida.get("abrir") == "studio":
                 lanzar_estudio()
@@ -366,6 +375,7 @@ def escritorio(sesion):
         boton_dictar.configure(state=estado)
         boton_enviar.configure(state=estado)
         menu_acciones.entryconfigure("Elegir audio", state=estado)
+        boton_borrar.configure(state=estado)
 
     def enviar(_evento=None):
         texto = entrada.get().strip()
@@ -443,6 +453,13 @@ def escritorio(sesion):
         salida.see("end")
         salida.configure(state="disabled")
 
+    def borrar_chat():
+        if messagebox.askyesno("Eliminar chat", "¿Eliminar el historial compartido?", parent=ventana):
+            cambiar_estado("Procesando")
+            Thread(target=tarea_de_voz,
+                   args=(lambda: api(sesion, "historial", {"confirmar": True}), "chat borrado"),
+                   daemon=True).start()
+
     def actualizar():
         nonlocal ultima_respuesta
         while not eventos.empty():
@@ -458,6 +475,13 @@ def escritorio(sesion):
                 cambiar_estado("Disponible")
                 if voz_activada:
                     hablar_respuesta(valor)
+            elif tipo == "chat borrado":
+                ultima_respuesta = ""
+                salida.configure(state="normal")
+                salida.delete("1.0", "end")
+                salida.configure(state="disabled")
+                cambiar_estado("Disponible")
+                aviso.set("Historial eliminado.")
             elif tipo == "dictado":
                 cambiar_estado("Disponible")
                 if valor:
@@ -487,7 +511,9 @@ def escritorio(sesion):
     boton_dictar = boton(barra, "Dictar", dictar)
     boton_dictar.pack(side="left", padx=(0, 5))
     boton_leer = boton(barra, "Voz apagada", alternar_voz)
-    boton_leer.pack(side="left")
+    boton_leer.pack(side="left", padx=(0, 5))
+    boton_borrar = boton(barra, "Eliminar chat", borrar_chat)
+    boton_borrar.pack(side="left")
     entrada.bind("<Return>", enviar)
 
     accesos = tk.Menubutton(barra, text="Accesos ▾", bg=panel, fg=texto,

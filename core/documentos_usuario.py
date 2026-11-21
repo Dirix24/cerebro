@@ -12,17 +12,35 @@ def _normalizar(texto):
                    if not unicodedata.combining(caracter))
 
 
+def carpetas(hogar=None):
+    hogar = Path.home() if hogar is None else Path(hogar)
+    return tuple(hogar / nombre for nombre in ("Documentos", "Documents", "Descargas", "Downloads")
+                 if (hogar / nombre).is_dir() and not (hogar / nombre).is_symlink())
+
+
+def permitido(ruta, hogar=None):
+    if not ruta.is_absolute() or ruta.suffix.lower() not in FORMATOS:
+        return False
+    try:
+        real = ruta.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    if real != ruta or not real.is_file():
+        return False
+    for raiz in carpetas(hogar):
+        if real.is_relative_to(raiz):
+            partes = real.relative_to(raiz).parts
+            return len(partes) <= 6 and all(not parte.startswith(".") for parte in partes)
+    return False
+
+
 def buscar(nombre, hogar=None):
     if not re.fullmatch(r"[\w .()-]{2,130}", nombre) or not any(c.isalnum() for c in nombre):
         raise ValueError("Indica el nombre del documento, sin introducir una ruta.")
     tema = _normalizar(nombre)
-    hogar = Path.home() if hogar is None else Path(hogar)
     coincidencias = []
     vistos = 0
-    for carpeta in ("Documentos", "Documents", "Descargas", "Downloads"):
-        raiz = hogar / carpeta
-        if not raiz.is_dir() or raiz.is_symlink():
-            continue
+    for raiz in carpetas(hogar):
         for directorio, subdirectorios, archivos in os.walk(raiz):
             base = Path(directorio)
             subdirectorios[:] = sorted(d for d in subdirectorios
