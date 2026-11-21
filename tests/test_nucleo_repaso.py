@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
 
+from agent.controlled_agent import ControlledAgent
 from chat import Conversacion
 from core.repaso_espaciado import anadir, cargar
 
@@ -19,7 +20,7 @@ class TestRepasoConversacional(unittest.TestCase):
             conversacion.pregunta_repaso = None
             conversacion.modelo = None
             conversacion.memoria = memoria
-            conversacion.agente = None
+            conversacion.agente = ControlledAgent()
             with patch("config._RAIZ", Path(tmp)):
                 mensaje, salir = conversacion.procesar("/repasar")
                 self.assertIn("capital de Francia", mensaje)
@@ -39,7 +40,7 @@ class TestRepasoConversacional(unittest.TestCase):
             conversacion.pregunta_repaso = None
             conversacion.modelo = None
             conversacion.memoria = None
-            conversacion.agente = None
+            conversacion.agente = ControlledAgent()
             with patch("config._RAIZ", Path(tmp)):
                 conversacion.procesar("/repasar")
                 mensaje, salir = conversacion.procesar("Londres")

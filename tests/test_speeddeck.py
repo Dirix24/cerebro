@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from agent.orquestador import seleccionar, extraer_consulta_local, explicar_seleccion
+from agent.controlled_agent import ControlledAgent
 from chat import Conversacion
 
 
@@ -37,7 +38,7 @@ class TestSpeedDeck(unittest.TestCase):
         chat.pregunta_repaso = None
         chat.modelo = None
         chat.memoria = None
-        chat.agente = None
+        chat.agente = ControlledAgent()
         with patch("core.local_search.buscar", return_value=[("dato", "fuente")]) as buscar:
             with patch.object(chat, "responder_modelo", side_effect=AssertionError("modelo activado")):
                 respuesta, salir = chat.procesar("investiga en el corpus: galaxias")

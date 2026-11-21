@@ -139,6 +139,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     ejecutar = abrir_universe
                 else:
                     raise ValueError("Acción de escritorio desconocida.")
+                nucleo.exigir_permisos("READ")
                 if ejecutar is None or nucleo.solo_lectura:
                     raise PermissionError("Abre el chat con el lanzador local de Cerebro para usar esta acción.")
                 if not ejecutar():
@@ -157,6 +158,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                             raise PermissionError("La sesión es de solo lectura.")
                         return nucleo.body(datos.get("accion"), datos.get("valor"))
                     if ruta == "/api/dispositivos" and not escribir:
+                        nucleo.exigir_permisos("READ")
                         if nucleo.perfil == "servidor":
                             raise PermissionError("Consulta de puertos disponible en el equipo local.")
                         from core.dispositivos_usb import listar_puertos
@@ -184,10 +186,10 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 else:
                     acciones = {
                         "/api/estado": nucleo.estado, "/api/historial": nucleo.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
-                        "/api/conversaciones": nucleo.conversaciones.estado,
+                        "/api/conversaciones": nucleo.estado_conversaciones,
                         "/api/conversacion-activa": nucleo.conversaciones.version_activa,
                         "/api/analizar-aprendizaje": nucleo.analizar_aprendizaje,
-                        "/api/tareas": lambda: [tarea.copy() for tarea in reversed(nucleo.tareas)],
+                        "/api/tareas": nucleo.consultar_tareas,
                         "/api/memoria": nucleo.respaldo,
                         "/api/archivo": lambda: nucleo.leer(consulta.get("nombre", [""])[0]),
                         "/api/canvas": lambda: (json.loads(nucleo.leer("canvas.json")["texto"])

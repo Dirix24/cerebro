@@ -147,16 +147,27 @@ def _agregar_dos_puntos(original, nombre, error):
 
 
 def ejecutar_pruebas(raiz):
-    """Ejecuta unittest con salida acotada y cancela su grupo si excede los límites."""
+    """Ejecuta unittest únicamente sobre una copia dentro de Bubblewrap."""
+    from tempfile import TemporaryDirectory
+
+    from core.aislamiento_proyecto import comando_aislado, preparar_copia
+
+    try:
+        with TemporaryDirectory(prefix="cerebro-pruebas-") as carpeta:
+            copia = Path(carpeta)
+            preparar_copia(raiz, copia)
+            return _ejecutar_aislado(comando_aislado(copia))
+    except (OSError, ValueError, RuntimeError) as error:
+        return False, str(error)
+
+
+def _ejecutar_aislado(comando):
     import selectors
     import signal
     import subprocess
-    import sys
     from time import monotonic
 
-    carpeta = "tests" if (raiz / "tests").is_dir() and not (raiz / "tests").is_symlink() else "."
-    comando = [sys.executable, "-B", "-m", "unittest", "discover", "-s", carpeta]
-    with subprocess.Popen(comando, cwd=raiz, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+    with subprocess.Popen(comando, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                           stderr=subprocess.STDOUT, start_new_session=True) as proceso:
         salida = bytearray()
         limite = monotonic() + 25
@@ -180,6 +191,8 @@ def ejecutar_pruebas(raiz):
                 pass
             return False, str(error) + "\n" + salida[-12000:].decode(errors="replace")
     texto = salida[-12000:].decode(errors="replace")
+    if texto.startswith("bwrap:"):
+        return False, "Bubblewrap no pudo iniciar el aislamiento. No se ejecutó el proyecto.\n" + texto
     if re.search(r"\bRan 0 tests?\b", texto):
         return False, "unittest no descubrió pruebas.\n" + texto
-    return codigo == 0, f"unittest · código {codigo}\n{texto}"
+    return codigo == 0, f"unittest aislado · código {codigo}\n{texto}"

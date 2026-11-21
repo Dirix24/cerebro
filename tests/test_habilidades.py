@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from agent.controlled_agent import ControlledAgent
 from chat import Conversacion
 from core.habilidades import apply, teach
 
@@ -28,8 +29,8 @@ def test_inconsistent_feedback_never_overwrites_skill(tmp_path):
 
 def test_uses_chat_and_persists_across_sessions(tmp_path, monkeypatch):
     monkeypatch.setattr("config.raiz_datos", lambda: tmp_path)
-    first = SimpleNamespace(agente=None)
-    second = SimpleNamespace(agente=None)
+    first = SimpleNamespace(agente=ControlledAgent())
+    second = SimpleNamespace(agente=ControlledAgent())
     result, end = Conversacion._comando(first, "/enseñar-habilidad euros || 0:0; 2:3; 4:6")
     assert "Regla local guardada" in result and not end
     result, end = Conversacion._comando(second, "/usar-habilidad euros || 3")

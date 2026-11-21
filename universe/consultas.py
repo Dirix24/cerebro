@@ -185,7 +185,7 @@ def consulta_documento_usuario(nucleo, pregunta):
         if re.fullmatch(r"(?:busca|encuentra)(?:me)? (?:(?:un|el|mi) )?documento[.]?", pregunta, re.I):
             return "Dime el nombre o parte del nombre del documento."
         return None
-    if not nucleo.documentos_usuario or "READ" not in nucleo.agente.permisos_concedidos:
+    if not nucleo.documentos_usuario or not nucleo.agente.tiene_permisos("READ"):
         return "La búsqueda en Documentos y Descargas requiere el lanzador local y permiso de lectura."
     from core.documentos_usuario import buscar
     try:
@@ -225,7 +225,7 @@ def consulta_directa(nucleo, pregunta, modo=None):
         nombre = nucleo.archivo_en_contexto
         if not nombre:
             return "Adjunta y analiza un documento primero."
-        if "READ" not in nucleo.agente.permisos_concedidos:
+        if not nucleo.agente.tiene_permisos("READ"):
             raise PermissionError("Falta el permiso de lectura para consultar el adjunto.")
         try:
             ruta = nucleo.ruta(nombre, lectura=True)
@@ -254,8 +254,7 @@ def consulta_directa(nucleo, pregunta, modo=None):
     if aprender_modelo or re.fullmatch(
         r"(?:guarda|recuerda) (?:lo aprendido|un resumen) (?:de este archivo|del archivo)", pregunta, re.I
     ):
-        if "WRITE" not in nucleo.agente.permisos_concedidos:
-            raise PermissionError("Falta el permiso de escritura para guardar en memoria.")
+        nucleo.exigir_permisos("READ", "WRITE")
         nombre = nucleo.archivo_en_contexto
         if not nombre:
             return "Primero adjunta un archivo y deja que lo analice."
@@ -405,8 +404,7 @@ def _extracto(texto):
 
 def analizar_ruta(nucleo, nombre, *, explicar=False):
     from core.analizador_codigo_local import analizar
-    if "READ" not in nucleo.agente.permisos_concedidos:
-        raise PermissionError("Falta el permiso de lectura para analizar el archivo.")
+    nucleo.exigir_permisos("READ")
     ruta = nucleo.ruta(nombre, lectura=True)
     if not ruta.is_file():
         raise ValueError("Adjunta el archivo primero o ponlo en el espacio de trabajo de Studio.")

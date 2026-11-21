@@ -29,13 +29,12 @@ class Escritorio:
             self.pendientes.popitem(last=False)
 
     def _autorizar(self):
-        if (not self.nucleo.documentos_usuario
-                or "READ" not in self.nucleo.agente.permisos_concedidos):
+        self.nucleo.exigir_permisos("READ")
+        if not self.nucleo.documentos_usuario:
             raise PermissionError("Esta acción requiere el lanzador local y permiso de lectura.")
 
     def _autorizar_escritura(self):
-        if "WRITE" not in self.nucleo.agente.permisos_concedidos:
-            raise PermissionError("Falta el permiso de escritura para cambiar lo aprendido.")
+        self.nucleo.exigir_permisos("WRITE")
 
     def _clave(self, nombre):
         return "documento_escritorio:" + documentos_usuario._normalizar(nombre)
@@ -67,6 +66,7 @@ class Escritorio:
         self._autorizar()
         titulo = ventana["titulo"]
         if accion == "cierra":
+            self._autorizar_escritura()
             self._guardar_pendiente(cliente, cierre=ventana)
             return f'¿Cerrar «{titulo}»? Responde «Confirmar cierre» o «Cancelar».'
         verificado = ventanas_x11.actuar(accion, ventana)
@@ -188,6 +188,7 @@ class Escritorio:
             return "De acuerdo. No guardé una selección nueva."
         if "cierre" in datos and confirmacion == "confirmar cierre":
             self._autorizar()
+            self._autorizar_escritura()
             ventana = datos["cierre"]
             self.pendientes.pop(cliente)
             cerrado = ventanas_x11.actuar("cierra", ventana)

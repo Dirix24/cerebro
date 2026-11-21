@@ -20,6 +20,14 @@ class ControlledAgent:
         self.permisos_concedidos = set(config.PERMISOS_AGENTE if permisos is None else permisos)
         self.registry = registry or ToolRegistry()
 
+    def tiene_permisos(self, *permisos):
+        return all(permiso in self.permisos_concedidos for permiso in permisos)
+
+    def exigir_permisos(self, *permisos):
+        faltantes = [permiso for permiso in permisos if not self.tiene_permisos(permiso)]
+        if faltantes:
+            raise PermissionError("Permiso requerido: " + ", ".join(faltantes) + ".")
+
     @property
     def permisos_herramientas(self):
         return {n: t["permiso"] for n, t in self.registry.tools.items()}
@@ -27,7 +35,7 @@ class ControlledAgent:
     def verificar_permiso(self, herramienta):
         """True si el agente tiene concedido el permiso que exige la herramienta."""
         tool = self.registry.tools.get(herramienta)
-        return tool is not None and tool["permiso"] in self.permisos_concedidos
+        return tool is not None and self.tiene_permisos(tool["permiso"])
 
     def ejecutar_plan_autonomo(self, intenciones):
         """Ejecuta una lista de {"tool": nombre, "arguments": {...}} respetando

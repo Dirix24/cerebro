@@ -77,7 +77,8 @@ class Nucleo:
         self.archivo_en_contexto = None
         self.proyectos_studio = {}
         self.conversaciones = Conversaciones(self.raiz / "data")
-        self._recuperar_contexto(self.historial()["turnos"])
+        if self.agente.tiene_permisos("READ"):
+            self._recuperar_contexto(self.historial()["turnos"])
         self.latencias = deque(maxlen=100)
         self.tareas = deque(maxlen=24)
         self.ejecutor = ThreadPoolExecutor(max_workers=1)
@@ -85,6 +86,11 @@ class Nucleo:
         self.posicion = [0.0, 0.0]
         self.angulo = 0.0
         self.telemetria = {}
+
+    def exigir_permisos(self, *permisos):
+        if self.solo_lectura and "WRITE" in permisos:
+            raise PermissionError("La sesión es de solo lectura.")
+        self.agente.exigir_permisos(*permisos)
 
     def estado(self):
         entorno = detectar_entorno(self.raiz)
@@ -136,9 +142,7 @@ class Nucleo:
         cliente = datos.get("cliente")
         if not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente):
             raise ValueError("Identificador de Studio inválido.")
-        permisos = self.agente.permisos_concedidos
-        if self.solo_lectura or "READ" not in permisos:
-            raise PermissionError("Se requiere permiso de lectura para trabajar con proyectos.")
+        self.exigir_permisos("READ")
         accion = datos.get("accion")
         if accion == "abrir":
             if datos.get("confirmar") is not True:
@@ -166,8 +170,9 @@ class Nucleo:
             ast.parse(proyecto.leer(nombre), filename=nombre)
             return {"salida": "Sintaxis Python válida."}
         if accion in {"guardar", "aplicar", "pruebas"}:
-            if "WRITE" not in permisos or datos.get("confirmar") is not True:
-                raise PermissionError("Esta acción requiere permiso de escritura y confirmación.")
+            self.exigir_permisos("WRITE")
+            if datos.get("confirmar") is not True:
+                raise PermissionError("Confirma la operación en el proyecto.")
             if accion == "guardar":
                 proyecto.guardar(nombre, datos.get("texto"), datos.get("original"))
                 return {"archivo": nombre}
@@ -185,7 +190,7 @@ class Nucleo:
         from core.proyecto_studio import ejecutar_pruebas
 
         with self.cerrojo:
-            if (self.solo_lectura or not {"READ", "WRITE"} <= self.agente.permisos_concedidos
+            if (self.solo_lectura or not self.agente.tiene_permisos("READ", "WRITE")
                     or self.proyectos_studio.get(cliente) is not proyecto):
                 tarea.update(estado="error", salida="La autorización del proyecto cambió.")
                 return
@@ -203,12 +208,16 @@ class Nucleo:
         return self.conversaciones.ruta(self.conversaciones.activa())
 
     def historial(self):
+        self.exigir_permisos("READ")
         from core.historial_local import consultar
         return {"turnos": consultar(self.ruta_historial, limite=60)}
 
+    def estado_conversaciones(self):
+        self.exigir_permisos("READ")
+        return self.conversaciones.estado()
+
     def cambiar_conversacion(self, accion, identificador=None):
-        if self.solo_lectura:
-            raise PermissionError("La sesión es de solo lectura.")
+        self.exigir_permisos("READ", "WRITE")
         if accion == "nueva":
             self.conversaciones.nueva()
         elif accion == "seleccionar":
@@ -225,8 +234,7 @@ class Nucleo:
             self.memoria.agregar_contexto("usuario" if turno["rol"] == "usuario" else "ia", turno["texto"])
 
     def borrar_historial(self, confirmar, identificador=None):
-        if self.solo_lectura:
-            raise PermissionError("La sesión es de solo lectura.")
+        self.exigir_permisos("READ", "WRITE")
         if confirmar is not True:
             raise ValueError("Confirma el borrado de la conversación.")
         activa = self.conversaciones.activa()
@@ -239,8 +247,7 @@ class Nucleo:
         return {"turnos": []}
 
     def borrar_conversaciones(self, confirmar, identificadores):
-        if self.solo_lectura:
-            raise PermissionError("La sesión es de solo lectura.")
+        self.exigir_permisos("READ", "WRITE")
         if confirmar is not True:
             raise ValueError("Confirma la eliminación de las conversaciones seleccionadas.")
         if (not isinstance(identificadores, list) or not identificadores
@@ -265,6 +272,8 @@ class Nucleo:
         self.archivo_en_contexto = None
 
     def _registrar_turno(self, pregunta, respuesta):
+        if not self.agente.tiene_permisos("WRITE") or self.solo_lectura:
+            return
         from core.historial_local import guardar
         # Los comandos de identidad, memoria y archivos pueden contener datos privados.
         if not pregunta.startswith("/") and respuesta and not re.match(
@@ -298,10 +307,12 @@ class Nucleo:
             return {"respuesta": (f"Evaluaciones registradas: {informe['evaluaciones']}. "
                                   f"Correcciones pendientes: {informe['correcciones_pendientes']}.\n" + objetivos)}
         if re.fullmatch(r"(?:cerebro[, ]+)?(?:activa|abre) (?:el )?modo t[aá]ctil[.!]?", pregunta, re.I):
+            self.exigir_permisos("READ")
             return {"respuesta": "Abre el modo táctil desde el lanzador local.", "abrir": "tactil"}
         compuesto = re.fullmatch(
             r"(?:cerebro[, ]+)?abre (?:el )?navegador (?:e|y) investiga (?:sobre )?(.+)", pregunta, re.I)
         if compuesto:
+            self.exigir_permisos("READ")
             from universe.consultas import tema_publico
             if not self.internet:
                 raise PermissionError("El permiso de internet de esta sesión está desactivado.")
@@ -317,12 +328,15 @@ class Nucleo:
         from universe.consultas import destino_desktop
         destino = destino_desktop(pregunta)
         if destino:
+            self.exigir_permisos("READ")
             if destino == "youtube" and not self.internet:
                 raise PermissionError("El permiso de internet de esta sesión está desactivado.")
             return {"respuesta": "La apertura requiere el lanzador local de Cerebro.", "abrir": destino}
         inicio = perf_counter()
-        self.memoria.cargar_memoria()
+        if self.agente.tiene_permisos("READ"):
+            self.memoria.cargar_memoria()
         if comando == "/modelo":
+            self.exigir_permisos("READ")
             if self.chat.modelo is None:
                 raise ValueError("Inicia con --modelo para cargar un checkpoint propio.")
             texto = pregunta.partition(" ")[2].strip()
@@ -344,14 +358,14 @@ class Nucleo:
         from collections import Counter
         from core.automejora import analizar
 
-        if "READ" not in self.agente.permisos_concedidos:
-            raise PermissionError("Se requiere permiso de lectura para revisar el aprendizaje.")
+        self.exigir_permisos("READ")
         tipos = Counter(nodo["tipo"] for nodo in self.nodos()["nodos"])
         informe = analizar(self.raiz)
         informe["tipos"] = dict(tipos)
         return informe
 
     def nodos(self):
+        self.exigir_permisos("READ")
         self.memoria.cargar_memoria()
         nodos = []
         categorias = {}
@@ -418,6 +432,7 @@ class Nucleo:
         return {"nodos": nodos}
 
     def respaldo(self, datos=None):
+        self.exigir_permisos("READ" if datos is None else "WRITE")
         self.memoria.cargar_memoria()
         formato = "cerebro-memoria-v1"
         if datos is None:
@@ -486,6 +501,7 @@ class Nucleo:
         return sum(ruta.stat().st_size for ruta in self._archivos())
 
     def archivos(self):
+        self.exigir_permisos("READ")
         return {"archivos": sorted(ruta.relative_to(self.estudio).as_posix() for ruta in self._archivos()
                                    if ruta.suffix in ARCHIVOS and ruta.name != "canvas.json")}
 
@@ -506,14 +522,14 @@ class Nucleo:
         return ruta
 
     def leer(self, nombre):
+        self.exigir_permisos("READ")
         ruta = self.ruta(nombre)
         if not ruta.is_file() or ruta.stat().st_size > MIB:
             raise ValueError("El archivo no existe o supera 1 MiB.")
         return {"texto": ruta.read_text(encoding="utf-8")}
 
     def guardar(self, nombre, texto, *, canvas=False):
-        if self.solo_lectura:
-            raise PermissionError("La sesión es de solo lectura.")
+        self.exigir_permisos("WRITE")
         ruta = self.ruta(nombre)
         if ruta == self.estudio / "canvas.json" and not canvas:
             raise PermissionError("Abre el documento desde Canvas.")
@@ -539,8 +555,7 @@ class Nucleo:
 
     def adjuntar(self, nombre, contenido):
         from base64 import b64decode
-        if self.solo_lectura:
-            raise PermissionError("La sesión es de solo lectura.")
+        self.exigir_permisos("WRITE")
         if not isinstance(nombre, str) or "/" in nombre or not isinstance(contenido, str):
             raise ValueError("Adjunta un archivo con nombre simple.")
         ruta = self.ruta("adjuntos/" + nombre, lectura=True)
@@ -564,9 +579,12 @@ class Nucleo:
             raise
         return {"nombre": ruta.relative_to(self.estudio).as_posix()}
 
+    def consultar_tareas(self):
+        self.exigir_permisos("READ")
+        return [tarea.copy() for tarea in reversed(self.tareas)]
+
     def limpiar_cache(self):
-        if self.solo_lectura:
-            raise PermissionError("La sesión es de solo lectura.")
+        self.exigir_permisos("WRITE")
         anteriores = len(self.tareas)
         vigentes = [tarea for tarea in self.tareas if tarea["estado"] in {"en cola", "en ejecución"}]
         self.tareas.clear()
@@ -607,6 +625,7 @@ class Nucleo:
         publicar("error" if estado == "error" else "consolidado", "herramienta")
 
     def body(self, accion=None, valor=None):
+        self.exigir_permisos("READ" if accion is None else "WRITE")
         if accion not in (None, "armar", "parar", "girar", "avanzar"):
             raise ValueError("Orden del simulador desconocida.")
         if accion == "parar":

@@ -447,7 +447,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             estado.set("Abre primero una carpeta de proyecto.")
             return
         if not messagebox.askyesno("Ejecutar pruebas",
-                                   f"¿Ejecutar unittest en «{proyecto_activo}»? Las pruebas ejecutan código del proyecto.",
+                                   f"¿Ejecutar unittest en «{proyecto_activo}»? Se usa una copia de solo lectura, sin acceso a tu carpeta personal ni a Internet.",
                                    parent=app):
             return
         esperado = proyecto_activo

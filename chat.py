@@ -133,6 +133,9 @@ class Conversacion:
         # Durante un repaso, la respuesta se comprueba contra la ficha aprobada.
         # No se envía al modelo generativo ni al detector de intenciones.
         if self.pregunta_repaso is not None:
+            if not self.agente.tiene_permisos("READ", "WRITE"):
+                self.pregunta_repaso = None
+                return "Permisos READ y WRITE requeridos para calificar el repaso.", False
             from pathlib import Path
             from core.repaso_espaciado import cargar, calificar
             from core.autoevaluacion import evaluar_respuesta
@@ -212,7 +215,7 @@ class Conversacion:
 
         dato_ensenado = re.fullmatch(r"aprende esta respuesta: *(.+?) *\|\| *(.+)", entrada, re.IGNORECASE)
         if dato_ensenado:
-            if "WRITE" not in config.PERMISOS_AGENTE:
+            if "WRITE" not in self.agente.permisos_concedidos:
                 return "Necesito permiso WRITE para guardar la respuesta.", False
             import sqlite3
             from core.conocimiento import guardar, respuesta_exacta
@@ -234,7 +237,7 @@ class Conversacion:
         recuerdo = re.match(r"^(?:cerebro[, ]+)?recuerda que\s+(.{3,400})$",
                               entrada, flags=re.IGNORECASE)
         if recuerdo:
-            if "WRITE" not in config.PERMISOS_AGENTE:
+            if "WRITE" not in self.agente.permisos_concedidos:
                 return "Necesito permiso WRITE para guardar el recuerdo.", False
             from hashlib import sha256
             texto = recuerdo.group(1).strip()
@@ -289,11 +292,15 @@ class Conversacion:
             return self._responder_con_agente(plan), False
 
         if _PREGUNTA_NOMBRE.search(entrada):
+            if not self.agente.tiene_permisos("READ"):
+                return "Permiso READ requerido.", False
             nombre = self.memoria.recuperar_largo_plazo("nombre")
             return (f"Te llamas {nombre}." if nombre
                     else "Todavía no sé tu nombre. Dímelo con «me llamo ...»."), False
         m = _NOMBRE.search(entrada)
         if m and m.group(1).lower() not in _NO_SON_NOMBRES:
+            if not self.agente.tiene_permisos("WRITE"):
+                return "Permiso WRITE requerido.", False
             nombre = m.group(1).capitalize()
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
             _registrar_actividad("aprendido", "memoria")
@@ -305,10 +312,13 @@ class Conversacion:
             entrada, re.IGNORECASE,
         )
         if peticion_docs:
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             from core.consulta_exploracion import respuesta_documental
             return respuesta_documental(peticion_docs.group(1)), False
+
+        if not self.agente.tiene_permisos("READ"):
+            return "Permiso READ requerido para consultar memoria y fuentes locales.", False
 
         if self.modo_local:
             import sqlite3
@@ -468,6 +478,16 @@ class Conversacion:
         resto = partes[1].strip() if len(partes) > 1 else ""
         a = self.agente
 
+        lecturas = {"/memoria", "/memory", "/recuerdo", "/extraer-recuerdos", "/conocimiento",
+                    "/buscar-corpus", "/usar-habilidad", "/encadenar-habilidades", "/repasar",
+                    "/historial", "/origen"}
+        escrituras = {"/recordar", "/olvidar", "/insertar-recuerdo", "/configurar-creador",
+                      "/enseñar-habilidad", "/corregir-habilidad", "/aprender-ficha", "/calificar",
+                      "/aprobar-ejemplo", "/registrar-error", "/progreso"}
+        permiso = "READ" if cmd in lecturas else "WRITE" if cmd in escrituras else None
+        if permiso and not a.tiene_permisos(permiso):
+            return f"Permiso {permiso} requerido.", False
+
         if cmd in ("/enseñar-habilidad", "/usar-habilidad", "/corregir-habilidad", "/encadenar-habilidades"):
             from pathlib import Path
             import sqlite3
@@ -538,7 +558,7 @@ class Conversacion:
                 return f"Cerebro V3: {exc}", False
 
         if cmd == "/mis-documentos":
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             if not resto:
                 return "Uso: /mis-documentos tema", False
@@ -548,7 +568,7 @@ class Conversacion:
         if cmd == "/estacion-neuronal":
             from pathlib import Path
             from core.estacion_neuronal import guardar_estacion
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 ruta = Path(config.CEREBRO_HOME) / "data" / "estacion_neuronal.html"
@@ -561,7 +581,7 @@ class Conversacion:
         if cmd == "/mapa-recuerdos":
             from pathlib import Path
             from core.mapa_memoria import guardar_mapa
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 ruta = Path(config.CEREBRO_HOME) / "data" / "mapa_recuerdos.svg"
@@ -574,7 +594,7 @@ class Conversacion:
         if cmd == "/recordar-tarea":
             import json
             from core.recordatorios_locales import crear
-            if "WRITE" not in config.PERMISOS_AGENTE:
+            if "WRITE" not in self.agente.permisos_concedidos:
                 return "Permiso WRITE requerido.", False
             fecha, separador, texto = resto.partition(" ")
             if not separador:
@@ -586,7 +606,7 @@ class Conversacion:
         if cmd == "/recordatorios":
             import json
             from core.recordatorios_locales import listar, pendientes
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 return json.dumps({"todos": listar(), "vencidos": pendientes()},
@@ -598,7 +618,7 @@ class Conversacion:
         if cmd == "/github-errores":
             import json
             from core.github_local import incidencias_publicas
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 return json.dumps(incidencias_publicas(resto), ensure_ascii=False, indent=2), False
@@ -607,7 +627,7 @@ class Conversacion:
         if cmd == "/github-estado":
             import json
             from core.github_local import estado_publico
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 return json.dumps(estado_publico(resto), ensure_ascii=False, indent=2), False
@@ -621,15 +641,15 @@ class Conversacion:
                 if cmd == "/origen":
                     resultado = leer_origen()
                 elif cmd == "/configurar-creador":
-                    if "WRITE" not in config.PERMISOS_AGENTE:
+                    if "WRITE" not in self.agente.permisos_concedidos:
                         return "Permiso WRITE requerido.", False
                     resultado = configurar_creador(resto)
                 elif cmd == "/exportar-legado":
-                    if "WRITE" not in config.PERMISOS_AGENTE:
+                    if "WRITE" not in self.agente.permisos_concedidos:
                         return "Permiso WRITE requerido.", False
                     resultado = exportar_legado_publico(resto)
                 else:
-                    if "READ" not in config.PERMISOS_AGENTE:
+                    if "READ" not in self.agente.permisos_concedidos:
                         return "Permiso READ requerido.", False
                     resultado = examinar_legado(resto)
                 return json.dumps(resultado, ensure_ascii=False, indent=2), False
@@ -658,7 +678,7 @@ class Conversacion:
             import json
             from pathlib import Path
             from core.descubrimiento_robot import analizar_codigo_robot
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             if not resto:
                 return "Uso: /analizar-robot archivo.py", False
@@ -674,7 +694,7 @@ class Conversacion:
         if cmd == "/usb":
             import json
             from core.dispositivos_usb import listar_puertos
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 return json.dumps(listar_puertos(), ensure_ascii=False, indent=2), False
@@ -688,7 +708,7 @@ class Conversacion:
             partes = resto.split()
             if len(partes) != 3:
                 return "Uso: /preparar-robot nombre esp32|rp2040 archivo.py", False
-            if "READ" not in config.PERMISOS_AGENTE or "WRITE" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos or "WRITE" not in self.agente.permisos_concedidos:
                 return "Se requieren permisos READ y WRITE.", False
             try:
                 verificar_almacenamiento()
@@ -704,7 +724,7 @@ class Conversacion:
         if cmd == "/usb":
             import json
             from core.dispositivos_conectados import listar_puertos
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido para consultar dispositivos.", False
             try:
                 return json.dumps(listar_puertos(), ensure_ascii=False, indent=2), False
@@ -714,7 +734,7 @@ class Conversacion:
             import json
             from core.robotica_local import preparar_robot
             from core.entorno_portatil import verificar_almacenamiento
-            if "WRITE" not in config.PERMISOS_AGENTE:
+            if "WRITE" not in self.agente.permisos_concedidos:
                 return "Permiso WRITE requerido.", False
             partes = resto.split()
             if len(partes) != 2:
@@ -735,7 +755,7 @@ class Conversacion:
             import json
             if not resto:
                 return "Uso: /laboratorio archivo.py", False
-            if "READ" not in config.PERMISOS_AGENTE:
+            if "READ" not in self.agente.permisos_concedidos:
                 return "Permiso READ requerido.", False
             try:
                 verificar_almacenamiento()
@@ -749,7 +769,7 @@ class Conversacion:
             partes_pdf = resto.split(None, 1)
             if len(partes_pdf) != 2:
                 return "Uso: /crear-pdf nombre texto del documento", False
-            if "WRITE" not in config.PERMISOS_AGENTE:
+            if "WRITE" not in self.agente.permisos_concedidos:
                 return "Permiso WRITE requerido.", False
             try:
                 verificar_almacenamiento()
@@ -762,7 +782,7 @@ class Conversacion:
             if not resto.strip():
                 return "Uso: /criterio /crear-proyecto mi_app cli", False
             import json
-            evaluacion = evaluar_peticion(resto, config.PERMISOS_AGENTE)
+            evaluacion = evaluar_peticion(resto, self.agente.permisos_concedidos)
             return json.dumps(evaluacion, ensure_ascii=False, indent=2), False
         if cmd == "/materias":
             from core.materias import listar_materias
@@ -780,7 +800,7 @@ class Conversacion:
             partes_proyecto = resto.split()
             if not 1 <= len(partes_proyecto) <= 2:
                 return "Uso: /crear-proyecto nombre [cli|biblioteca]", False
-            if "WRITE" not in config.PERMISOS_AGENTE:
+            if "WRITE" not in self.agente.permisos_concedidos:
                 return "No puedo crear proyectos: falta permiso WRITE.", False
             try:
                 verificar_almacenamiento()

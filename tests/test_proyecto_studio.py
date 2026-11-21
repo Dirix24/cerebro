@@ -56,7 +56,11 @@ def test_proyecto_real_propuesta_confirmacion_revocacion_y_unittest(tmp_path, mo
         assert operar("pruebas", confirmar=True)["id"]
     finally:
         nucleo.ejecutor.shutdown()
-    assert nucleo.tareas[-1]["estado"] == "terminada"
+    resultado = nucleo.tareas[-1]["salida"]
+    if "No se ejecutó" in resultado or "No se ejecutaron" in resultado:
+        assert nucleo.tareas[-1]["estado"] == "error"
+        return
+    assert nucleo.tareas[-1]["estado"] == "terminada", resultado
     assert "Ran 1 test" in nucleo.tareas[-1]["salida"]
 
 
