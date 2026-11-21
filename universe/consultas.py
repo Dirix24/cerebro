@@ -2,10 +2,12 @@
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
@@ -102,7 +104,73 @@ def deduccion_en_frase(nucleo, pregunta):
     return nucleo.chat.procesar(f"/deducir {individuo} es {categoria}; {origen} implica {destino} ? {objetivo}")[0]
 
 
+def investigacion_externa(nucleo, pregunta):
+    comando, _, argumentos = pregunta.partition(" ")
+    comando = comando.casefold()
+    repo = re.fullmatch(r"(?:explora|inspecciona|analiza|investiga|revisa) "
+                        r"(?:(?:el )?repositorio )?(https://github\.com/[^\s]+|[\w.-]+/[\w.-]+)",
+                        pregunta, re.I)
+    if repo:
+        comando, argumentos = "/github-explorar", repo[1]
+    web = re.fullmatch(r"(?:busca|investiga) en la web\s+(.+)", pregunta, re.I)
+    if web:
+        comando, argumentos = "/web", web[1]
+    clave = os.environ.get("CEREBRO_BRAVE_API_KEY")
+    if clave and (web_general := re.fullmatch(r"(?:busca|consulta) en internet\s+(.+)", pregunta, re.I)):
+        comando, argumentos = "/web", web_general[1]
+    if comando not in ("/github-explorar", "/github-leer", "/web"):
+        return None
+    if not nucleo.internet:
+        raise PermissionError("Las consultas públicas están desactivadas en este núcleo.")
+    publicar("investigando", "consulta")
+    try:
+        if comando == "/web":
+            from core.busqueda_web import buscar
+            tema = tema_publico(argumentos)
+            if not tema:
+                return "Escribe un tema público breve, como «Busca en la web editores para MX Linux»."
+            resultados = buscar(tema, clave)
+            if not resultados:
+                return "No encontré referencias web para ese tema."
+            return "Resultados de búsqueda web (Brave Search)\n\n" + "\n\n".join(
+                "\n".join(parte for parte in (titulo, extracto, enlace) if parte)
+                for titulo, extracto, enlace in resultados
+            )
+        from core.github_local import explorar_publico, leer_publico
+        repositorio, separador, ruta = argumentos.partition("||")
+        ruta = ruta.strip() if separador else None
+        if separador and not ruta:
+            return f"Uso: {comando} propietario/repositorio || ruta/relativa"
+        if comando == "/github-explorar":
+            datos = explorar_publico(repositorio, ruta)
+            lugar = datos["repo"] + (f" · {ruta}" if ruta else "")
+            filas = ["Estructura de " + lugar, *datos["elementos"]]
+            if datos["omitidos"]:
+                filas.append(f"{datos['omitidos']} entradas adicionales.")
+            filas.append("Fuente: " + datos["fuente"])
+            return "\n".join(filas)
+        datos = leer_publico(repositorio, ruta)
+        extracto = datos["texto"][:3800]
+        if len(extracto) < len(datos["texto"]):
+            extracto += "\n[Extracto recortado]"
+        return (f"Texto público de {datos['repo']}\n\n{extracto}\n\n"
+                f"Fuente: {datos['fuente']}")
+    except HTTPError as exc:
+        publicar("error", "fallo")
+        if exc.code in (403, 429):
+            return "El servicio público limitó o rechazó la consulta. Prueba más tarde."
+        if exc.code == 404:
+            return "No encontré ese recurso público o no está disponible."
+        return f"El servicio público devolvió HTTP {exc.code}."
+    except (OSError, ValueError) as exc:
+        publicar("error", "fallo")
+        return str(exc) if isinstance(exc, ValueError) else "No pude conectar con la fuente pública."
+
+
 def consulta_directa(nucleo, pregunta, modo=None):
+    investigacion = investigacion_externa(nucleo, pregunta)
+    if investigacion is not None:
+        return investigacion
     explicacion = re.fullmatch(r"¿?(?:expl[ií]ca(?:me|lo)?|res[uú]me(?:lo)?|qu[eé] dice)"
                               r"(?: (?:m[aá]s|esto|eso|el (?:archivo|documento|v[ií]deo)|qu[eé] dice))?[?.]?",
                               pregunta, re.I)

@@ -37,3 +37,70 @@ def incidencias_publicas(repositorio, *, abrir=urlopen):
     return [{"numero": item["number"], "titulo": item["title"],
              "url": item["html_url"]} for item in datos
             if "pull_request" not in item]
+
+
+def identificar_repositorio(valor):
+    """Acepta propietario/nombre o el enlace base de GitHub."""
+    from urllib.parse import urlsplit
+
+    valor = valor.strip()
+    if valor.startswith("https://"):
+        url = urlsplit(valor)
+        if url.netloc != "github.com" or url.query or url.fragment:
+            raise ValueError("Usa un enlace base HTTPS de github.com.")
+        valor = url.path.removeprefix("/").removesuffix("/").removesuffix(".git")
+    if not _REPO.fullmatch(valor) or any(parte in {".", ".."} for parte in valor.split("/")):
+        raise ValueError("Usa propietario/repositorio o https://github.com/propietario/repositorio.")
+    return valor
+
+
+def _datos_publicos(repositorio, ruta="", *, abrir=None):
+    from core.fuentes_publicas import consultar_json
+
+    repo = identificar_repositorio(repositorio)
+    return consultar_json("https://api.github.com/repos/" + repo + ruta,
+                          {"Accept": "application/vnd.github+json"}, abrir=abrir)
+
+
+def _ruta_contenido(ruta):
+    from urllib.parse import quote
+
+    if (not re.fullmatch(r"[\w ./-]{1,240}", ruta)
+            or any(parte in {"", ".", ".."} for parte in ruta.split("/"))):
+        raise ValueError("Usa una ruta relativa al repositorio de GitHub.")
+    return "/contents/" + quote(ruta, safe="/")
+
+
+def explorar_publico(repositorio, carpeta=None, *, abrir=None):
+    repo = identificar_repositorio(repositorio)
+    ruta = "/contents" if carpeta is None else _ruta_contenido(carpeta)
+    raiz = _datos_publicos(repo, ruta, abrir=abrir)
+    if not isinstance(raiz, list):
+        raise ValueError("GitHub devolvió un listado inválido.")
+    elementos = sorted((item["type"], item["name"]) for item in raiz
+                       if isinstance(item, dict) and item.get("type") in ("dir", "file")
+                       and isinstance(item.get("name"), str))
+    disponibles = ["[carpeta] " + nombre if tipo == "dir" else nombre
+                   for tipo, nombre in elementos[:45]]
+    return {"repo": repo, "elementos": disponibles, "omitidos": max(0, len(elementos) - len(disponibles)),
+            "fuente": "https://github.com/" + repo}
+
+
+def leer_publico(repositorio, archivo=None, *, abrir=None):
+    import base64
+
+    repo = identificar_repositorio(repositorio)
+    ruta = "/readme" if archivo is None else _ruta_contenido(archivo)
+    dato = _datos_publicos(repo, ruta, abrir=abrir)
+    if (not isinstance(dato, dict) or dato.get("type") != "file"
+            or dato.get("encoding") != "base64" or type(dato.get("size")) is not int
+            or not 0 <= dato["size"] <= 128 * 1024 or not isinstance(dato.get("content"), str)):
+        raise ValueError("Solo se admiten archivos de texto de hasta 128 KiB.")
+    contenido = base64.b64decode("".join(dato["content"].split()), validate=True)
+    if len(contenido) != dato["size"] or b"\0" in contenido:
+        raise ValueError("El documento no es texto UTF-8 válido.")
+    texto = contenido.decode("utf-8")
+    fuente = dato.get("html_url")
+    if not isinstance(fuente, str) or not fuente.startswith("https://github.com/" + repo + "/"):
+        fuente = "https://github.com/" + repo
+    return {"repo": repo, "fuente": fuente, "texto": texto}

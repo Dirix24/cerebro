@@ -38,7 +38,7 @@ COMANDOS = {
     "/memoria", "/recuerdo", "/recordar", "/olvidar", "/extraer-recuerdos", "/insertar-recuerdo",
     "/origen", "/configurar-creador", "/conocimiento", "/enseñar-habilidad", "/corregir-habilidad",
     "/usar-habilidad", "/encadenar-habilidades", "/aprender-ficha", "/internet",
-    "/buscar-corpus", "/resumir", "/palabras-clave",
+    "/buscar-corpus", "/resumir", "/palabras-clave", "/github-explorar", "/github-leer", "/web",
 }
 EVENTOS = {
     "analizando": "procesamiento", "aprendido": "aprendizaje", "investigando": "investigación",

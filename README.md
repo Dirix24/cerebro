@@ -57,6 +57,10 @@ Los recuerdos se conservan entre sesiones. Copia el JSON de `/extraer-recuerdos`
 
 `/internet` y «Busca en internet…» envían el tema que escribas a Wikipedia en español y devuelven un extracto con su enlace. Escribe solo temas públicos en ese comando. Para usar el asistente local desde un script, ejecuta `python3 cerebro.py iniciar --una-vez '/recuerdo proyecto'`.
 
+## Investigación pública
+
+Prueba «Explora el repositorio Dirix24/cerebro» o `/github-leer Dirix24/cerebro || LICENSE` dentro de Cerebro. [Diagnóstico, fases y configuración de búsqueda web](docs/EVOLUCION_CEREBRO.md).
+
 ## Cerebro en MX Linux
 
 Ejecuta `./instalar` una vez. En adelante escribe `cerebro` o elige Terminal, Escritorio, Chat o Studio en el menú de aplicaciones. Las cuatro entradas usan el mismo núcleo. [Guía de interfaces, investigación y adjuntos](docs/INTERFACES_MX.md).
