@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 from urllib.parse import quote
 
 from universe.lanzador import api, abrir
+from universe.mapa_studio import MapaStudio
 
 FONDO = "#121920"
 PANEL = "#17242e"
@@ -77,10 +78,24 @@ def abrir_studio(sesion):
     cabecera = ttk.Frame(app, padding=(16, 12))
     cabecera.pack(fill=X)
     ttk.Label(cabecera, text="Cerebro Studio", style="Titulo.TLabel").pack(side=LEFT, padx=(0, 15))
-    boton(cabecera, "Universe", lambda: abrir(sesion, "universe"))
     boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"))
-    cuerpo = ttk.Panedwindow(app, orient="horizontal")
-    cuerpo.pack(fill=BOTH, expand=True, padx=14, pady=4)
+    boton(cabecera, "Universe web", lambda: abrir(sesion, "universe"))
+    paginas = ttk.Notebook(app)
+    paginas.pack(fill=BOTH, expand=True, padx=14, pady=4)
+    cuerpo = ttk.Panedwindow(paginas, orient="horizontal")
+    paginas.add(cuerpo, text="Proyecto")
+
+    def actualizar_mapa():
+        publicar(lambda: pedir("nodos"), mapa.actualizar)
+
+    mapa = MapaStudio(paginas, actualizar_mapa)
+    paginas.add(mapa, text="Universe")
+
+    def pagina_activa(_evento):
+        if paginas.select() == str(mapa):
+            actualizar_mapa()
+
+    paginas.bind("<<NotebookTabChanged>>", pagina_activa)
     archivos = ttk.Frame(cuerpo, padding=(4, 7, 9, 4))
     codigo = ttk.Frame(cuerpo, padding=(5, 7, 9, 4))
     chat = ttk.Frame(cuerpo, padding=(5, 7, 4, 4))

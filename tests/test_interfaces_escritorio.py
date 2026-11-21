@@ -159,3 +159,39 @@ def test_apagado_devuelve_respuesta_completa_antes_de_cerrar(nucleo):
         servidor.shutdown()
         hilo.join(timeout=2)
         servidor.server_close()
+
+
+def test_aprende_medidas_obj_y_universe_muestra_su_procedencia(nucleo):
+    from hashlib import sha256
+    from memory.advanced_memory import AdvancedMemoryManager
+
+    obj = b"mtllib ../ignorado.mtl\nv 0 0 0\nv 2 0 0\nv 0 3 4\nf -3 -2 -1\n"
+    ruta = adjuntar(nucleo, "muestra.obj", obj)
+    assert "X: 2 · Y: 3 · Z: 4" in nucleo.conversar(f"Analiza el modelo {ruta}")["respuesta"]
+    assert "unidades físicas" in nucleo.conversar("Explícame")["respuesta"]
+    assert not nucleo.memoria.long_term_memory
+
+    clave = "modelo3d_" + sha256(obj).hexdigest()[:32]
+    assert clave in nucleo.conversar("Aprende de este modelo")["respuesta"]
+    persistida = AdvancedMemoryManager(nucleo.memoria.filepath).recuperar_largo_plazo(clave)
+    assert persistida["dimensiones_xyz"] == [2.0, 3.0, 4.0]
+    assert persistida["triangulos"] == 1
+    ficha = next(nodo for nodo in nucleo.nodos()["nodos"] if nodo["id"] == "malla:" + clave)
+    assert ficha["titulo"] == "muestra.obj"
+    assert ficha["origen"] == "Medición local de un OBJ"
+    assert ficha["vinculos"] == ["memoria:" + clave]
+
+    alias = adjuntar(nucleo, "misma-malla.obj", obj)
+    nucleo.internet = False
+    assert "3 vértices" in nucleo.conversar(f"Analiza {alias}")["respuesta"]
+    assert "ya estaban guardadas" in nucleo.conversar("Aprende de este modelo")["respuesta"]
+    assert len(nucleo.memoria.long_term_memory) == 1
+
+
+@pytest.mark.parametrize("obj", [b"v NaN 0 0", b"v 0 0 0\nf 1 2 3", b"v 0 0 0\nf 0 1 2"])
+def test_malla_obj_invalida_no_se_aprende(tmp_path, obj):
+    from core.modelos_3d import analizar_obj
+    modelo = tmp_path / "invalido.obj"
+    modelo.write_bytes(obj)
+    with pytest.raises(ValueError):
+        analizar_obj(modelo)
