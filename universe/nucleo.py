@@ -153,6 +153,12 @@ class Nucleo:
             raise PermissionError("El permiso de internet de esta sesión está desactivado.")
         if self.solo_lectura:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
+        from universe.consultas import destino_desktop
+        destino = destino_desktop(pregunta)
+        if destino:
+            if destino == "youtube" and not self.internet:
+                raise PermissionError("El permiso de internet de esta sesión está desactivado.")
+            return {"respuesta": "La apertura requiere el lanzador local de Cerebro.", "abrir": destino}
         inicio = perf_counter()
         self.memoria.cargar_memoria()
         if comando == "/modelo":

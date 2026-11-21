@@ -19,7 +19,7 @@ ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/htm
 
 
 def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
-                   abrir_terminal=None, mostrar_acompanante=None):
+                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -97,6 +97,12 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
                 if abrir_estudio():
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
+            destino = resultado.get("abrir")
+            if destino in ("navegador", "youtube") and abrir_destino is not None:
+                if abrir_destino(destino):
+                    resultado["respuesta"] = ("Abrí YouTube." if destino == "youtube" else "Abrí el navegador.")
+                else:
+                    resultado["respuesta"] = "No pude abrir el navegador predeterminado."
             return resultado
 
         def operar(self, ruta, escribir, datos, consulta):

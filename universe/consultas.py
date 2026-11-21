@@ -67,6 +67,15 @@ def actualidad(habilitada):
     )
 
 
+def destino_desktop(pregunta):
+    texto = re.sub(r"^cerebro(?:[ ,]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
+    if re.fullmatch(r"(?:abre|[aá]breme|inicia|lanza) (?:(?:el|mi) )?navegador(?: web)?", texto, re.I):
+        return "navegador"
+    if re.fullmatch(r"(?:abre|[aá]breme) (?:la p[aá]gina de )?you ?tube", texto, re.I):
+        return "youtube"
+    return None
+
+
 def desea_studio(pregunta):
     return bool(re.fullmatch(r"(?:quiero programar|abre (?:el )?estudio|abre studio)", pregunta.strip(" ¿?!."), re.I))
 

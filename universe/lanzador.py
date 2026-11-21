@@ -100,7 +100,8 @@ def nucleo():
     motor = Nucleo("local", modelo=modelo, meta=meta, internet=internet, investigar_auto=internet)
     token = secrets.token_urlsafe(32)
     with crear_servidor(0, motor, token, permitir_cierre=True, abrir_estudio=lanzar_estudio,
-                         abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante) as servidor:
+                         abrir_terminal=lanzar_terminal, mostrar_acompanante=lanzar_acompanante,
+                         abrir_destino=lanzar_destino) as servidor:
         ruta = carpeta()
         datos = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": token,
                  "version": version_local()}
@@ -114,6 +115,11 @@ def nucleo():
 def abrir(sesion, interfaz):
     lanzar_acompanante()
     return abrir_web(f"{sesion['url']}/{interfaz}#{sesion['token']}")
+
+
+def lanzar_destino(destino):
+    destinos = {"navegador": "about:blank", "youtube": "https://www.youtube.com/"}
+    return bool(_hay_escritorio() and destino in destinos and abrir_web(destinos[destino]))
 
 
 def _hay_escritorio():
@@ -211,8 +217,8 @@ def escritorio(sesion):
     ventana.resizable(False, False)
     ventana.attributes("-topmost", True)
     x = max(0, ventana.winfo_screenwidth() - 370)
-    y = max(0, ventana.winfo_screenheight() - 358)
-    ventana.geometry(f"340x327+{x}+{y}")
+    y = max(0, ventana.winfo_screenheight() - 398)
+    ventana.geometry(f"340x367+{x}+{y}")
 
     from universe.orbita import Orbita
     nucleo_visual = Orbita(ventana)
@@ -225,6 +231,10 @@ def escritorio(sesion):
     salida.configure(state="disabled")
     entrada = tk.Entry(ventana, bg="#142b32", fg="#e4fffa", insertbackground="white")
     entrada.pack(fill="x", padx=12, pady=6)
+    barra_voz = tk.Frame(ventana, bg="#102027")
+    barra_voz.pack()
+    ultima_respuesta = ""
+    ocupado = False
     barra = tk.Frame(ventana, bg="#102027")
     barra.pack()
     eventos = queue.SimpleQueue()
@@ -255,15 +265,47 @@ def escritorio(sesion):
         except (OSError, RuntimeError) as exc:
             eventos.put(("respuesta", str(exc)))
 
+    def cambiar_estado(texto):
+        nonlocal ocupado
+        ocupado = texto != "Disponible"
+        nucleo_visual.estado(texto)
+        estado = "disabled" if ocupado else "normal"
+        entrada.configure(state=estado)
+        boton_dictar.configure(state=estado)
+        boton_leer.configure(state=estado if ultima_respuesta else "disabled")
+
     def enviar(_evento=None):
         texto = entrada.get().strip()
-        if texto:
+        if texto and not ocupado:
             entrada.delete(0, "end")
-            entrada.configure(state="disabled")
-            nucleo_visual.procesando(True)
+            cambiar_estado("Procesando")
             Thread(target=despachar, args=(texto,), daemon=True).start()
 
+    def tarea_de_voz(operacion, tipo):
+        try:
+            eventos.put((tipo, operacion()))
+        except (OSError, RuntimeError, ValueError) as exc:
+            eventos.put(("error de voz", str(exc)))
+
+    def dictar():
+        from core.local_voice import dictar as grabar
+        cambiar_estado("Escuchando")
+        Thread(target=tarea_de_voz, args=(grabar, "dictado"), daemon=True).start()
+
+    def leer():
+        from core.local_voice import leer_en_espanol
+        texto = ultima_respuesta
+        cambiar_estado("Hablando")
+        Thread(target=tarea_de_voz, args=(lambda: leer_en_espanol(texto), "audio listo"), daemon=True).start()
+
+    def mostrar_texto(texto):
+        salida.configure(state="normal")
+        salida.delete("1.0", "end")
+        salida.insert("end", texto)
+        salida.configure(state="disabled")
+
     def actualizar():
+        nonlocal ultima_respuesta
         while not eventos.empty():
             tipo, valor = eventos.get()
             if tipo == "vista":
@@ -272,18 +314,35 @@ def escritorio(sesion):
                 elif valor != "escritorio" and ventana.state() != "withdrawn":
                     ventana.withdraw()
             elif tipo == "respuesta":
-                nucleo_visual.procesando(False)
-                salida.configure(state="normal")
-                salida.delete("1.0", "end")
-                salida.insert("end", valor)
-                salida.configure(state="disabled")
-                entrada.configure(state="normal")
+                ultima_respuesta = valor
+                mostrar_texto(valor)
+                cambiar_estado("Disponible")
+            elif tipo == "dictado":
+                cambiar_estado("Disponible")
+                if valor:
+                    entrada.delete(0, "end")
+                    entrada.insert(0, valor)
+                    entrada.focus_set()
+                    mostrar_texto("Revisa lo que has dictado y pulsa Enter para enviarlo.")
+                else:
+                    mostrar_texto("No reconocí palabras. Puedes volver a dictar o escribir tu petición.")
+            elif tipo == "error de voz":
+                mostrar_texto(valor)
+                cambiar_estado("Disponible")
+            elif tipo == "audio listo":
+                cambiar_estado("Disponible")
         ventana.after(150, actualizar)
 
     def cerrar():
         detenido.set()
         ventana.destroy()
 
+    boton_dictar = tk.Button(barra_voz, text="Dictar · 5 s", command=dictar, bg="#25434b",
+                             fg="#e6faf5", relief="flat", padx=10, pady=4)
+    boton_leer = tk.Button(barra_voz, text="Leer respuesta", command=leer, bg="#25434b",
+                           fg="#e6faf5", relief="flat", padx=10, pady=4, state="disabled")
+    boton_dictar.pack(side="left", padx=4, pady=(0, 4))
+    boton_leer.pack(side="left", padx=4, pady=(0, 4))
     entrada.bind("<Return>", enviar)
     for nombre, accion in (("Chat web", lambda: abrir(sesion, "chat")), ("Studio", lanzar_estudio),
                            ("Terminal", lanzar_terminal), ("Universe", lambda: abrir(sesion, "universe"))):
