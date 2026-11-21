@@ -99,7 +99,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 self.enviar(500, {"error": "No se pudo completar la operación en el almacenamiento local."})
 
         def responder_chat(self, datos):
-            if "conversacion" in datos and datos["conversacion"] != nucleo.conversaciones.activa():
+            anterior = nucleo.conversaciones.version_activa()
+            if "conversacion" in datos and datos["conversacion"] != anterior["activa"]:
                 raise ValueError("La conversación activa cambió. Actualiza antes de enviar el mensaje.")
             resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"), cliente=datos.get("cliente"))
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
@@ -115,6 +116,9 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     resultado["respuesta"] = "Abrí YouTube." if destino == "youtube" else "Abrí el navegador."
                 else:
                     resultado["respuesta"] = "No pude abrir el navegador predeterminado."
+            if "conversacion" in datos:
+                resultado["revision"] = nucleo.conversaciones.version_activa()["revision"]
+                resultado["revision_anterior"] = anterior["revision"]
             return resultado
 
         def operar(self, ruta, escribir, datos, consulta):
@@ -172,7 +176,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     acciones = {
                         "/api/estado": nucleo.estado, "/api/historial": nucleo.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
                         "/api/conversaciones": nucleo.conversaciones.estado,
-                        "/api/conversacion-activa": lambda: {"activa": nucleo.conversaciones.activa()},
+                        "/api/conversacion-activa": nucleo.conversaciones.version_activa,
                         "/api/tareas": lambda: [tarea.copy() for tarea in reversed(nucleo.tareas)],
                         "/api/memoria": nucleo.respaldo,
                         "/api/archivo": lambda: nucleo.leer(consulta.get("nombre", [""])[0]),

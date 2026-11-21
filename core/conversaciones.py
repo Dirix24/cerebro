@@ -54,8 +54,20 @@ class Conversaciones:
         self.ruta(identificador).touch(mode=0o600, exist_ok=False)
         self.seleccionar(identificador)
 
-    def estado(self):
+    def version_activa(self):
         activa = self.activa()
+        ruta = self.ruta(activa)
+        version = ""
+        if not ruta.is_symlink():
+            try:
+                datos = ruta.stat()
+                version = f"{datos.st_mtime_ns}:{datos.st_size}"
+            except FileNotFoundError:
+                pass
+        return {"activa": activa, "revision": version}
+
+    def estado(self):
+        version = self.version_activa()
         archivos = [ruta for ruta in self.carpeta.glob("*.jsonl")
                     if _ID.fullmatch(ruta.stem) and ruta.is_file() and not ruta.is_symlink()]
         archivos.sort(key=lambda ruta: ruta.stat().st_mtime, reverse=True)
@@ -63,4 +75,4 @@ class Conversaciones:
                  for ruta in archivos]
         if self.ruta("original").is_file() and not self.ruta("original").is_symlink():
             chats.append({"id": "original", "titulo": "Conversación anterior"})
-        return {"activa": activa, "chats": chats, "turnos": consultar(self.ruta(activa), limite=60)}
+        return {**version, "chats": chats, "turnos": consultar(self.ruta(version["activa"]), limite=60)}

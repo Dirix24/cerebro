@@ -176,3 +176,36 @@ def test_borrado_de_chat_por_lotes(servidor):
     assert estado["eliminadas"] == 2 and not estado["turnos"]
     assert estado["activa"] != actual
     assert [chat["id"] for chat in estado["chats"]] == [estado["activa"]]
+
+
+def test_cuatro_interfaces_comparten_memoria_historial_y_contexto(servidor):
+    api, _, nucleo = servidor
+    clientes = dict(zip(("terminal", "chat", "studio", "escritorio"), ("a", "b", "c", "d")))
+
+    def conversar(modo, mensaje):
+        identificador = api("/api/conversacion-activa")["activa"]
+        return api("/api/chat", {"mensaje": mensaje, "modo": modo, "cliente": clientes[modo] * 24,
+                                 "conversacion": identificador})
+
+    assert "guardados: 1" in conversar("escritorio", "Guarda esta memoria: proyecto_prueba = Atlas")["respuesta"]
+    for modo in ("terminal", "chat", "studio"):
+        assert "Atlas" in conversar(modo, "/recuerdo proyecto_prueba")["respuesta"]
+
+    anterior = api("/api/conversacion-activa")
+    resultado = conversar("terminal", "Hola Cerebro")
+    posterior = api("/api/conversaciones")
+    assert anterior["activa"] == posterior["activa"]
+    assert resultado["revision_anterior"] == anterior["revision"]
+    assert resultado["revision"] == posterior["revision"] != anterior["revision"]
+    assert posterior["turnos"][-2]["texto"] == "Hola Cerebro"
+
+    reiniciado = Nucleo("usb")
+    try:
+        assert reiniciado.memoria.recuperar_largo_plazo("proyecto_prueba") == "Atlas"
+        assert any(turno["contenido"] == "Hola Cerebro" for turno in reiniciado.memoria.short_term_context)
+    finally:
+        reiniciado.ejecutor.shutdown()
+
+    api("/api/conversaciones", {"accion": "nueva"})
+    assert not nucleo.memoria.short_term_context
+    assert "Atlas" in conversar("escritorio", "/recuerdo proyecto_prueba")["respuesta"]

@@ -76,6 +76,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     generacion = 0
     revision_chat = 0
     chat_activo = None
+    revision_visible = None
     chats_guardados = []
 
     def pedir(operacion, datos=None):
@@ -268,24 +269,31 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         activa = chat_activo
 
         def respondido(dato):
+            nonlocal revision_visible
             if revision != revision_chat:
                 return
-            mostrar_mensaje("Cerebro", dato["respuesta"])
+            ya_visible = dato["revision"] == revision_visible and dato["revision"] != dato["revision_anterior"]
+            if dato["revision_anterior"] == revision_visible:
+                revision_visible = dato["revision"]
+            if not ya_visible:
+                mostrar_mensaje("Cerebro", dato["respuesta"])
             estado.set("Núcleo conectado")
 
         publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador, "conversacion": activa}), respondido)
 
     def mostrar_chat(datos):
-        nonlocal revision_chat, chat_activo
+        nonlocal revision_chat, chat_activo, revision_visible
         chats_guardados[:] = datos["chats"]
         if not any(chat["id"] == datos["activa"] for chat in chats_guardados):
             chats_guardados.insert(0, {"id": datos["activa"], "titulo": "Conversación actual"})
         selector.configure(values=[chat["titulo"] for chat in chats_guardados])
         selector.current(next(i for i, chat in enumerate(chats_guardados) if chat["id"] == datos["activa"]))
-        if datos["activa"] == chat_activo:
+        version = datos["activa"], datos["revision"]
+        if version == (chat_activo, revision_visible):
             return
-        revision_chat += 1
-        chat_activo = datos["activa"]
+        if datos["activa"] != chat_activo:
+            revision_chat += 1
+        chat_activo, revision_visible = version
         mostrar(salida, "")
         for turno in datos["turnos"]:
             mostrar_mensaje("Tú" if turno["rol"] == "usuario" else "Cerebro", turno["texto"])
@@ -376,10 +384,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 app.lift()
         if visible:
             informar()
-            activa = chat_activo
+            version_visible = chat_activo, revision_visible
 
             def consultar_chat():
-                if pedir("conversacion-activa")["activa"] != activa:
+                version = pedir("conversacion-activa")
+                if (version["activa"], version["revision"]) != version_visible:
                     return pedir("conversaciones")
                 return None
 

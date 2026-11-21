@@ -427,14 +427,15 @@ def escritorio(sesion):
     identificador = secrets.token_hex(12)
 
     chat_activo = None
+    revision_visible = None
 
     def observar():
         while not detenido.is_set():
             try:
                 eventos.put(("vista", api(sesion, "interfaz", tiempo=2)["activa"]))
                 if not ocupado:
-                    activa = api(sesion, "conversacion-activa", tiempo=2)["activa"]
-                    if activa != chat_activo:
+                    version = api(sesion, "conversacion-activa", tiempo=2)
+                    if (version["activa"], version["revision"]) != (chat_activo, revision_visible):
                         eventos.put(("conversación remota", api(sesion, "conversaciones", tiempo=2)))
             except (OSError, RuntimeError):
                 registro = carpeta() / "sesion.json"
@@ -451,11 +452,11 @@ def escritorio(sesion):
             except OSError:
                 sesion.update(conectar())
                 salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador, "conversacion": chat_activo})
-            eventos.put(("respuesta", salida["respuesta"]))
+            eventos.put(("respuesta", salida))
             if salida.get("abrir") == "studio":
                 lanzar_estudio()
         except (OSError, RuntimeError) as exc:
-            eventos.put(("respuesta", str(exc)))
+            eventos.put(("respuesta", {"respuesta": str(exc)}))
 
     def cambiar_estado(texto):
         nonlocal ocupado
@@ -562,7 +563,7 @@ def escritorio(sesion):
         Thread(target=tarea_de_voz, args=(operar, "conversación"), daemon=True).start()
 
     def actualizar():
-        nonlocal ultima_respuesta, chat_activo, temporizador
+        nonlocal ultima_respuesta, chat_activo, revision_visible, temporizador
         while not eventos.empty():
             tipo, valor = eventos.get()
             if tipo == "vista":
@@ -571,15 +572,18 @@ def escritorio(sesion):
                 elif valor != "escritorio" and ventana.state() != "withdrawn":
                     ventana.withdraw()
             elif tipo == "respuesta":
-                ultima_respuesta = valor
-                agregar_turno("Cerebro", valor)
+                ultima_respuesta = valor["respuesta"]
+                if "revision" in valor and valor["revision_anterior"] == revision_visible:
+                    revision_visible = valor["revision"]
+                agregar_turno("Cerebro", ultima_respuesta)
                 cambiar_estado("Disponible")
                 if voz_activada:
-                    hablar_respuesta(valor)
+                    hablar_respuesta(ultima_respuesta)
             elif tipo in {"conversación", "conversación remota"}:
-                if tipo == "conversación remota" and (ocupado or chat_activo == valor["activa"]):
+                version = valor["activa"], valor["revision"]
+                if tipo == "conversación remota" and (ocupado or version == (chat_activo, revision_visible)):
                     continue
-                chat_activo = valor["activa"]
+                chat_activo, revision_visible = version
                 ultima_respuesta = ""
                 salida.configure(state="normal")
                 salida.delete("1.0", "end")

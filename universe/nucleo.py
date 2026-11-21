@@ -76,6 +76,7 @@ class Nucleo:
         self.interfaces = {}
         self.archivo_en_contexto = None
         self.conversaciones = Conversaciones(self.raiz / "data")
+        self._recuperar_contexto(self.historial()["turnos"])
         self.latencias = deque(maxlen=100)
         self.tareas = deque(maxlen=24)
         self.ejecutor = ThreadPoolExecutor(max_workers=1)
@@ -147,9 +148,12 @@ class Nucleo:
             raise ValueError("Acción de conversación desconocida.")
         self._limpiar_contexto()
         estado = self.conversaciones.estado()
-        for turno in estado["turnos"]:
-            self.memoria.agregar_contexto("usuario" if turno["rol"] == "usuario" else "ia", turno["texto"])
+        self._recuperar_contexto(estado["turnos"])
         return estado
+
+    def _recuperar_contexto(self, turnos):
+        for turno in turnos:
+            self.memoria.agregar_contexto("usuario" if turno["rol"] == "usuario" else "ia", turno["texto"])
 
     def borrar_historial(self, confirmar, identificador=None):
         if self.solo_lectura:

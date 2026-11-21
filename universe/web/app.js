@@ -39,6 +39,7 @@ let canvasCargado = false;
 let sondeoOcupado = false;
 let chatOcupado = false;
 let chatActivo = null;
+let revisionVisible = null;
 
 async function api(ruta, datos) {
   const headers = {Authorization: "Bearer " + token};
@@ -167,10 +168,12 @@ async function sondear() {
   sondeoOcupado = true;
   try {
     await estado();
-    if (chatActivo !== null && !chatOcupado
-        && (await api("conversacion-activa")).activa !== chatActivo && !chatOcupado) {
-      const datos = await api("conversaciones");
-      if (!chatOcupado) cargarConversacion(datos);
+    if (chatActivo !== null && !chatOcupado) {
+      const version = await api("conversacion-activa");
+      if (version.activa !== chatActivo || version.revision !== revisionVisible) {
+        const datos = await api("conversaciones");
+        if (!chatOcupado) cargarConversacion(datos);
+      }
     }
     if (vista === "studio" && modoWeb === "studio") await actualizarTareas();
     if (vista === "universe") {
@@ -222,6 +225,7 @@ async function conversar(texto) {
       throw new Error("La conversación cambió en otra interfaz. Revisa el chat y vuelve a enviar el mensaje.");
     }
     const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz, conversacion: chatActivo});
+    if (salida.revision_anterior === revisionVisible) revisionVisible = salida.revision;
     $("sugerencias-chat").hidden = true;
     agregarMensaje("Tú", texto);
     agregarMensaje("Cerebro", salida.respuesta);
@@ -236,6 +240,7 @@ async function conversar(texto) {
 
 function cargarConversacion(datos) {
   chatActivo = datos.activa;
+  revisionVisible = datos.revision;
   const chats = [...datos.chats];
   if (!chats.some(chat => chat.id === chatActivo)) chats.unshift({id: chatActivo, titulo: "Conversación actual"});
   $("lista-chats").replaceChildren(...chats.map(chat => new Option(chat.titulo, chat.id)));

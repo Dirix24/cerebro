@@ -34,6 +34,10 @@ Las cuatro entradas se conectan al mismo servicio autenticado en loopback. Compa
 
 Al adjuntar desde Chat o Studio, Cerebro analiza el archivo automáticamente. Después puedes decir «Explícame» para ver los pasajes principales y los temas detectados. «Guarda lo aprendido de este archivo» guarda el análisis en la memoria compartida. El último archivo analizado se conserva en el núcleo mientras está en ejecución. El análisis admite adjuntos de hasta 16 MiB, dentro de la cuota del espacio de trabajo. El navegador reproduce localmente los vídeos compatibles con sus códecs. Están pendientes el OCR de documentos escaneados, la interpretación visual de escenas y la transcripción propia de audio. Las operaciones aritméticas y las deducciones usan reglas comprobables. El modelo propio sigue teniendo un rendimiento limitado en conversación y programación general.
 
+### Memoria y conversación compartidas
+
+Prueba «Guarda esta memoria: proyecto = Atlas» en una interfaz y `/recuerdo proyecto` en otra. Las cuatro usan la misma memoria persistente. Si cambias de chat, el contexto inmediato pasa a la conversación elegida y los recuerdos guardados siguen disponibles. Chat web, Studio y la esfera se actualizan cuando otro cliente añade turnos al historial compartido. En Terminal, `/historial` muestra los intercambios guardados más recientes.
+
 ### Abrir y recordar documentos
 
 1. Escribe o dicta «Cerebro, abre mi documento de matemáticas». Cerebro busca por nombre en Documentos y Descargas y pide elegir por número si hay varias coincidencias.
