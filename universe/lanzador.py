@@ -183,26 +183,12 @@ def escritorio(sesion):
     ventana.resizable(False, False)
     ventana.attributes("-topmost", True)
     x = max(0, ventana.winfo_screenwidth() - 370)
-    y = max(0, ventana.winfo_screenheight() - 330)
-    ventana.geometry(f"340x292+{x}+{y}")
+    y = max(0, ventana.winfo_screenheight() - 358)
+    ventana.geometry(f"340x327+{x}+{y}")
 
-    cara = tk.Canvas(ventana, width=330, height=87, bg="#102027", highlightthickness=0)
-    cara.pack()
-    cara.create_oval(119, 3, 211, 85, outline="#284b54", width=1, dash=(2, 4))
-    cara.create_oval(129, 10, 201, 80, outline="#3f938a", width=2, fill="#173139")
-    for cx, cy in ((125, 23), (204, 28), (125, 64), (204, 68)):
-        cara.create_oval(cx - 2, cy - 2, cx + 2, cy + 2, fill="#78d3bd", outline="")
-    cara.create_arc(138, 31, 193, 67, start=218, extent=104, outline="#5ee5b7", width=2, style="arc")
-    ojos = [cara.create_oval(pos, 32, pos + 9, 45, fill="#9ef7d4", outline="")
-            for pos in (148, 174)]
-    cara.create_text(17, 17, text="CEREBRO", anchor="w", fill="#9be8d3", font=("TkDefaultFont", 10, "bold"))
-    cara.create_text(17, 39, text="Asistente local", anchor="w", fill="#a9c1c9", font=("TkDefaultFont", 8))
-
-    def parpadear():
-        for ojo in ojos:
-            cara.itemconfigure(ojo, state="hidden")
-        ventana.after(130, lambda: [cara.itemconfigure(ojo, state="normal") for ojo in ojos])
-        ventana.after(5100, parpadear)
+    from universe.orbita import Orbita
+    nucleo_visual = Orbita(ventana)
+    nucleo_visual.pack()
 
     salida = tk.Text(ventana, height=5, wrap="word", bg="#142b32", fg="#e4fffa", relief="flat",
                      padx=7, pady=4)
@@ -246,6 +232,7 @@ def escritorio(sesion):
         if texto:
             entrada.delete(0, "end")
             entrada.configure(state="disabled")
+            nucleo_visual.procesando(True)
             Thread(target=despachar, args=(texto,), daemon=True).start()
 
     def actualizar():
@@ -257,6 +244,7 @@ def escritorio(sesion):
                 elif valor != "escritorio" and ventana.state() != "withdrawn":
                     ventana.withdraw()
             elif tipo == "respuesta":
+                nucleo_visual.procesando(False)
                 salida.configure(state="normal")
                 salida.delete("1.0", "end")
                 salida.insert("end", valor)
@@ -277,7 +265,6 @@ def escritorio(sesion):
     ventana.protocol("WM_DELETE_WINDOW", cerrar)
     Thread(target=observar, daemon=True).start()
     ventana.after(150, actualizar)
-    ventana.after(5100, parpadear)
     ventana.mainloop()
 
 
