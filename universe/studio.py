@@ -5,7 +5,7 @@ from pathlib import Path
 from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
-from tkinter import END, BOTH, LEFT, X, Y, Listbox, StringVar, Text, Tk, TclError
+from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Listbox, StringVar, Text, Tk, TclError
 from tkinter import filedialog, messagebox, ttk
 from urllib.parse import quote
 
@@ -16,6 +16,8 @@ FONDO = "#090e18"
 PANEL = "#121c2c"
 TEXTO = "#e8f3ff"
 ACENTO = "#79bdff"
+MUTED = "#a9bed8"
+BORDE = "#2a3b58"
 
 
 def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
@@ -40,7 +42,18 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     estilo.configure("Titulo.TLabel", font=("TkDefaultFont", 17, "bold"), foreground=ACENTO)
     estilo.configure("TEntry", fieldbackground=PANEL, foreground=TEXTO, insertcolor=TEXTO,
                      bordercolor="#2a3b58", lightcolor=PANEL, darkcolor=PANEL)
-    estilo.configure("TPanedwindow", background=FONDO)
+    estilo.configure("TPanedwindow", background=FONDO, sashwidth=6)
+    estilo.configure("Principal.TButton", background="#205083", foreground="#edf8ff")
+    estilo.map("Principal.TButton", background=[("active", "#2b659d")])
+    estilo.configure("Eliminar.TButton", foreground="#ffadb8")
+    estilo.configure("Seccion.TLabel", foreground=ACENTO, font=("TkDefaultFont", 10, "bold"))
+    estilo.configure("Estado.TLabel", background=PANEL, foreground=MUTED)
+    estilo.configure("TCombobox", fieldbackground=PANEL, background=PANEL, foreground=TEXTO,
+                     arrowcolor=ACENTO, bordercolor=BORDE)
+    estilo.map("TCombobox", fieldbackground=[("readonly", PANEL)], foreground=[("readonly", TEXTO)])
+    app.option_add("*TCombobox*Listbox.background", PANEL)
+    app.option_add("*TCombobox*Listbox.foreground", TEXTO)
+    app.option_add("*TCombobox*Listbox.selectBackground", "#205083")
 
     estado = StringVar(value="Conectando con Cerebro…")
     ruta = StringVar()
@@ -55,6 +68,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     generacion = 0
     revision_chat = 0
     chat_activo = None
+    chats_guardados = []
 
     def pedir(operacion, datos=None):
         return api(sesion, operacion, datos)
@@ -67,15 +81,26 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 pendientes.put((None, None, str(exc)))
         Thread(target=hacer, daemon=True).start()
 
-    def boton(padre, nombre, accion):
-        widget = ttk.Button(padre, text=nombre, command=accion)
-        widget.pack(side=LEFT, padx=(0, 6), pady=3)
+    def boton(padre, nombre, accion, estilo="TButton", lado=LEFT):
+        widget = ttk.Button(padre, text=nombre, command=accion, style=estilo)
+        widget.pack(side=lado, padx=(0, 5), pady=3)
         return widget
 
-    def campo_texto(padre, *, codigo=False):
-        campo = Text(padre, bg=PANEL, fg=TEXTO, insertbackground=ACENTO, relief="flat",
+    def campo_texto(padre, *, codigo=False, altura=10):
+        marco = ttk.Frame(padre)
+        marco.pack(fill=BOTH, expand=True)
+        campo = Text(marco, bg=PANEL, fg=TEXTO, insertbackground=ACENTO, relief="flat",
                      padx=10, pady=9, wrap="none" if codigo else "word",
+                     width=18, height=altura, highlightthickness=1, highlightbackground=BORDE,
+                     highlightcolor=ACENTO, selectbackground="#205083",
                      font=("TkFixedFont", 11) if codigo else ("TkDefaultFont", 10))
+        desplazamiento = ttk.Scrollbar(marco, command=campo.yview)
+        desplazamiento.pack(side=RIGHT, fill=Y)
+        campo.configure(yscrollcommand=desplazamiento.set)
+        if codigo:
+            horizontal = ttk.Scrollbar(marco, orient="horizontal", command=campo.xview)
+            horizontal.pack(side="bottom", fill=X)
+            campo.configure(xscrollcommand=horizontal.set)
         campo.pack(fill=BOTH, expand=True)
         return campo
 
@@ -91,9 +116,9 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cabecera = ttk.Frame(app, padding=(16, 12))
     cabecera.pack(fill=X)
     ttk.Label(cabecera, text="Cerebro Studio", style="Titulo.TLabel").pack(side=LEFT, padx=(0, 15))
-    boton(cabecera, "Terminal", lanzar_terminal)
-    boton(cabecera, "Acompañante", app.iconify)
-    boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"))
+    boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"), lado=RIGHT)
+    boton(cabecera, "Acompañante", app.iconify, lado=RIGHT)
+    boton(cabecera, "Terminal", lanzar_terminal, lado=RIGHT)
     paginas = ttk.Notebook(app)
     paginas.pack(fill=BOTH, expand=True, padx=14, pady=4)
     cuerpo = ttk.Panedwindow(paginas, orient="horizontal")
@@ -117,7 +142,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cuerpo.add(codigo, weight=4)
     cuerpo.add(chat, weight=3)
 
-    ttk.Label(archivos, text="Filtrar archivos").pack(anchor="w", pady=(0, 5))
+    ttk.Label(archivos, text="EXPLORADOR", style="Seccion.TLabel").pack(anchor="w", pady=(0, 7))
+    ttk.Label(archivos, text="Filtrar archivos · Ctrl+P").pack(anchor="w", pady=(0, 4))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
     buscador.pack(fill=X, pady=(0, 7))
     lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#193154", selectforeground=ACENTO,
@@ -129,19 +155,31 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     barra_archivos = ttk.Frame(archivos)
     barra_archivos.pack(fill=X)
 
-    ttk.Label(codigo, text="Editor").pack(anchor="w", pady=(0, 7))
-    ttk.Entry(codigo, textvariable=ruta).pack(fill=X, pady=(0, 4))
-    editor = campo_texto(codigo, codigo=True)
-    barra_editor = ttk.Frame(codigo)
+    vistas_editor = ttk.Notebook(codigo)
+    vistas_editor.pack(fill=BOTH, expand=True)
+    pagina_editor = ttk.Frame(vistas_editor, padding=6)
+    pagina_validaciones = ttk.Frame(vistas_editor, padding=6)
+    vistas_editor.add(pagina_editor, text="Editor")
+    vistas_editor.add(pagina_validaciones, text="Validaciones")
+    ttk.Entry(pagina_editor, textvariable=ruta).pack(fill=X, pady=(0, 5))
+    editor = campo_texto(pagina_editor, codigo=True)
+    barra_editor = ttk.Frame(pagina_editor)
     barra_editor.pack(fill=X)
-    ttk.Label(chat, text="Conversación y análisis").pack(anchor="w", pady=(0, 7))
+    validaciones = campo_texto(pagina_validaciones)
+    validaciones.configure(state="disabled")
+
+    ttk.Label(chat, text="CONVERSACIÓN", style="Seccion.TLabel").pack(anchor="w", pady=(0, 6))
+    selector = ttk.Combobox(chat, state="readonly", width=16)
+    selector.pack(fill=X, pady=(0, 3))
+    barra_conversaciones = ttk.Frame(chat)
+    barra_conversaciones.pack(fill=X, pady=(0, 4))
     salida = campo_texto(chat)
     salida.configure(state="disabled")
     consulta = ttk.Entry(chat, textvariable=entrada)
     consulta.pack(fill=X, pady=(6, 1))
     barra_chat = ttk.Frame(chat)
     barra_chat.pack(fill=X)
-    ttk.Label(app, textvariable=estado, padding=(16, 7), anchor="w").pack(fill=X)
+    ttk.Label(app, textvariable=estado, style="Estado.TLabel", padding=(16, 7), anchor="w").pack(fill=X)
 
     def filtrar_archivos(*_args):
         filtro = filtro_archivos.get().strip().casefold()
@@ -168,6 +206,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
         def copiar(datos):
             ruta.set(nombre)
+            vistas_editor.select(pagina_editor)
             mostrar(editor, datos["texto"])
             editor.edit_modified(False)
 
@@ -194,6 +233,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         publicar(lambda: pedir("tarea", {"accion": "sintaxis", "nombre": nombre}),
                   lambda dato: tareas_en_curso.add(dato["id"]))
+        vistas_editor.select(pagina_validaciones)
+        mostrar(validaciones, "Validando «" + nombre + "»…\n", anexar=True)
         estado.set("Validación solicitada.")
 
     def enviar(texto=None):
@@ -217,6 +258,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     def mostrar_chat(datos):
         nonlocal revision_chat, chat_activo
+        chats_guardados[:] = datos["chats"]
+        if not any(chat["id"] == datos["activa"] for chat in chats_guardados):
+            chats_guardados.insert(0, {"id": datos["activa"], "titulo": "Conversación actual"})
+        selector.configure(values=[chat["titulo"] for chat in chats_guardados])
+        selector.current(next(i for i, chat in enumerate(chats_guardados) if chat["id"] == datos["activa"]))
         if datos["activa"] == chat_activo:
             return
         revision_chat += 1
@@ -246,6 +292,14 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             estado.set("Conversación eliminada." if borrar else "Nueva conversación.")
 
         publicar(operar, actualizado)
+
+    def seleccionar_chat(_evento):
+        indice = selector.current()
+        if indice < 0:
+            return
+        elegida = chats_guardados[indice]["id"]
+        if elegida != chat_activo:
+            publicar(lambda: pedir("conversaciones", {"accion": "seleccionar", "id": elegida}), mostrar_chat)
 
     def adjuntar():
         archivo = filedialog.askopenfilename(title="Seleccionar documento o vídeo")
@@ -315,7 +369,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             def mostrar_tareas(datos):
                 for tarea in datos:
                     if tarea["id"] in tareas_en_curso and tarea["estado"] in {"terminada", "error"}:
-                        mostrar(salida, "\nValidación · " + tarea["salida"] + "\n", anexar=True)
+                        mostrar(validaciones, tarea["salida"] + "\n", anexar=True)
                         tareas_en_curso.remove(tarea["id"])
             publicar(lambda: pedir("tareas"), mostrar_tareas)
         temporizador_pulso = app.after(2000, pulso)
@@ -345,14 +399,13 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         app.destroy()
 
     boton(barra_archivos, "Actualizar", actualizar_archivos)
-    boton(barra_editor, "Guardar · Ctrl+S", guardar)
+    boton(barra_editor, "Guardar · Ctrl+S", guardar, "Principal.TButton")
     boton(barra_editor, "Validar Python", revisar)
-    boton(barra_chat, "Enviar", enviar)
+    boton(barra_chat, "Enviar", enviar, "Principal.TButton")
     boton(barra_chat, "Adjuntar", adjuntar)
-    barra_conversaciones = ttk.Frame(chat)
-    barra_conversaciones.pack(fill=X)
     boton(barra_conversaciones, "Nuevo chat", gestionar_chat)
-    boton(barra_conversaciones, "Eliminar chat", lambda: gestionar_chat(borrar=True))
+    boton(barra_conversaciones, "Eliminar chat", lambda: gestionar_chat(borrar=True), "Eliminar.TButton")
+    selector.bind("<<ComboboxSelected>>", seleccionar_chat)
     lista.bind("<<ListboxSelect>>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())
 

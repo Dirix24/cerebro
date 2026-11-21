@@ -8,9 +8,10 @@ import os
 import re
 from pathlib import Path
 import secrets
-from shutil import which
+from shutil import get_terminal_size, which
 import subprocess
 import sys
+from textwrap import indent
 from threading import Event, Thread
 from time import monotonic, sleep
 from urllib.error import HTTPError
@@ -198,25 +199,46 @@ def terminal(sesion):
     lanzar_acompanante()
     renovador = Thread(target=renovar, daemon=True)
     renovador.start()
-    acento = "\033[38;5;81m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
-    fin = "\033[0m" if acento else ""
+    color = sys.stdout.isatty() and "NO_COLOR" not in os.environ and os.environ.get("TERM") != "dumb"
+
+    def formato(texto, estilo):
+        return f"\033[{estilo}m{texto}\033[0m" if color else texto
+
+    def mostrar_turno(autor, texto):
+        print()
+        print(formato(autor, "1;38;5;81" if autor == "Cerebro" else "1;38;5;117"))
+        print(indent(texto, "  "))
+
     def mostrar_historial(limite):
-        for turno in api(sesion, "historial")["turnos"][-limite:]:
-            print(f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}")
+        turnos = api(sesion, "historial")["turnos"][-limite:]
+        if not turnos:
+            print("Esta conversación todavía está vacía.")
+        for turno in turnos:
+            mostrar_turno("Tú" if turno["rol"] == "usuario" else "Cerebro", turno["texto"])
 
     accesos = {
         "/studio": lanzar_estudio,
         "/web": lambda: abrir(sesion, "chat"),
     }
-    fondo = "\033[48;5;233m" if acento else ""
-    print(f"{fondo}{acento}  C E R E B R O  {fin}  ·  {Path.cwd()}")
-    print("  /studio   /web   /historial   /nuevo-chat   /chats   /eliminar-chat   /ayuda   /salir")
+
+    def cabecera():
+        ancho = min(68, get_terminal_size((68, 24)).columns)
+        separador = formato("─" * ancho, "38;5;24")
+        print(separador)
+        print(formato("  C E R E B R O   /   TERMINAL  ", "1;38;5;81;48;5;233"))
+        print(formato("  " + str(Path.cwd()), "38;5;109"))
+        print(separador)
+        print("  Chats   /nuevo-chat  /chats  /historial  /eliminar-chat")
+        print("  Vistas  /studio  /web     Sesión  /ayuda  /salir")
+        print()
+
+    cabecera()
     if sys.stdin.isatty():
         with contextlib.suppress(ImportError):
             __import__("readline")
     try:
         while True:
-            entrada = input(f"{acento}cerebro ›{fin} ").strip()
+            entrada = input(formato("cerebro ›", "1;38;5;81") + " ").strip()
             comando = entrada.casefold()
             if comando in {"salir", "/salir", "adiós", "adios"}:
                 break
@@ -247,14 +269,15 @@ def terminal(sesion):
                         api(sesion, "historial", {"confirmar": True, "id": activa})
                         if sys.stdout.isatty():
                             print("\033[3J\033[2J\033[H", end="")
-                        print("Historial eliminado.")
+                        cabecera()
+                        print("Conversación eliminada.")
                     continue
                 if comando in accesos:
                     if not accesos[comando]():
                         print("No se pudo abrir la interfaz desde esta sesión.", file=sys.stderr)
                     continue
                 respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal", "cliente": identificador})
-                print(respuesta["respuesta"])
+                mostrar_turno("Cerebro", respuesta["respuesta"])
                 if respuesta.get("abrir") == "studio":
                     lanzar_estudio()
             except (OSError, RuntimeError) as exc:
@@ -492,7 +515,7 @@ def escritorio(sesion):
         Thread(target=tarea_de_voz, args=(operar, "conversación"), daemon=True).start()
 
     def actualizar():
-        nonlocal ultima_respuesta, chat_activo
+        nonlocal ultima_respuesta, chat_activo, temporizador
         while not eventos.empty():
             tipo, valor = eventos.get()
             if tipo == "vista":
@@ -535,11 +558,12 @@ def escritorio(sesion):
             elif tipo == "dispositivos":
                 cambiar_estado("Disponible")
                 elegir_audio(valor)
-        ventana.after(150, actualizar)
+        temporizador = ventana.after(150, actualizar)
 
     def cerrar():
         cancelar_audio.set()
         detenido.set()
+        ventana.after_cancel(temporizador)
         ventana.destroy()
 
     boton_enviar = boton(compositor, "Enviar", enviar, "#245496")
@@ -572,7 +596,7 @@ def escritorio(sesion):
     ventana.bind("<Escape>", lambda _evento: alternar_panel() if not compacto else None)
     ventana.protocol("WM_DELETE_WINDOW", cerrar)
     Thread(target=observar, daemon=True).start()
-    ventana.after(150, actualizar)
+    temporizador = ventana.after(150, actualizar)
     ventana.mainloop()
 
 
