@@ -17,7 +17,7 @@ Cerebro, creado por Danny Jesús, se mantiene como proyecto MIT. Esta revisión 
 
 ## Arquitectura objetivo
 
-Las cuatro interfaces serán clientes del mismo núcleo. Terminal priorizará el trabajo sobre proyectos y diffs. Web se centrará en investigar y conversar. Companion será un acceso breve a voz y acciones autorizadas. Studio ofrecerá una vista de proyectos, tareas, memoria y grafo. Cada interfaz puede abrirse por separado y compartir tareas y contexto por el API local.
+Las cuatro interfaces serán clientes del mismo núcleo. Terminal priorizará el trabajo sobre proyectos y diffs. Web se centrará en investigar y conversar. Companion será la esfera azul flotante desde la que se puede conversar, actuar y enseñar procedimientos por voz o por escrito. Usará el mismo modelo alumno, memoria, permisos y herramientas que Terminal, Chat web y Studio. Studio ofrecerá una vista de proyectos, tareas, memoria y grafo. Cada interfaz puede abrirse por separado y compartir tareas y contexto por el API local.
 
 En el núcleo, separar sesión e intención, políticas de permisos, herramientas tipadas, recuperación de memoria, inferencia propia y evaluación. Una solicitud debe identificar el ámbito del proyecto, las fuentes consultadas y si produjo cambios. Los clientes pueden mostrar los resultados sin volver a ejecutar la operación. El grafo y la telemetría se alimentan de los hechos registrados; la evaluación de modelos se ejecuta aparte.
 
@@ -29,10 +29,38 @@ Referencias iniciales: [permisos por operación en OpenCode](https://opencode.ai
 2. Sesiones y ámbitos de proyecto en el núcleo. Unificar permisos, identidad, memoria y referencias entre los clientes.
 3. Programación asistida. Primero exploración local, propuestas de cambios y comprobaciones autorizadas; después diffs más amplios y evaluación en repositorios de prueba.
 4. Chat web y seguimiento. Mantener evidencia, archivos y conversación al cambiar de interfaz.
-5. Companion. Probar voz local bajo activación explícita y controles de permiso para acciones de escritorio.
+5. Companion. Integrar voz local bajo activación explícita y el flujo de búsqueda, apertura y aprendizaje de tareas de escritorio descrito abajo.
 6. Studio y Universe. Hacer visibles cambios del grafo, fuentes, tareas y métricas observadas.
-7. Aprendizaje y herramientas. Separar corrección, memoria y entrenamiento. Evaluar ejemplos aprobados antes y después de cambiar pesos o incorporar una herramienta.
+7. Aprendizaje y herramientas. Registrar resultados comprobados, recuperar procedimientos entre interfaces y evaluar ejemplos aprobados antes y después de entrenar el modelo alumno o incorporar una herramienta.
 8. Medir arranque, RAM y tiempo de respuesta en equipos modestos. Documentar el despliegue y publicar evaluaciones reproducibles.
+
+## Acompañante inteligente y aprendizaje continuo
+
+Esta ampliación del plan maestro distribuye el trabajo entre comprensión del lenguaje, control del escritorio, núcleo compartido, voz, aprendizaje y validación.
+
+| Fase del plan maestro | Entrega prevista |
+| --- | --- |
+| 1 y 4 · Comprensión y voz | Pasar texto y dictado por el mismo intérprete de intenciones. Admitir errores de escritura y transcripción. Si hay dudas que cambian el archivo o la operación, pedir una aclaración breve. |
+| 2 · Control del escritorio | Buscar por nombre y formato dentro de carpetas autorizadas. Consultar las aplicaciones instaladas y sus asociaciones de archivo mediante adaptadores de cada sistema. Aprender qué funciones ofrecen a partir de metadatos, documentación y acciones comprobadas. Si hay varios documentos plausibles, mostrar opciones y esperar la elección. |
+| 3 y 8 · Núcleo compartido y Universe | Usar el núcleo para resolver la intención, comprobar permisos, ejecutar la herramienta y registrar el resultado. Compartir preferencias, referencias, procedimientos y evidencias con Terminal, Chat web, Studio y Companion. Mostrar en Universe los resultados y su procedencia con el nivel de detalle permitido. |
+| 5 y 7 · Aprendizaje por experiencia | Guardar la preferencia o el procedimiento cuando el usuario lo enseñe o confirme y registrar el resultado comprobado de las acciones autorizadas. Conservar condiciones, herramienta, evidencia y fecha. Permitir consultar, corregir y olvidar lo aprendido. Proponer automatizaciones a partir de tareas encomendadas que se repitan y pedir autorización antes de activarlas. |
+| 6 y 11 · Investigación y comprobación | Si falta un procedimiento y la red está habilitada, consultar documentación pública con una consulta libre de datos privados. Probar el procedimiento con herramientas autorizadas en modo de solo lectura o sobre datos de prueba. Guardar los pasos reutilizables cuando el resultado confirme que funcionaron. |
+| 12 y 13 · Portabilidad y validación | Verificar búsqueda, asociaciones, permisos y reapertura en Linux, Windows y macOS. Mantener las acciones sobre el ordenador limitadas al equipo y al ámbito autorizados. |
+
+### Recuerdos, procedimientos y entrenamiento
+
+Una referencia recordada ayuda a localizar un documento en el siguiente turno. El núcleo debe volver a verificar que existe y que la sesión conserva permiso para acceder al archivo. Si el documento se movió o la referencia es ambigua, ofrecer una nueva búsqueda en el ámbito autorizado. Una solicitud aceptada por el sistema operativo y una apertura confirmada son resultados distintos. Guardar y mostrar el grado de verificación disponible.
+
+Los procedimientos comprobados se recuperan de la memoria y se reutilizan desde cualquier interfaz. Los ejemplos aprobados que sirvan para generalizar pueden alimentar el entrenamiento local del modelo alumno. Evaluar el candidato sobre tareas reservadas antes de sustituir el modelo activo, conservar el checkpoint anterior y comprobar que el aprendizaje respeta los permisos. Los documentos personales y sus extractos requieren autorización específica para incorporarse al conjunto de entrenamiento.
+
+### Privacidad y criterios de aceptación
+
+La esfera flotante acepta tareas escritas o dictadas mediante activación explícita. El aprendizaje se limita a solicitudes del usuario, interacciones autorizadas y resultados comprobados. La captura de pantalla, el micrófono y la lectura de archivos se usan solo para la tarea autorizada, sin grabación continua ni vigilancia de fondo. Antes de modificar, borrar o compartir un archivo, mostrar el archivo y el efecto de la acción y solicitar confirmación. Para compartir, identificar también el destino.
+
+- Pedir por voz o por texto «abre mi documento de matemáticas», resolver una coincidencia única o preguntar cuando haya varias y abrir el archivo elegido con una aplicación compatible.
+- Reiniciar Cerebro y pedir «abre el documento de matemáticas otra vez» desde Terminal, Chat web o Studio. Comprobar que se usa la referencia aprendida y que revocar el permiso impide abrirla.
+- Consultar qué aprendió Cerebro y comprobar que puede mostrar la evidencia, corregir un recuerdo y explicar por qué no guardó como válido un procedimiento fallido.
+- Repetir una tarea autorizada y comprobar que Cerebro propone una automatización, espera aprobación y conserva los límites de la tarea original.
 
 ## Primera entrega: repositorios e investigación pública
 
