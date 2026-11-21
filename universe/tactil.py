@@ -1,15 +1,17 @@
 """Ventana local para autorizar y pausar el seguimiento de manos."""
 import importlib.util
 import os
+from math import cos, sin
 from pathlib import Path
-from queue import Empty, SimpleQueue
+from queue import Empty, Full, Queue, SimpleQueue
 from shutil import which
 import subprocess
 from threading import Event, Thread
 from time import monotonic
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
+from core.figuras_tactiles import Trazo, extruir, obj
 from core.gestos_tactiles import Gestos
 from universe.paleta import ACENTO, BORDE, FONDO, PANEL, SELECCION, TEXTO
 
@@ -54,7 +56,35 @@ def _control(eventos, ancho, alto):
         subprocess.run(["xdotool", *comandos], check=True, timeout=.8, capture_output=True)
 
 
-def _capturar(indice, modelo, detener, avisos, ancho, alto):
+_CONEXIONES = ((0, 1, 2, 3, 4), (0, 5, 6, 7, 8), (5, 9, 10, 11, 12),
+              (9, 13, 14, 15, 16), (13, 17, 18, 19, 20), (17, 0))
+
+
+def _publicar_imagen(cuadros, imagen):
+    try:
+        cuadros.put_nowait(imagen)
+    except Full:
+        try:
+            cuadros.get_nowait()
+        except Empty:
+            pass
+        cuadros.put_nowait(imagen)
+
+
+def _vista(cv2, rgb, manos):
+    imagen = cv2.resize(rgb, (400, 280))
+    for nombre, mano in manos.items():
+        color = (83, 185, 255) if nombre == "Right" else (140, 231, 165)
+        puntos = [(round(x * 399), round(y * 279)) for x, y in mano]
+        for cadena in _CONEXIONES:
+            for a, b in zip(cadena, cadena[1:]):
+                cv2.line(imagen, puntos[a], puntos[b], color, 2)
+        for punto in puntos:
+            cv2.circle(imagen, punto, 3, color, -1)
+    return b"P6\n400 280\n255\n" + imagen.tobytes()
+
+
+def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reiniciar, habilitar_puntero, cuadros):
     gestos = Gestos()
     camara = None
     try:
@@ -72,8 +102,10 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto):
                 raise RuntimeError("No pude abrir esa cámara.")
             camara.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             camara.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            avisos.put("Cámara activa · control de puntero habilitado")
+            avisos.put("Cámara activa")
             anterior = -1
+            trazo = None
+            ultimo_estado = None
             while not detener.is_set():
                 correcto, imagen = camara.read()
                 if not correcto:
@@ -87,9 +119,26 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto):
                 for clasificacion, puntos in zip(resultado.handedness, resultado.hand_landmarks):
                     if clasificacion:
                         manos[clasificacion[0].category_name] = [(p.x, p.y) for p in puntos]
-                if not detener.is_set():
-                    eventos = gestos.actualizar(manos.get("Right"), ahora, manos.get("Left"))
-                    _control(eventos, ancho, alto)
+                if detener.is_set():
+                    break
+                if dibujar.is_set():
+                    if trazo is None or reiniciar.is_set():
+                        reiniciar.clear()
+                        trazo = Trazo()
+                        ultimo_estado = None
+                    trazo.actualizar(manos.get("Right") or manos.get("Left"))
+                    estado_dibujo = (trazo.estado, tuple(trazo.puntos))
+                    if estado_dibujo != ultimo_estado:
+                        avisos.put(estado_dibujo)
+                        ultimo_estado = estado_dibujo
+                else:
+                    trazo = None
+                if ver.is_set():
+                    _publicar_imagen(cuadros, (_vista(cv2, rgb, manos), len(manos)))
+                if not habilitar_puntero.is_set():
+                    _control(gestos.pausar(), ancho, alto)
+                else:
+                    _control(gestos.actualizar(manos.get("Right"), ahora, manos.get("Left")), ancho, alto)
                 detener.wait(.045)
     except Exception as exc:
         avisos.put(str(exc))
@@ -122,6 +171,19 @@ def abrir():
     valor = tk.StringVar(value="Cámara apagada")
     eventos = SimpleQueue()
     detener = Event()
+    ver = Event()
+    dibujar = Event()
+    reiniciar = Event()
+    habilitar_puntero = Event()
+    habilitar_puntero.set()
+    cuadros = Queue(maxsize=1)
+    vista = tk.StringVar(value="")
+    indicaciones = tk.StringVar(value="Índice derecho: puntero · Pinza: clic o arrastre · Esc: pausa")
+    puntos = ()
+    figura = None
+    trazo_listo = False
+    angulo = .45
+    foto = None
     activo = False
     cerrando = False
     tk.Label(raiz, text="Modo táctil", bg=FONDO, fg=ACENTO, font=("TkDefaultFont", 15, "bold")).pack(padx=18, pady=10)
@@ -130,8 +192,111 @@ def abrir():
     if opciones:
         lista.current(0)
     tk.Label(raiz, textvariable=valor, bg=FONDO, fg=TEXTO, width=47, wraplength=370).pack(padx=10)
-    tk.Label(raiz, text="Índice derecho: puntero · Pinza breve: clic · Mantén: arrastra\nPinza izquierda: desplaza · Esc: pausa",
-             bg=FONDO, fg=TEXTO).pack(padx=14, pady=8)
+    tk.Label(raiz, textvariable=indicaciones, bg=FONDO, fg=TEXTO, wraplength=400).pack(padx=14, pady=8)
+    visual = tk.Frame(raiz, bg=FONDO)
+    visual.pack(padx=12, pady=(0, 6))
+    vista_camara = tk.Frame(visual, bg=FONDO)
+    pantalla = tk.Label(vista_camara, bg=PANEL, fg=TEXTO, text="Activa la cámara para ver la imagen.")
+    pantalla.pack(fill="both", expand=True)
+    tk.Label(vista_camara, textvariable=vista, bg=FONDO, fg=ACENTO).pack(pady=4)
+    lienzo = tk.Canvas(visual, width=400, height=280, bg=PANEL, highlightthickness=1, highlightbackground=BORDE)
+
+    def pintar():
+        lienzo.delete("all")
+        if figura:
+            vertices, caras = figura
+            coseno, seno = cos(angulo), sin(angulo)
+            pantalla_3d = []
+            for x, y, z in vertices:
+                horizontal = x * coseno + z * seno
+                fondo = -x * seno + z * coseno
+                pantalla_3d.append((200 + 155 * horizontal, 140 - 170 * (y * .87 - fondo * .5)))
+            aristas = {tuple(sorted((a, b))) for cara in caras for a, b in zip(cara, cara[1:] + cara[:1])}
+            for a, b in sorted(aristas):
+                lienzo.create_line(*pantalla_3d[a], *pantalla_3d[b], fill=ACENTO, width=2)
+        elif len(puntos) > 1:
+            coordenadas = [coordenada for x, y in puntos for coordenada in (x * 400, y * 280)]
+            lienzo.create_line(*coordenadas, fill=ACENTO, width=2)
+
+    def alternar_vista():
+        nonlocal foto
+        if ver.is_set():
+            ver.clear()
+            foto = None
+            pantalla.configure(image="", text="Vista de la cámara oculta.")
+            vista_camara.pack_forget()
+            boton_ver.configure(text="Ver cámara")
+            if not dibujar.is_set():
+                indicaciones.set("Vista oculta. Pulsa Usar puntero para volver al escritorio.")
+        else:
+            habilitar_puntero.clear()
+            ver.set()
+            vista_camara.pack(side="left", padx=(0, 6))
+            boton_ver.configure(text="Ocultar cámara")
+            if not dibujar.is_set():
+                indicaciones.set("Vista de cámara. El puntero del escritorio está en pausa.")
+
+    def iniciar_trazo():
+        nonlocal puntos, figura, trazo_listo
+        puntos, figura, trazo_listo = (), None, False
+        habilitar_puntero.clear()
+        dibujar.set()
+        reiniciar.set()
+        if not ver.is_set():
+            alternar_vista()
+        lienzo.pack(side="left", padx=4)
+        convertir.configure(state="disabled")
+        exportar.configure(state="disabled")
+        indicaciones.set("Junta pulgar e índice, dibuja un contorno continuo y separa los dedos para terminar.")
+        pintar()
+
+    def modelo_3d():
+        nonlocal figura
+        if not trazo_listo:
+            return
+        try:
+            figura = extruir(puntos)
+        except ValueError as exc:
+            indicaciones.set(str(exc))
+            return
+        indicaciones.set("Figura extruida. Arrastra sobre el dibujo para girarla o guarda un OBJ.")
+        exportar.configure(state="normal")
+        pintar()
+
+    def guardar_obj():
+        if not figura:
+            return
+        destino = filedialog.asksaveasfilename(parent=raiz, title="Exportar figura para Blender",
+                                               defaultextension=".obj", filetypes=[("Wavefront OBJ", "*.obj")])
+        if not destino:
+            return
+        try:
+            with Path(destino).open("x", encoding="utf-8") as archivo:
+                archivo.write(obj(*figura))
+        except OSError as exc:
+            messagebox.showerror("Exportar OBJ", str(exc), parent=raiz)
+        else:
+            indicaciones.set("OBJ guardado en " + Path(destino).name + ".")
+
+    def girar(evento):
+        nonlocal angulo
+        if figura:
+            angulo = (evento.x - 200) / 70
+            pintar()
+
+    def puntero():
+        nonlocal foto
+        if ver.is_set():
+            alternar_vista()
+        dibujar.clear()
+        habilitar_puntero.set()
+        foto = None
+        lienzo.pack_forget()
+        indicaciones.set("Índice derecho: puntero · Pinza: clic o arrastre · Esc: pausa")
+
+    lienzo.bind("<B1-Motion>", girar)
+    controles = tk.Frame(raiz, bg=FONDO)
+    controles.pack(padx=12, pady=(0, 12))
 
     def pausar(_evento=None):
         if activo:
@@ -156,7 +321,8 @@ def abrir():
         lista.configure(state="disabled")
         valor.set("Iniciando cámara…")
         Thread(target=_capturar, args=(opciones[indice][0], modelo, detener, eventos,
-                                      raiz.winfo_screenwidth(), raiz.winfo_screenheight()), daemon=True).start()
+                                      raiz.winfo_screenwidth(), raiz.winfo_screenheight(),
+                                      ver, dibujar, reiniciar, habilitar_puntero, cuadros), daemon=True).start()
 
     def cerrar():
         nonlocal cerrando
@@ -167,7 +333,7 @@ def abrir():
             raiz.destroy()
 
     def actualizar():
-        nonlocal activo
+        nonlocal activo, foto, puntos, trazo_listo
         while True:
             try:
                 mensaje = eventos.get_nowait()
@@ -177,18 +343,46 @@ def abrir():
                 activo = False
                 boton.configure(state="normal" if opciones else "disabled")
                 lista.configure(state="readonly")
-                if valor.get() in {"Pausando…", "Cámara activa · control de puntero habilitado"}:
+                if valor.get() in {"Pausando…", "Cámara activa"}:
                     valor.set("Cámara apagada")
+                foto = None
+                pantalla.configure(image="", text="La cámara está apagada.")
+                vista.set("")
                 if cerrando:
                     raiz.destroy()
                     return
-            else:
+            elif isinstance(mensaje, tuple) and dibujar.is_set():
+                estado, puntos = mensaje
+                if estado in {"terminado", "interrumpido"}:
+                    trazo_listo = estado == "terminado"
+                    convertir.configure(state="normal" if trazo_listo else "disabled")
+                    indicaciones.set("Trazo listo. Pulsa Convertir a 3D." if trazo_listo
+                                     else "Se perdió la mano. Pulsa Dibujar figura para intentarlo otra vez.")
+                pintar()
+            elif isinstance(mensaje, str):
                 valor.set(mensaje)
-        raiz.after(100, actualizar)
+        try:
+            imagen, manos = cuadros.get_nowait()
+        except Empty:
+            pass
+        else:
+            if activo and not detener.is_set() and ver.is_set():
+                foto = tk.PhotoImage(data=imagen, format="ppm")
+                pantalla.configure(image=foto, text="")
+                vista.set(f"Manos detectadas: {manos} · Azul: derecha · Verde: izquierda")
+        raiz.after(60, actualizar)
 
-    boton = ttk.Button(raiz, text="Activar cámara", command=iniciar, state="normal" if opciones else "disabled")
-    boton.pack(padx=14, pady=(0, 4))
-    ttk.Button(raiz, text="Pausar", command=pausar).pack(padx=14, pady=(0, 12))
+    boton = ttk.Button(controles, text="Activar cámara", command=iniciar, state="normal" if opciones else "disabled")
+    boton.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
+    ttk.Button(controles, text="Pausar", command=pausar).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
+    boton_ver = ttk.Button(controles, text="Ver cámara", command=alternar_vista)
+    boton_ver.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
+    ttk.Button(controles, text="Dibujar figura", command=iniciar_trazo).grid(row=1, column=0, padx=2, pady=2, sticky="ew")
+    convertir = ttk.Button(controles, text="Convertir a 3D", command=modelo_3d, state="disabled")
+    convertir.grid(row=1, column=1, padx=2, pady=2, sticky="ew")
+    exportar = ttk.Button(controles, text="Guardar OBJ", command=guardar_obj, state="disabled")
+    exportar.grid(row=1, column=2, padx=2, pady=2, sticky="ew")
+    ttk.Button(controles, text="Usar puntero", command=puntero).grid(row=2, column=0, columnspan=3, pady=(4, 0))
     if not opciones:
         valor.set("No se detectó una cámara compatible.")
     raiz.bind("<Escape>", pausar)

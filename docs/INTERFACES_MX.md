@@ -36,7 +36,7 @@ Al adjuntar desde Chat o Studio, Cerebro analiza el archivo automáticamente. De
 
 ### Modo táctil experimental y revisión de aprendizaje
 
-«Cerebro, activa el modo táctil» abre un panel local. Elige una cámara, pulsa **Activar cámara** y confirma. El panel indica cuándo hay captura y permite detenerla con **Pausar** o Esc mientras está enfocado. La cámara se libera al detener el seguimiento. Las imágenes se procesan en memoria.
+«Cerebro, activa el modo táctil» abre un panel local. Elige una cámara, pulsa **Activar cámara** y confirma. El panel indica cuándo hay captura y permite detenerla con **Pausar** o Esc mientras está enfocado. La cámara se libera al detener el seguimiento. Las imágenes se procesan en memoria. **Ver cámara** muestra los puntos detectados y pausa el control del puntero. Con **Dibujar figura**, mantén la pinza mientras trazas un contorno y separa los dedos para terminar. **Convertir a 3D** da grosor al contorno y **Guardar OBJ** exporta la malla. **Usar puntero** vuelve al control del escritorio.
 
 El adaptador experimental requiere Linux X11, `xdotool`, OpenCV, MediaPipe Tasks y un archivo local `hand_landmarker.task` indicado por `CEREBRO_MODELO_MANOS`. Comprueba la compatibilidad de estas dependencias con tu Python antes de instalarlas. La primera versión usa una zona central fija para mover el puntero, pinza breve para pulsar, pinza mantenida para arrastrar y una segunda mano para desplazar. La comprobación con una cámara y manos reales queda pendiente.
 
