@@ -68,7 +68,7 @@ El núcleo recibe la orden de cualquiera de las cuatro interfaces y prepara paso
 
 - Inventario de aplicaciones y compatibilidad MIME con GIO. Diagnóstico bajo demanda de aplicaciones, carpetas, extracción PDF y acceso a Internet.
 - Búsqueda de PDF, fotos, vídeos y proyectos Blender por nombre, fecha de modificación y ubicación en las carpetas ya autorizadas. Las coincidencias ambiguas requieren elegir. La apertura se solicita a la aplicación asociada.
-- Búsqueda de YouTube en el navegador predeterminado. Apertura de enlaces HTTP y HTTPS. El análisis de páginas usa el extracto de artículos públicos de Wikipedia en español. Los enlaces recientes se guardan solo en el contexto en memoria de cada cliente.
+- Búsqueda de YouTube en el navegador predeterminado. Apertura de enlaces HTTP y HTTPS. El análisis de páginas usa el extracto de artículos públicos de Wikipedia en español. Los enlaces recientes se guardan en el contexto en memoria de cada cliente. El resultado visible se sincroniza en el chat activo entre las cuatro interfaces durante la sesión, con confirmaciones vinculadas a la interfaz de origen.
 - Plan PDF comprobable: buscar el más reciente, solicitar su apertura y extraer un resumen. La autorización final permite escribir un archivo nuevo en el espacio de Studio. Cerebro vuelve a leerlo para comprobar el contenido.
 
 Quedan pendientes el catálogo de paquetes y accesibilidad, la búsqueda por contenido, los resultados de YouTube dentro de Cerebro, el control de reproducción y la enseñanza supervisada por demostración. Los procedimientos futuros deberán registrar autorización, acciones, resultado observado y una forma de detenerse ante cambios de versión o interfaz.

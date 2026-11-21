@@ -126,6 +126,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     resultado["respuesta"] = "Abrí YouTube." if destino == "youtube" else "Abrí el navegador."
                 else:
                     resultado["respuesta"] = "No pude abrir el navegador predeterminado."
+            if resultado.pop("compartir_temporal", False) and nucleo.agente.tiene_permisos("READ"):
+                nucleo.conversaciones.registrar_temporal(datos["mensaje"].strip(), resultado["respuesta"])
             if "conversacion" in datos:
                 resultado["revision"] = nucleo.conversaciones.version_activa()["revision"]
                 resultado["revision_anterior"] = anterior["revision"]

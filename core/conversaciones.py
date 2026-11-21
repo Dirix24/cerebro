@@ -1,5 +1,6 @@
 """Historiales separados con selección persistente y compatibilidad con JSONL anterior."""
-from datetime import datetime
+from collections import OrderedDict, deque
+from datetime import datetime, timezone
 from pathlib import Path
 import re
 from tempfile import NamedTemporaryFile
@@ -15,6 +16,8 @@ class Conversaciones:
         self.datos = Path(datos)
         self.carpeta = self.datos / "conversaciones"
         self.selector = self.carpeta / "activa"
+        self.temporales = OrderedDict()
+        self.revisiones_temporales = {}
         if self.carpeta.is_symlink() or self.selector.is_symlink():
             raise ValueError("El historial de conversaciones requiere un directorio local.")
 
@@ -37,7 +40,7 @@ class Conversaciones:
 
     def seleccionar(self, identificador):
         ruta = self.ruta(identificador)
-        if ruta.is_symlink() or not ruta.is_file():
+        if ruta.is_symlink() or (not ruta.is_file() and identificador not in self.temporales):
             raise ValueError("La conversación ya no está disponible.")
         self.carpeta.mkdir(mode=0o700, parents=True, exist_ok=True)
         with NamedTemporaryFile(dir=self.carpeta, mode="w", encoding="ascii", delete=False) as archivo:
@@ -54,6 +57,28 @@ class Conversaciones:
         self.ruta(identificador).touch(mode=0o600, exist_ok=False)
         self.seleccionar(identificador)
 
+    def registrar_temporal(self, pregunta, respuesta):
+        identificador = self.activa()
+        turnos = self.temporales.setdefault(identificador, deque(maxlen=60))
+        fecha = datetime.now(timezone.utc).isoformat()
+        turnos.extend({"fecha": fecha, "rol": rol, "texto": texto[:4000], "temporal": True}
+                     for rol, texto in (("usuario", pregunta), ("cerebro", respuesta)))
+        self.revisiones_temporales[identificador] = uuid4().hex
+        self.temporales.move_to_end(identificador)
+        if len(self.temporales) > 32:
+            anterior, _ = self.temporales.popitem(last=False)
+            self.revisiones_temporales.pop(anterior, None)
+
+    def quitar_temporal(self, identificador):
+        self.temporales.pop(identificador, None)
+        self.revisiones_temporales.pop(identificador, None)
+
+    def turnos(self, identificador=None):
+        activa = self.activa() if identificador is None else identificador
+        guardados = consultar(self.ruta(activa), limite=60)
+        temporales = self.temporales.get(activa, ())
+        return sorted([*guardados, *temporales], key=lambda turno: str(turno.get("fecha", "")))[-60:]
+
     def version_activa(self):
         activa = self.activa()
         ruta = self.ruta(activa)
@@ -64,6 +89,9 @@ class Conversaciones:
                 version = f"{datos.st_mtime_ns}:{datos.st_size}"
             except FileNotFoundError:
                 pass
+        temporal = self.revisiones_temporales.get(activa)
+        if temporal:
+            version += ":" + temporal
         return {"activa": activa, "revision": version}
 
     def estado(self):
@@ -73,6 +101,7 @@ class Conversaciones:
         archivos.sort(key=lambda ruta: ruta.stat().st_mtime, reverse=True)
         chats = [{"id": ruta.stem, "titulo": datetime.fromtimestamp(ruta.stat().st_ctime).strftime("Conversación · %d/%m %H:%M:%S")}
                  for ruta in archivos]
-        if self.ruta("original").is_file() and not self.ruta("original").is_symlink():
+        original = self.ruta("original")
+        if not original.is_symlink() and (original.is_file() or "original" in self.temporales):
             chats.append({"id": "original", "titulo": "Conversación anterior"})
-        return {**version, "chats": chats, "turnos": consultar(self.ruta(version["activa"]), limite=60)}
+        return {**version, "chats": chats, "turnos": self.turnos(version["activa"])}

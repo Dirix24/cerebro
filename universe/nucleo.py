@@ -209,8 +209,7 @@ class Nucleo:
 
     def historial(self):
         self.exigir_permisos("READ")
-        from core.historial_local import consultar
-        return {"turnos": consultar(self.ruta_historial, limite=60)}
+        return {"turnos": self.conversaciones.turnos()}
 
     def estado_conversaciones(self):
         self.exigir_permisos("READ")
@@ -243,6 +242,7 @@ class Nucleo:
         ruta = self.ruta_historial
         self.conversaciones.nueva()
         ruta.unlink(missing_ok=True)
+        self.conversaciones.quitar_temporal(activa)
         self._limpiar_contexto()
         return {"turnos": []}
 
@@ -255,13 +255,15 @@ class Nucleo:
             raise ValueError("Selecciona al menos una conversación.")
         ids = list(dict.fromkeys(identificadores))
         rutas = [self.conversaciones.ruta(valor) for valor in ids]
-        if any(ruta.is_symlink() or not ruta.is_file() for ruta in rutas):
+        if any(ruta.is_symlink() or (not ruta.is_file() and nombre not in self.conversaciones.temporales)
+               for nombre, ruta in zip(ids, rutas)):
             raise ValueError("La lista cambió. Actualiza la selección e inténtalo otra vez.")
         if self.conversaciones.activa() in ids:
             self.conversaciones.nueva()
             self._limpiar_contexto()
-        for ruta in rutas:
-            ruta.unlink()
+        for nombre, ruta in zip(ids, rutas):
+            ruta.unlink(missing_ok=True)
+            self.conversaciones.quitar_temporal(nombre)
         return {**self.conversaciones.estado(), "eliminadas": len(rutas)}
 
     def _limpiar_contexto(self):
@@ -339,17 +341,18 @@ class Nucleo:
         if comando == "":
             plan = self.escritorio.planificar(pregunta, cliente)
             if plan is not None:
-                return plan
+                return {**plan, "compartir_temporal": True}
             resultado_escritorio = self.escritorio.consultar(pregunta, cliente)
             if resultado_escritorio is not None:
-                return {"respuesta": resultado_escritorio}
+                return {"respuesta": resultado_escritorio, "compartir_temporal": True}
         from universe.consultas import destino_desktop
         destino = destino_desktop(pregunta)
         if destino:
             self.exigir_permisos("READ")
             if destino == "youtube" and not self.internet:
                 raise PermissionError("El permiso de internet de esta sesión está desactivado.")
-            return {"respuesta": "La apertura requiere el lanzador local de Cerebro.", "abrir": destino}
+            return {"respuesta": "La apertura requiere el lanzador local de Cerebro.", "abrir": destino,
+                    **({"compartir_temporal": True} if destino == "youtube" else {})}
         inicio = perf_counter()
         if self.agente.tiene_permisos("READ"):
             self.memoria.cargar_memoria()
@@ -364,6 +367,9 @@ class Nucleo:
         else:
             from universe.consultas import alternativa_publica, consulta_directa
             respuesta = consulta_directa(self, pregunta, modo=modo)
+            if respuesta is not None and re.match(
+                    r"(?:busca|encuentra)(?:me)?\s+(?:(?:un|el|mi)\s+)?documento\b", pregunta, re.I):
+                return {"respuesta": respuesta, "compartir_temporal": True}
             if respuesta is None:
                 respuesta, _ = self.chat.procesar(pregunta)
                 respuesta = alternativa_publica(self, pregunta, respuesta)

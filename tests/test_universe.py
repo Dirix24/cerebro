@@ -220,3 +220,26 @@ def test_informe_universe_y_modo_tactil_sin_captura(servidor):
     tactil = api("/api/chat", {"mensaje": "Cerebro, activa el modo táctil"})
     assert tactil["abrir"] == "tactil"
     assert "lanzador local" in tactil["respuesta"]
+
+
+def test_herramientas_se_comparten_sin_guardar_datos_privados(servidor):
+    api, _, nucleo = servidor
+    nucleo.internet = True
+    previa = api("/api/conversacion-activa")
+    mensaje = "Abre YouTube y busca un tutorial de Blender"
+    resultado = api("/api/chat", {"mensaje": mensaje, "modo": "chat", "conversacion": previa["activa"]})
+    assert "compartir_temporal" not in resultado
+    assert resultado["revision"] != previa["revision"]
+    assert resultado["revision"] == api("/api/conversacion-activa")["revision"]
+    turnos = api("/api/historial")["turnos"]
+    assert [turno["texto"] for turno in turnos] == [mensaje, resultado["respuesta"]]
+    assert all(turno["temporal"] for turno in turnos)
+    assert api("/api/conversaciones")["turnos"] == turnos
+    assert not nucleo.ruta_historial.exists()
+
+    api("/api/conversaciones", {"accion": "nueva"})
+    assert api("/api/historial")["turnos"] == []
+    restaurada = api("/api/conversaciones", {"accion": "seleccionar", "id": previa["activa"]})
+    assert restaurada["turnos"] == turnos
+    api("/api/borrar-conversaciones", {"ids": [previa["activa"]], "confirmar": True})
+    assert api("/api/historial")["turnos"] == []

@@ -68,6 +68,8 @@ Prueba «Abre YouTube y busca un tutorial de Blender» para abrir los resultados
 
 Para generar un archivo, prueba «Busca mis PDF de física, abre el más reciente, hazme un resumen y guárdalo en una carpeta». Tras revisar el resultado, escribe **Confirmar guardar resumen** en la misma interfaz. El archivo se guarda en `resumenes/` dentro del espacio de Studio.
 
+Las búsquedas de escritorio y enlaces aparecen también en las otras interfaces conectadas al chat activo. Estas interacciones se mantienen en memoria del núcleo durante la sesión para evitar escribir nombres de archivos, URLs o extractos privados en el historial permanente. Las selecciones y confirmaciones se responden desde la interfaz que solicitó la acción.
+
 ### Abrir y recordar documentos
 
 1. Escribe o dicta «Cerebro, abre mi documento de matemáticas». Cerebro busca por nombre en Documentos y Descargas y pide elegir por número si hay varias coincidencias.
