@@ -29,3 +29,5 @@ data/actividad_neuronal.jsonl
 # Historial privado de las interfaces
 /data/historial_cerebro.jsonl
 /data/conversaciones/
+
+/data/terminal/

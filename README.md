@@ -1,6 +1,6 @@
 # Cerebro
 
-Cerebro es un asistente local de software libre para MX Linux, publicado bajo la licencia MIT. Cuatro interfaces comparten un núcleo, conversaciones, recuerdos y herramientas. El proyecto combina modelos propios en NumPy y PyTorch con herramientas verificables para documentos, proyectos Python, escritorio y consulta de fuentes públicas.
+Cerebro es un asistente local de software libre para MX Linux, publicado bajo la licencia MIT. Cuatro interfaces comparten el servicio local, recuerdos y herramientas. Studio, Chat web y la esfera comparten el chat activo. Terminal puede incorporarse cuando tú lo pidas. El proyecto combina modelos propios en NumPy y PyTorch con herramientas verificables para documentos, proyectos Python, escritorio y consulta de fuentes públicas.
 
 **Estado experimental.** El flujo habitual funciona en MX Linux con XFCE/X11. La comprensión general, el seguimiento de manos con diferentes cámaras, Wayland y el agente de programación de propósito general siguen en desarrollo.
 
@@ -19,7 +19,7 @@ Desde la carpeta del repositorio:
 | Acompañante | `cerebro escritorio` | Esfera flotante, texto, dictado y lectura opcionales. |
 | Studio | `cerebro studio` | Explorador, editor, revisión de cambios, pruebas y Universe. |
 
-Las interfaces conservan el diseño negro con acentos azules. El núcleo de escritorio escucha únicamente en loopback y requiere una clave de sesión. **Nuevo chat** conserva los chats anteriores. Desde **Chats** puedes recuperarlos o seleccionar cuáles eliminar. En Terminal están `/nuevo-chat`, `/chats` y `/historial`. Guarda un dato con `/recordar proyecto = Atlas` y recupéralo con `/recuerdo proyecto` desde otra interfaz.
+Las interfaces conservan el diseño negro con acentos azules. El núcleo de escritorio escucha únicamente en loopback y requiere una clave de sesión. **Nuevo chat** conserva los chats anteriores. Desde **Chats** puedes recuperarlos o seleccionar cuáles eliminar. Terminal abre un chat separado para programación. Escribe **sincronízate** o `/sincronizar` para ver y usar el chat activo de Studio, la web y la esfera. Usa `/separar` para volver al chat de Terminal. El cambio afecta a esa sesión y no copia mensajes anteriores. Siguen disponibles `/nuevo-chat`, `/chats` y `/historial`. Con **guarda esto en Studio** o `/guardar-en-studio` puedes guardar la última respuesta como TXT en `notas/`. Guarda un dato con `/recordar proyecto = Atlas` y recupéralo con `/recuerdo proyecto` desde otra interfaz.
 
 Para arrancar el asistente de consola anterior o preparar los motores opcionales, ejecuta `python3 cerebro.py --help`. Consulta [las interfaces y sus dependencias](docs/INTERFACES_MX.md) y [la configuración de voz local](docs/VOZ_LOCAL.md).
 

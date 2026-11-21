@@ -206,6 +206,8 @@ def lanzar_terminal():
 def terminal(sesion):
     identificador = secrets.token_hex(12)
     cerrar = Event()
+    compartido = False
+    ultima_respuesta = ""
 
     def presencia(visible, enfocar=False):
         return api(sesion, "interfaz", {"id": identificador, "modo": "terminal",
@@ -230,8 +232,12 @@ def terminal(sesion):
         print(formato(autor, "1;38;5;81" if autor == "Cerebro" else "1;38;5;117"))
         print(indent(texto, "  "))
 
+    def pedir_chat(ruta, datos=None):
+        sufijo = "" if compartido else "?ambito=terminal"
+        return api(sesion, ruta + sufijo, datos)
+
     def mostrar_historial(limite):
-        turnos = api(sesion, "historial")["turnos"][-limite:]
+        turnos = pedir_chat("historial")["turnos"][-limite:]
         if not turnos:
             print("Esta conversación todavía está vacía.")
         for turno in turnos:
@@ -261,6 +267,7 @@ def terminal(sesion):
             print(estado_visible.replace("Núcleo conectado", formato("Núcleo conectado", "1;38;5;81"), 1))
         print(formato("─" * ancho, "38;5;24"))
         for accesos_visibles in ("Chats: /nuevo-chat  /chats  /historial  /eliminar-chat",
+                                 "Compartir: /sincronizar  /separar  /guardar-en-studio",
                                  "Vistas: /studio  /web    Sesión: /ayuda  /salir"):
             print(fill(accesos_visibles, width=ancho, subsequent_indent="  ",
                        break_long_words=False, break_on_hyphens=False))
@@ -272,7 +279,8 @@ def terminal(sesion):
             __import__("readline")
     try:
         while True:
-            entrada = input(formato("cerebro ›", "1;38;5;81") + " ").strip()
+            prompt = "cerebro [compartido] ›" if compartido else "cerebro [terminal] ›"
+            entrada = input(formato(prompt, "1;38;5;81") + " ").strip()
             comando = entrada.casefold()
             if comando in {"salir", "/salir", "adiós", "adios"}:
                 break
@@ -280,15 +288,39 @@ def terminal(sesion):
                 continue
             try:
                 presencia(True, enfocar=True)
+                orden = comando.rstrip(" .!¡")
+                if orden in {"sincronízate", "sincronizate", "sinconisate", "sincroniza", "/sincronizar"}:
+                    compartido = True
+                    ultima_respuesta = ""
+                    print("Chat compartido con Studio, Chat web y la esfera.")
+                    mostrar_historial(12)
+                    continue
+                if orden in {"sepárate", "separate", "/separar"}:
+                    compartido = False
+                    ultima_respuesta = ""
+                    print("Chat separado de Terminal.")
+                    mostrar_historial(12)
+                    continue
+                if orden in {"guarda esto en studio", "/guardar-en-studio"}:
+                    if not ultima_respuesta:
+                        print("Primero pide una respuesta que quieras guardar en Studio.")
+                        continue
+                    nombre = "notas/terminal-" + secrets.token_hex(8) + ".txt"
+                    api(sesion, "archivo", {"nombre": nombre, "texto": ultima_respuesta})
+                    if api(sesion, "archivo?nombre=" + nombre)["texto"] != ultima_respuesta:
+                        raise RuntimeError("No pude verificar el contenido guardado en Studio.")
+                    print(f"Guardado en Studio: {nombre}")
+                    continue
                 if comando == "/historial":
                     mostrar_historial(12)
                     continue
                 if comando == "/nuevo-chat":
-                    api(sesion, "conversaciones", {"accion": "nueva"})
+                    pedir_chat("conversaciones", {"accion": "nueva"})
+                    ultima_respuesta = ""
                     print("Nueva conversación.")
                     continue
                 if comando == "/chats":
-                    chats = api(sesion, "conversaciones")["chats"]
+                    chats = pedir_chat("conversaciones")["chats"]
                     for indice, chat in enumerate(chats, 1):
                         print(f"  {indice}. {chat['titulo']}")
                     if chats:
@@ -307,17 +339,20 @@ def terminal(sesion):
                                 continue
                             ids = [chats[indice]["id"] for indice in indices]
                             if input(f"¿Eliminar {len(ids)} conversaciones? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
-                                datos = api(sesion, "borrar-conversaciones", {"confirmar": True, "ids": ids})
+                                datos = pedir_chat("borrar-conversaciones", {"confirmar": True, "ids": ids})
+                                ultima_respuesta = ""
                                 print(f"Conversaciones eliminadas: {datos['eliminadas']}.")
                             continue
                         if opcion.isascii() and opcion.isdigit() and len(opcion) <= 8 and 1 <= int(opcion) <= len(chats):
-                            api(sesion, "conversaciones", {"accion": "seleccionar", "id": chats[int(opcion) - 1]["id"]})
+                            pedir_chat("conversaciones", {"accion": "seleccionar", "id": chats[int(opcion) - 1]["id"]})
+                            ultima_respuesta = ""
                             mostrar_historial(12)
                     continue
                 if comando == "/eliminar-chat":
-                    activa = api(sesion, "conversaciones")["activa"]
+                    activa = pedir_chat("conversaciones")["activa"]
                     if input("¿Eliminar la conversación actual? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
-                        api(sesion, "historial", {"confirmar": True, "id": activa})
+                        pedir_chat("historial", {"confirmar": True, "id": activa})
+                        ultima_respuesta = ""
                         if sys.stdout.isatty():
                             print("\033[3J\033[2J\033[H", end="")
                         print("Conversación eliminada.")
@@ -326,8 +361,9 @@ def terminal(sesion):
                     if not accesos[comando]():
                         print("No se pudo abrir la interfaz desde esta sesión.", file=sys.stderr)
                     continue
-                respuesta = api(sesion, "chat", {"mensaje": entrada, "modo": "terminal", "cliente": identificador})
-                mostrar_turno("Cerebro", respuesta["respuesta"])
+                respuesta = pedir_chat("chat", {"mensaje": entrada, "modo": "terminal", "cliente": identificador})
+                ultima_respuesta = respuesta["respuesta"]
+                mostrar_turno("Cerebro", ultima_respuesta)
                 if respuesta.get("abrir") == "studio":
                     lanzar_estudio()
             except (OSError, RuntimeError) as exc:

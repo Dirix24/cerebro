@@ -20,6 +20,8 @@ ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/htm
 
 def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
                    abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None, abrir_tactil=None, abrir_url=None):
+    terminal = None
+
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
             super().setup()
@@ -98,7 +100,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             except (OSError, sqlite3.Error):
                 self.enviar(500, {"error": "No se pudo completar la operación en el almacenamiento local."})
 
-        def responder_chat(self, datos):
+        def responder_chat(self, datos, nucleo):
             anterior = nucleo.conversaciones.version_activa()
             if "conversacion" in datos and datos["conversacion"] != anterior["activa"]:
                 raise ValueError("La conversación activa cambió. Actualiza antes de enviar el mensaje.")
@@ -172,17 +174,33 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                         return {"serie": listar_puertos()}
                     raise KeyError(ruta)
             with nucleo.cerrojo:
+                nonlocal terminal
+                motor = nucleo
+                if consulta.get("ambito") == ["terminal"]:
+                    if ruta not in {"/api/chat", "/api/historial", "/api/conversaciones",
+                                    "/api/borrar-conversaciones", "/api/conversacion-activa"}:
+                        raise KeyError(ruta)
+                    if ruta == "/api/chat" and datos.get("modo") != "terminal":
+                        raise PermissionError("El chat privado requiere el modo Terminal.")
+                    if terminal is None:
+                        terminal = nucleo.nucleo_terminal()
+                    # Consulta los permisos vivos y las opciones del núcleo que abrió la sesión.
+                    terminal.solo_lectura = nucleo.solo_lectura
+                    terminal.internet = nucleo.internet
+                    terminal.investigar_auto = nucleo.investigar_auto
+                    terminal.documentos_usuario = nucleo.documentos_usuario
+                    motor = terminal
                 if escribir and ruta == "/api/proyecto":
                     if abrir_estudio is None:
                         raise PermissionError("Los proyectos requieren el lanzador de escritorio local.")
                     return nucleo.operar_proyecto(datos)
                 if escribir:
                     acciones = {
-                        "/api/chat": lambda: self.responder_chat(datos),
-                        "/api/historial": lambda: nucleo.borrar_historial(datos.get("confirmar"), datos.get("id")),
-                        "/api/borrar-conversaciones": lambda: nucleo.borrar_conversaciones(
+                        "/api/chat": lambda: self.responder_chat(datos, motor),
+                        "/api/historial": lambda: motor.borrar_historial(datos.get("confirmar"), datos.get("id")),
+                        "/api/borrar-conversaciones": lambda: motor.borrar_conversaciones(
                             datos.get("confirmar"), datos.get("ids")),
-                        "/api/conversaciones": lambda: nucleo.cambiar_conversacion(datos.get("accion"), datos.get("id")),
+                        "/api/conversaciones": lambda: motor.cambiar_conversacion(datos.get("accion"), datos.get("id")),
                         "/api/adjunto": lambda: nucleo.adjuntar(datos.get("nombre"), datos.get("contenido")),
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),
                         "/api/tarea": lambda: nucleo.crear_tarea(datos.get("accion"), datos.get("nombre")),
@@ -192,9 +210,9 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     }
                 else:
                     acciones = {
-                        "/api/estado": nucleo.estado, "/api/historial": nucleo.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
-                        "/api/conversaciones": nucleo.estado_conversaciones,
-                        "/api/conversacion-activa": nucleo.conversaciones.version_activa,
+                        "/api/estado": nucleo.estado, "/api/historial": motor.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
+                        "/api/conversaciones": motor.estado_conversaciones,
+                        "/api/conversacion-activa": motor.conversaciones.version_activa,
                         "/api/analizar-aprendizaje": nucleo.analizar_aprendizaje,
                         "/api/evaluar-alumno": nucleo.evaluar_alumno,
                         "/api/tareas": nucleo.consultar_tareas,

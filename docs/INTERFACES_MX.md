@@ -52,7 +52,7 @@ Para consultar un adjunto, adjúntalo y espera el análisis. Puedes preguntar «
 
 ### Memoria y conversación compartidas
 
-Prueba «Guarda esta memoria: proyecto = Atlas» en una interfaz y `/recuerdo proyecto` en otra. Las cuatro usan la misma memoria persistente. Si cambias de chat, el contexto inmediato pasa a la conversación elegida y los recuerdos guardados siguen disponibles. Chat web, Studio y la esfera se actualizan cuando otro cliente añade turnos al historial compartido. En Terminal, `/historial` muestra los intercambios guardados más recientes.
+Prueba «Guarda esta memoria: proyecto = Atlas» en una interfaz y `/recuerdo proyecto` en otra. Las cuatro usan la misma memoria persistente. Terminal empieza en un chat separado. Escribe «sincronízate» o `/sincronizar` para entrar al chat activo de Studio, la web y la esfera. `/separar` devuelve el chat de Terminal. Los mensajes previos de ambos chats se conservan en sus ámbitos. «Guarda esto en Studio» o `/guardar-en-studio` guarda la última respuesta como TXT en `notas/`. Si cambias de chat, el contexto inmediato pasa a la conversación elegida y los recuerdos guardados siguen disponibles. Chat web, Studio y la esfera se actualizan cuando otro cliente añade turnos al historial compartido. En Terminal, `/historial` muestra los intercambios guardados más recientes.
 
 ### Aplicaciones y ventanas
 

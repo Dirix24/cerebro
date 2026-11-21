@@ -52,7 +52,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -62,7 +62,7 @@ class Nucleo:
         if self.estudio.is_symlink():
             raise ValueError("El directorio de Universe no puede ser un enlace simbólico.")
         self.estudio.mkdir(mode=0o700, exist_ok=True)
-        self.agente = ControlledAgent()
+        self.agente = agente if agente is not None else ControlledAgent()
         self.memoria = AdvancedMemoryManager()
         self.chat = Conversacion(modelo, self.memoria, self.agente, info_checkpoint=meta, modo_local=True)
         self.internet = internet
@@ -76,7 +76,7 @@ class Nucleo:
         self.interfaces = {}
         self.archivo_en_contexto = None
         self.proyectos_studio = {}
-        self.conversaciones = Conversaciones(self.raiz / "data")
+        self.conversaciones = Conversaciones(conversaciones_dir or self.raiz / "data")
         if self.agente.tiene_permisos("READ"):
             self._recuperar_contexto(self.historial()["turnos"])
         self.latencias = deque(maxlen=100)
@@ -86,6 +86,15 @@ class Nucleo:
         self.posicion = [0.0, 0.0]
         self.angulo = 0.0
         self.telemetria = {}
+
+    def nucleo_terminal(self):
+        carpeta = self.raiz / "data" / "terminal"
+        if carpeta.is_symlink():
+            raise PermissionError("La carpeta de conversaciones de Terminal debe ser local.")
+        return Nucleo(self.perfil, cuota=self.cuota, modelo=self.chat.modelo, internet=self.internet,
+                      solo_lectura=self.solo_lectura, meta=self.chat.info,
+                      investigar_auto=self.investigar_auto, documentos_usuario=self.documentos_usuario,
+                      conversaciones_dir=carpeta, agente=self.agente)
 
     def exigir_permisos(self, *permisos):
         if self.solo_lectura and "WRITE" in permisos:

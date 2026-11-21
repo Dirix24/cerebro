@@ -243,3 +243,27 @@ def test_herramientas_se_comparten_sin_guardar_datos_privados(servidor):
     assert restaurada["turnos"] == turnos
     api("/api/borrar-conversaciones", {"ids": [previa["activa"]], "confirmar": True})
     assert api("/api/historial")["turnos"] == []
+
+
+def test_terminal_separada_y_sincronizacion_explicita(servidor):
+    api, _, nucleo = servidor
+    consulta = "?ambito=terminal"
+    privado = "Consulta para programar en Terminal"
+    compartido = "Mensaje visible en Studio y en la web"
+    api("/api/chat" + consulta, {"mensaje": privado, "modo": "terminal"})
+    assert api("/api/historial")["turnos"] == []
+    assert api("/api/historial" + consulta)["turnos"][0]["texto"] == privado
+
+    api("/api/chat", {"mensaje": compartido, "modo": "terminal"})
+    assert api("/api/historial")["turnos"][0]["texto"] == compartido
+    assert api("/api/historial" + consulta)["turnos"][0]["texto"] == privado
+    reiniciado = nucleo.nucleo_terminal()
+    try:
+        assert reiniciado.historial()["turnos"][0]["texto"] == privado
+    finally:
+        reiniciado.ejecutor.shutdown()
+    with pytest.raises(HTTPError, match="403"):
+        api("/api/chat" + consulta, {"mensaje": "Otro cliente", "modo": "chat"})
+    nucleo.agente.permisos_concedidos.discard("READ")
+    with pytest.raises(HTTPError, match="403"):
+        api("/api/historial" + consulta)
