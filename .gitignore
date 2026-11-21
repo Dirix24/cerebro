@@ -25,3 +25,7 @@ data/habilidades.sqlite3*
 data/actividad_neuronal.jsonl
 
 /universe-datos/
+
+# Historial privado de las interfaces
+/data/historial_cerebro.jsonl
+/data/conversaciones/

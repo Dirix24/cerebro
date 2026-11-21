@@ -38,6 +38,7 @@ let trazo = null;
 let canvasCargado = false;
 let sondeoOcupado = false;
 let chatOcupado = false;
+let chatActivo = null;
 
 async function api(ruta, datos) {
   const headers = {Authorization: "Bearer " + token};
@@ -108,11 +109,7 @@ async function conectar(nuevaClave) {
   $("metricas").hidden = false;
   activarVista();
   await mostrar(location.pathname === "/universe" ? "universe" : "studio");
-  const historial = await api("historial");
-  if ($("mensajes").childElementCount === 0) {
-    for (const turno of historial.turnos) agregarMensaje(turno.rol === "usuario" ? "Tú" : "Cerebro", turno.texto);
-  }
-  $("sugerencias-chat").hidden = modoWeb !== "chat" || $("mensajes").childElementCount > 0;
+  cargarConversacion(await api("conversaciones"));
   if (modoWeb === "studio") await actualizarArchivos();
 }
 
@@ -170,6 +167,11 @@ async function sondear() {
   sondeoOcupado = true;
   try {
     await estado();
+    if (chatActivo !== null && !chatOcupado
+        && (await api("conversacion-activa")).activa !== chatActivo && !chatOcupado) {
+      const datos = await api("conversaciones");
+      if (!chatOcupado) cargarConversacion(datos);
+    }
     if (vista === "studio" && modoWeb === "studio") await actualizarTareas();
     if (vista === "universe") {
       nodos = (await api("nodos")).nodos;
@@ -210,12 +212,16 @@ function agregarMensaje(rol, texto) {
 async function conversar(texto) {
   if (chatOcupado) return false;
   chatOcupado = true;
-  const controles = [$("enviar-chat"), $("borrar-chat"), ...document.querySelectorAll("[data-chat]")];
+  const controles = [$("enviar-chat"), $("borrar-chat"), $("nuevo-chat"), $("lista-chats"), ...document.querySelectorAll("[data-chat]")];
   controles.forEach(control => { control.disabled = true; });
   $("estado-chat").hidden = false;
   activarVista();
   try {
-    const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz});
+    if ((await api("conversacion-activa")).activa !== chatActivo) {
+      cargarConversacion(await api("conversaciones"));
+      throw new Error("La conversación cambió en otra interfaz. Revisa el chat y vuelve a enviar el mensaje.");
+    }
+    const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz, conversacion: chatActivo});
     $("sugerencias-chat").hidden = true;
     agregarMensaje("Tú", texto);
     agregarMensaje("Cerebro", salida.respuesta);
@@ -228,19 +234,42 @@ async function conversar(texto) {
   }
 }
 
-$("borrar-chat").addEventListener("click", () => {
-  if (chatOcupado || !window.confirm("¿Eliminar el historial compartido?")) return;
-  ejecutar($("borrar-chat"), async () => {
-    chatOcupado = true;
-    $("enviar-chat").disabled = true;
+function cargarConversacion(datos) {
+  chatActivo = datos.activa;
+  const chats = [...datos.chats];
+  if (!chats.some(chat => chat.id === chatActivo)) chats.unshift({id: chatActivo, titulo: "Conversación actual"});
+  $("lista-chats").replaceChildren(...chats.map(chat => new Option(chat.titulo, chat.id)));
+  $("lista-chats").value = chatActivo;
+  $("mensajes").replaceChildren();
+  for (const turno of datos.turnos) agregarMensaje(turno.rol === "usuario" ? "Tú" : "Cerebro", turno.texto);
+  $("sugerencias-chat").hidden = modoWeb !== "chat" || datos.turnos.length > 0;
+}
+
+function gestionarChat(boton, operacion) {
+  if (chatOcupado) return;
+  chatOcupado = true;
+  const controles = ["enviar-chat", "nuevo-chat", "borrar-chat", "lista-chats"].map($);
+  controles.forEach(control => { control.disabled = true; });
+  ejecutar(boton, async () => {
     try {
-      await api("historial", {confirmar: true});
-      $("mensajes").replaceChildren();
-      $("sugerencias-chat").hidden = modoWeb !== "chat";
+      cargarConversacion(await operacion());
     } finally {
-      $("enviar-chat").disabled = false;
+      $("lista-chats").value = chatActivo;
+      controles.forEach(control => { control.disabled = false; });
       chatOcupado = false;
     }
+  });
+}
+
+$("nuevo-chat").addEventListener("click", () => gestionarChat($("nuevo-chat"),
+  () => api("conversaciones", {accion: "nueva"})));
+$("lista-chats").addEventListener("change", () => gestionarChat($("lista-chats"),
+  () => api("conversaciones", {accion: "seleccionar", id: $("lista-chats").value})));
+$("borrar-chat").addEventListener("click", () => {
+  if (chatOcupado || !window.confirm("¿Eliminar la conversación actual?")) return;
+  gestionarChat($("borrar-chat"), async () => {
+    await api("historial", {confirmar: true, id: chatActivo});
+    return api("conversaciones");
   });
 });
 

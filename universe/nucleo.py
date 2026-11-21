@@ -21,6 +21,7 @@ from agent.controlled_agent import ControlledAgent
 from agent.lenguaje_natural import interpretar
 from chat import Conversacion
 from core.actividad_neuronal import publicar, ultimos
+from core.conversaciones import Conversaciones
 from core.entorno_portatil import detectar_entorno
 from core.legado_identidad import leer_origen
 from core.repaso_espaciado import cargar
@@ -74,7 +75,7 @@ class Nucleo:
         self.cerrojo_interfaz = RLock()
         self.interfaces = {}
         self.archivo_en_contexto = None
-        self.ruta_historial = self.raiz / "data" / "historial_cerebro.jsonl"
+        self.conversaciones = Conversaciones(self.raiz / "data")
         self.latencias = deque(maxlen=100)
         self.tareas = deque(maxlen=24)
         self.ejecutor = ThreadPoolExecutor(max_workers=1)
@@ -127,22 +128,49 @@ class Nucleo:
                          default=("escritorio", ahora, ahora))
             return {"activa": activa[0]}
 
+    @property
+    def ruta_historial(self):
+        return self.conversaciones.ruta(self.conversaciones.activa())
+
     def historial(self):
         from core.historial_local import consultar
         return {"turnos": consultar(self.ruta_historial, limite=60)}
 
-    def borrar_historial(self, confirmar):
+    def cambiar_conversacion(self, accion, identificador=None):
+        if self.solo_lectura:
+            raise PermissionError("La sesión es de solo lectura.")
+        if accion == "nueva":
+            self.conversaciones.nueva()
+        elif accion == "seleccionar":
+            self.conversaciones.seleccionar(identificador)
+        else:
+            raise ValueError("Acción de conversación desconocida.")
+        self._limpiar_contexto()
+        estado = self.conversaciones.estado()
+        for turno in estado["turnos"]:
+            self.memoria.agregar_contexto("usuario" if turno["rol"] == "usuario" else "ia", turno["texto"])
+        return estado
+
+    def borrar_historial(self, confirmar, identificador=None):
         if self.solo_lectura:
             raise PermissionError("La sesión es de solo lectura.")
         if confirmar is not True:
-            raise ValueError("Confirma el borrado del historial de conversación.")
-        self.ruta_historial.unlink(missing_ok=True)
+            raise ValueError("Confirma el borrado de la conversación.")
+        activa = self.conversaciones.activa()
+        if identificador is not None and identificador != activa:
+            raise ValueError("La conversación activa cambió. Actualiza antes de eliminarla.")
+        ruta = self.ruta_historial
+        self.conversaciones.nueva()
+        ruta.unlink(missing_ok=True)
+        self._limpiar_contexto()
+        return {"turnos": []}
+
+    def _limpiar_contexto(self):
         self.memoria.limpiar_corto_plazo()
         self.chat.tema_local = None
         self.chat.pregunta_repaso = None
         self.escritorio.limpiar()
         self.archivo_en_contexto = None
-        return {"turnos": []}
 
     def _registrar_turno(self, pregunta, respuesta):
         from core.historial_local import guardar

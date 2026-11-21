@@ -125,3 +125,30 @@ def test_borrado_de_historial_requiere_autenticacion_y_confirmacion(servidor):
     assert len(api("/api/historial")["turnos"]) == 2
     assert api("/api/historial", {"confirmar": True}) == {"turnos": []}
     assert api("/api/historial") == {"turnos": []}
+
+
+def test_conversaciones_independientes_reinicio_y_migracion(servidor):
+    api, _, nucleo = servidor
+    nucleo._registrar_turno("Mensaje original", "Respuesta original")
+    nueva = api("/api/conversaciones", {"accion": "nueva"})
+    identificador = nueva["activa"]
+    assert nueva["turnos"] == []
+    assert [chat["id"] for chat in nueva["chats"]] == [identificador, "original"]
+    nucleo._registrar_turno("Segunda conversación", "Segunda respuesta")
+    reiniciado = Nucleo("usb")
+    try:
+        assert reiniciado.conversaciones.activa() == identificador
+        assert reiniciado.historial()["turnos"][0]["texto"] == "Segunda conversación"
+    finally:
+        reiniciado.ejecutor.shutdown()
+    original = api("/api/conversaciones", {"accion": "seleccionar", "id": "original"})
+    assert original["turnos"][0]["texto"] == "Mensaje original"
+    with pytest.raises(HTTPError, match="400"):
+        api("/api/historial", {"confirmar": True, "id": identificador})
+    with pytest.raises(HTTPError, match="400"):
+        api("/api/chat", {"mensaje": "Mensaje desactualizado", "conversacion": identificador})
+    api("/api/historial", {"confirmar": True, "id": "original"})
+    assert api("/api/conversacion-activa")["activa"] != "original"
+    assert api("/api/historial")["turnos"] == []
+    otra = api("/api/conversaciones", {"accion": "seleccionar", "id": identificador})
+    assert otra["turnos"][0]["texto"] == "Segunda conversación"

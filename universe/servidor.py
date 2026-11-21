@@ -99,6 +99,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 self.enviar(500, {"error": "No se pudo completar la operación en el almacenamiento local."})
 
         def responder_chat(self, datos):
+            if "conversacion" in datos and datos["conversacion"] != nucleo.conversaciones.activa():
+                raise ValueError("La conversación activa cambió. Actualiza antes de enviar el mensaje.")
             resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"), cliente=datos.get("cliente"))
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
                 if abrir_estudio():
@@ -155,7 +157,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 if escribir:
                     acciones = {
                         "/api/chat": lambda: self.responder_chat(datos),
-                        "/api/historial": lambda: nucleo.borrar_historial(datos.get("confirmar")),
+                        "/api/historial": lambda: nucleo.borrar_historial(datos.get("confirmar"), datos.get("id")),
+                        "/api/conversaciones": lambda: nucleo.cambiar_conversacion(datos.get("accion"), datos.get("id")),
                         "/api/adjunto": lambda: nucleo.adjuntar(datos.get("nombre"), datos.get("contenido")),
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),
                         "/api/tarea": lambda: nucleo.crear_tarea(datos.get("accion"), datos.get("nombre")),
@@ -166,6 +169,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 else:
                     acciones = {
                         "/api/estado": nucleo.estado, "/api/historial": nucleo.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
+                        "/api/conversaciones": nucleo.conversaciones.estado,
+                        "/api/conversacion-activa": lambda: {"activa": nucleo.conversaciones.activa()},
                         "/api/tareas": lambda: [tarea.copy() for tarea in reversed(nucleo.tareas)],
                         "/api/memoria": nucleo.respaldo,
                         "/api/archivo": lambda: nucleo.leer(consulta.get("nombre", [""])[0]),

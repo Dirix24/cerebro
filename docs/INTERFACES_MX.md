@@ -41,7 +41,7 @@ Al adjuntar desde Chat o Studio, Cerebro analiza el archivo automáticamente. De
 3. Si ves el archivo en pantalla, responde «Sí, recuérdalo» para guardar la selección. Después de reiniciar, «Abre el documento de matemáticas otra vez» funciona en cualquiera de las interfaces. «Olvida el documento de matemáticas» elimina la selección.
 4. Universe muestra un registro del formato y el programa confirmado. Tras guardar la selección, «Aprueba ejemplo de apertura» añade al banco del alumno una frase genérica sin nombres, rutas ni contenido del documento. El entrenamiento se ejecuta por separado con `entrenar_ejemplos_aprobados.py`.
 
-Para desactivar la búsqueda y apertura de archivos personales, detén el servicio e inicia el lanzador con `CEREBRO_SIN_DOCUMENTOS=1`. Las acciones de apertura usan nombres y asociaciones del escritorio. **Eliminar chat** borra el historial compartido tras confirmar. En Terminal el control es `/eliminar-chat`. Los recuerdos guardados tienen su propio control de olvido.
+Para desactivar la búsqueda y apertura de archivos personales, detén el servicio e inicia el lanzador con `CEREBRO_SIN_DOCUMENTOS=1`. Las acciones de apertura usan nombres y asociaciones del escritorio. **Nuevo chat** inicia una conversación vacía y conserva el historial anterior. **Eliminar chat** borra solo la conversación activa tras confirmar. Usa el selector en Chat web o Studio web para volver a una conversación guardada. En Terminal usa `/nuevo-chat`, `/chats` y `/eliminar-chat`. El núcleo conserva la selección al reiniciar y abre el historial anterior de la instalación como **Conversación anterior**. Los recuerdos guardados tienen su propio control de olvido.
 
 ### Aprender de modelos 3D
 

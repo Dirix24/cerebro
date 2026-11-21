@@ -198,7 +198,7 @@ def terminal(sesion):
     lanzar_acompanante()
     renovador = Thread(target=renovar, daemon=True)
     renovador.start()
-    acento = "\033[38;5;79m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
+    acento = "\033[38;5;81m" if sys.stdout.isatty() and not os.environ.get("NO_COLOR") else ""
     fin = "\033[0m" if acento else ""
     def mostrar_historial(limite):
         for turno in api(sesion, "historial")["turnos"][-limite:]:
@@ -208,8 +208,9 @@ def terminal(sesion):
         "/studio": lanzar_estudio,
         "/web": lambda: abrir(sesion, "chat"),
     }
-    print(f"{acento}Cerebro Terminal{fin}  ·  {Path.cwd()}")
-    print("  /studio   /web   /historial   /eliminar-chat   /ayuda   /salir")
+    fondo = "\033[48;5;233m" if acento else ""
+    print(f"{fondo}{acento}  C E R E B R O  {fin}  ·  {Path.cwd()}")
+    print("  /studio   /web   /historial   /nuevo-chat   /chats   /eliminar-chat   /ayuda   /salir")
     if sys.stdin.isatty():
         with contextlib.suppress(ImportError):
             __import__("readline")
@@ -226,9 +227,24 @@ def terminal(sesion):
                 if comando == "/historial":
                     mostrar_historial(12)
                     continue
+                if comando == "/nuevo-chat":
+                    api(sesion, "conversaciones", {"accion": "nueva"})
+                    print("Nueva conversación.")
+                    continue
+                if comando == "/chats":
+                    chats = api(sesion, "conversaciones")["chats"]
+                    for indice, chat in enumerate(chats, 1):
+                        print(f"  {indice}. {chat['titulo']}")
+                    if chats:
+                        opcion = input("Abrir número (Enter cancela): ").strip()
+                        if opcion.isascii() and opcion.isdigit() and len(opcion) <= 8 and 1 <= int(opcion) <= len(chats):
+                            api(sesion, "conversaciones", {"accion": "seleccionar", "id": chats[int(opcion) - 1]["id"]})
+                            mostrar_historial(12)
+                    continue
                 if comando == "/eliminar-chat":
-                    if input("¿Eliminar el historial compartido? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
-                        api(sesion, "historial", {"confirmar": True})
+                    activa = api(sesion, "conversaciones")["activa"]
+                    if input("¿Eliminar la conversación actual? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
+                        api(sesion, "historial", {"confirmar": True, "id": activa})
                         if sys.stdout.isatty():
                             print("\033[3J\033[2J\033[H", end="")
                         print("Historial eliminado.")
@@ -262,7 +278,7 @@ def escritorio(sesion):
     except tk.TclError as exc:
         raise RuntimeError("Se necesita una sesión gráfica con Tk para abrir el acompañante.") from exc
     ventana.title("Cerebro · Acompañante")
-    fondo, panel, texto = "#0b1425", "#15243b", "#edf5ff"
+    fondo, panel, texto = "#090e18", "#121c2c", "#e8f3ff"
     ventana.configure(bg=fondo)
     ventana.resizable(False, False)
     ventana.attributes("-topmost", True)
@@ -341,10 +357,16 @@ def escritorio(sesion):
     detenido = Event()
     identificador = secrets.token_hex(12)
 
+    chat_activo = None
+
     def observar():
         while not detenido.is_set():
             try:
                 eventos.put(("vista", api(sesion, "interfaz", tiempo=2)["activa"]))
+                if not ocupado:
+                    activa = api(sesion, "conversacion-activa", tiempo=2)["activa"]
+                    if activa != chat_activo:
+                        eventos.put(("conversación remota", api(sesion, "conversaciones", tiempo=2)))
             except (OSError, RuntimeError):
                 registro = carpeta() / "sesion.json"
                 with contextlib.suppress(OSError, ValueError):
@@ -356,10 +378,10 @@ def escritorio(sesion):
     def despachar(mensaje):
         try:
             try:
-                salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador})
+                salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador, "conversacion": chat_activo})
             except OSError:
                 sesion.update(conectar())
-                salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador})
+                salida = api(sesion, "chat", {"mensaje": mensaje, "modo": "escritorio", "cliente": identificador, "conversacion": chat_activo})
             eventos.put(("respuesta", salida["respuesta"]))
             if salida.get("abrir") == "studio":
                 lanzar_estudio()
@@ -376,10 +398,11 @@ def escritorio(sesion):
         boton_enviar.configure(state=estado)
         menu_acciones.entryconfigure("Elegir audio", state=estado)
         boton_borrar.configure(state=estado)
+        boton_nuevo.configure(state=estado)
 
     def enviar(_evento=None):
         texto = entrada.get().strip()
-        if texto and not ocupado:
+        if texto and not ocupado and chat_activo is not None:
             entrada.delete(0, "end")
             aviso.set("")
             agregar_turno("Tú", texto)
@@ -453,15 +476,23 @@ def escritorio(sesion):
         salida.see("end")
         salida.configure(state="disabled")
 
-    def borrar_chat():
-        if messagebox.askyesno("Eliminar chat", "¿Eliminar el historial compartido?", parent=ventana):
-            cambiar_estado("Procesando")
-            Thread(target=tarea_de_voz,
-                   args=(lambda: api(sesion, "historial", {"confirmar": True}), "chat borrado"),
-                   daemon=True).start()
+    def gestionar_chat(borrar=False):
+        if chat_activo is None:
+            return
+        if borrar and not messagebox.askyesno("Eliminar chat", "¿Eliminar la conversación actual?", parent=ventana):
+            return
+        cambiar_estado("Procesando")
+
+        def operar():
+            if borrar:
+                api(sesion, "historial", {"confirmar": True, "id": chat_activo})
+                return api(sesion, "conversaciones")
+            return api(sesion, "conversaciones", {"accion": "nueva"})
+
+        Thread(target=tarea_de_voz, args=(operar, "conversación"), daemon=True).start()
 
     def actualizar():
-        nonlocal ultima_respuesta
+        nonlocal ultima_respuesta, chat_activo
         while not eventos.empty():
             tipo, valor = eventos.get()
             if tipo == "vista":
@@ -475,13 +506,18 @@ def escritorio(sesion):
                 cambiar_estado("Disponible")
                 if voz_activada:
                     hablar_respuesta(valor)
-            elif tipo == "chat borrado":
+            elif tipo in {"conversación", "conversación remota"}:
+                if tipo == "conversación remota" and (ocupado or chat_activo == valor["activa"]):
+                    continue
+                chat_activo = valor["activa"]
                 ultima_respuesta = ""
                 salida.configure(state="normal")
                 salida.delete("1.0", "end")
                 salida.configure(state="disabled")
                 cambiar_estado("Disponible")
-                aviso.set("Historial eliminado.")
+                for turno in valor["turnos"]:
+                    agregar_turno("Tú" if turno["rol"] == "usuario" else "Cerebro", turno["texto"])
+                aviso.set("")
             elif tipo == "dictado":
                 cambiar_estado("Disponible")
                 if valor:
@@ -512,7 +548,11 @@ def escritorio(sesion):
     boton_dictar.pack(side="left", padx=(0, 5))
     boton_leer = boton(barra, "Voz apagada", alternar_voz)
     boton_leer.pack(side="left", padx=(0, 5))
-    boton_borrar = boton(barra, "Eliminar chat", borrar_chat)
+    barra_chat = tk.Frame(contenido, bg=fondo)
+    barra_chat.pack(fill="x", pady=(5, 0))
+    boton_nuevo = boton(barra_chat, "Nuevo chat", gestionar_chat)
+    boton_nuevo.pack(side="left", padx=(0, 5))
+    boton_borrar = boton(barra_chat, "Eliminar chat", lambda: gestionar_chat(borrar=True))
     boton_borrar.pack(side="left")
     entrada.bind("<Return>", enviar)
 

@@ -12,10 +12,10 @@ from urllib.parse import quote
 from universe.lanzador import api, abrir, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
-FONDO = "#f5f6fb"
-PANEL = "#ffffff"
-TEXTO = "#22233b"
-ACENTO = "#4d3bb1"
+FONDO = "#090e18"
+PANEL = "#121c2c"
+TEXTO = "#e8f3ff"
+ACENTO = "#79bdff"
 
 
 def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
@@ -30,16 +30,16 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     estilo = ttk.Style(app)
     estilo.theme_use("clam")
     estilo.configure(".", background=FONDO, foreground=TEXTO, fieldbackground=PANEL)
-    estilo.configure("TButton", background="#eeeff8", foreground=TEXTO, padding=(10, 6),
+    estilo.configure("TButton", background="#15233a", foreground=TEXTO, padding=(10, 6),
                      borderwidth=0, bordercolor=FONDO, lightcolor=FONDO, darkcolor=FONDO)
     estilo.configure("TNotebook", background=FONDO, borderwidth=0)
-    estilo.configure("TNotebook.Tab", background="#eeeff8", foreground=TEXTO, padding=(13, 7))
-    estilo.map("TNotebook.Tab", background=[("selected", "#e6e2fb")],
+    estilo.configure("TNotebook.Tab", background="#15233a", foreground=TEXTO, padding=(13, 7))
+    estilo.map("TNotebook.Tab", background=[("selected", "#193154")],
                foreground=[("selected", ACENTO)])
-    estilo.map("TButton", background=[("active", "#e3dff8")])
+    estilo.map("TButton", background=[("active", "#224165")])
     estilo.configure("Titulo.TLabel", font=("TkDefaultFont", 17, "bold"), foreground=ACENTO)
     estilo.configure("TEntry", fieldbackground=PANEL, foreground=TEXTO, insertcolor=TEXTO,
-                     bordercolor="#dbdeed", lightcolor=PANEL, darkcolor=PANEL)
+                     bordercolor="#2a3b58", lightcolor=PANEL, darkcolor=PANEL)
     estilo.configure("TPanedwindow", background=FONDO)
 
     estado = StringVar(value="Conectando con Cerebro…")
@@ -54,6 +54,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     visible = True
     generacion = 0
     revision_chat = 0
+    chat_activo = None
 
     def pedir(operacion, datos=None):
         return api(sesion, operacion, datos)
@@ -119,7 +120,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     ttk.Label(archivos, text="Filtrar archivos").pack(anchor="w", pady=(0, 5))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
     buscador.pack(fill=X, pady=(0, 7))
-    lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#e6e2fb", selectforeground=ACENTO,
+    lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground="#193154", selectforeground=ACENTO,
                     relief="flat", highlightthickness=0, exportselection=False)
     desplazamiento_archivos = ttk.Scrollbar(archivos, command=lista.yview)
     lista.configure(yscrollcommand=desplazamiento_archivos.set)
@@ -197,13 +198,14 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     def enviar(texto=None):
         texto = (entrada.get() if texto is None else texto).strip()
-        if not texto:
+        if not texto or chat_activo is None:
             return
         entrada.set("")
         mostrar(salida, "\nTú · " + texto + "\n", anexar=True)
         estado.set("Procesando…")
 
         revision = revision_chat
+        activa = chat_activo
 
         def respondido(dato):
             if revision != revision_chat:
@@ -211,19 +213,39 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             mostrar(salida, "Cerebro · " + dato["respuesta"] + "\n", anexar=True)
             estado.set("Núcleo conectado")
 
-        publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador}), respondido)
+        publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador, "conversacion": activa}), respondido)
 
-    def borrar_chat():
-        if not messagebox.askyesno("Eliminar chat", "¿Eliminar el historial compartido?", parent=app):
+    def mostrar_chat(datos):
+        nonlocal revision_chat, chat_activo
+        if datos["activa"] == chat_activo:
             return
+        revision_chat += 1
+        chat_activo = datos["activa"]
+        mostrar(salida, "\n".join(
+            f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}"
+            for turno in datos["turnos"]
+        ) + "\n")
 
-        def borrado(_):
-            nonlocal revision_chat
-            revision_chat += 1
-            mostrar(salida, "")
-            estado.set("Historial eliminado.")
+    def gestionar_chat(borrar=False):
+        if chat_activo is None:
+            return
+        if borrar and not messagebox.askyesno("Eliminar chat", "¿Eliminar la conversación actual?", parent=app):
+            return
+        activa = chat_activo
 
-        publicar(lambda: pedir("historial", {"confirmar": True}), borrado)
+        def operar():
+            if borrar:
+                pedir("historial", {"confirmar": True, "id": activa})
+                return pedir("conversaciones")
+            return pedir("conversaciones", {"accion": "nueva"})
+
+        def actualizado(datos):
+            nonlocal chat_activo
+            chat_activo = None
+            mostrar_chat(datos)
+            estado.set("Conversación eliminada." if borrar else "Nueva conversación.")
+
+        publicar(operar, actualizado)
 
     def adjuntar():
         archivo = filedialog.askopenfilename(title="Seleccionar documento o vídeo")
@@ -281,6 +303,14 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 app.lift()
         if visible:
             informar()
+            activa = chat_activo
+
+            def consultar_chat():
+                if pedir("conversacion-activa")["activa"] != activa:
+                    return pedir("conversaciones")
+                return None
+
+            publicar(consultar_chat, lambda datos: mostrar_chat(datos) if datos else None)
         if tareas_en_curso:
             def mostrar_tareas(datos):
                 for tarea in datos:
@@ -319,7 +349,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     boton(barra_editor, "Validar Python", revisar)
     boton(barra_chat, "Enviar", enviar)
     boton(barra_chat, "Adjuntar", adjuntar)
-    boton(barra_chat, "Eliminar chat", borrar_chat)
+    barra_conversaciones = ttk.Frame(chat)
+    barra_conversaciones.pack(fill=X)
+    boton(barra_conversaciones, "Nuevo chat", gestionar_chat)
+    boton(barra_conversaciones, "Eliminar chat", lambda: gestionar_chat(borrar=True))
     lista.bind("<<ListboxSelect>>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())
 
@@ -341,10 +374,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     if inicial == "universe":
         paginas.select(mapa)
     actualizar_archivos()
-    publicar(lambda: pedir("historial"), lambda datos: mostrar(salida, "\n".join(
-        f"{'Tú' if turno['rol'] == 'usuario' else 'Cerebro'} · {turno['texto']}"
-        for turno in datos["turnos"][-20:]
-    ) + "\n", anexar=True))
+    publicar(lambda: pedir("conversaciones"), mostrar_chat)
     publicar(lambda: pedir("estado"), lambda _: estado.set("Núcleo conectado"))
     informar(True)
     temporizador_cola = app.after(75, procesar)

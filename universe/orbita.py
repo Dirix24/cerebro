@@ -8,7 +8,7 @@ class Orbita(Canvas):
     """Anillos, pulsos y nodos decorativos animados mientras el panel está visible."""
 
     def __init__(self, padre):
-        super().__init__(padre, width=330, height=112, bg="#0b1425", highlightthickness=0)
+        super().__init__(padre, width=330, height=112, bg="#090e18", highlightthickness=0)
         self._inicio = monotonic()
         self._turno = None
         self._procesando = False
