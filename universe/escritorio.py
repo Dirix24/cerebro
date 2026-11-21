@@ -33,6 +33,10 @@ class Escritorio:
                 or "READ" not in self.nucleo.agente.permisos_concedidos):
             raise PermissionError("Esta acción requiere el lanzador local y permiso de lectura.")
 
+    def _autorizar_escritura(self):
+        if "WRITE" not in self.nucleo.agente.permisos_concedidos:
+            raise PermissionError("Falta el permiso de escritura para cambiar lo aprendido.")
+
     def _clave(self, nombre):
         return "documento_escritorio:" + documentos_usuario._normalizar(nombre)
 
@@ -69,6 +73,7 @@ class Escritorio:
             clave = self._clave(nombre)
             self.nucleo.memoria.cargar_memoria()
             if olvidar:
+                self._autorizar_escritura()
                 borrado = self.nucleo.memoria.eliminar_largo_plazo(clave)
                 return "Olvidé la selección." if borrado else "No tengo una selección guardada para ese documento."
             recuerdo = self.nucleo.memoria.recuperar_largo_plazo(clave)
@@ -124,6 +129,7 @@ class Escritorio:
             return self._abrir(cliente, datos["nombre"], datos["opciones"][indice], verbo=datos["verbo"])
         if "resultado" in datos and confirmacion in _CONFIRMAR:
             self._autorizar()
+            self._autorizar_escritura()
             ruta = datos["ruta"]
             if not documentos_usuario.permitido(ruta):
                 self.pendientes.pop(cliente)
@@ -139,6 +145,7 @@ class Escritorio:
                     "Si quieres aportar una frase genérica al entrenamiento, escribe «Aprueba ejemplo de apertura».")
         if "ejemplo" in datos and normal == "aprueba ejemplo de apertura":
             self._autorizar()
+            self._autorizar_escritura()
             from core.ejemplos_aprobados import aprobar
             aprobar(self.nucleo.raiz / "data" / "ejemplos_aprobados.jsonl",
                     f"{datos['ejemplo'].capitalize()} mi documento de prueba",

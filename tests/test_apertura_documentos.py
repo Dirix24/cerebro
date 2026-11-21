@@ -91,3 +91,22 @@ def test_catalogo_y_borrado_de_historial(nucleo, monkeypatch):
     nucleo.solo_lectura = True
     with pytest.raises(PermissionError):
         nucleo.borrar_historial(True)
+
+
+def test_revocar_escritura_bloquea_memoria_y_ejemplos_de_apertura(nucleo, monkeypatch, tmp_path):
+    (tmp_path / "Documentos" / "calculo.txt").touch()
+    monkeypatch.setattr(aplicaciones_linux, "abrir_documento",
+                        lambda _: {"aceptado": True, "formato": "text/plain", "aplicacion": "Editor"})
+    nucleo.agente.permisos_concedidos.discard("WRITE")
+    assert "aceptó" in nucleo.conversar("Abre mi documento de calculo")["respuesta"]
+    with pytest.raises(PermissionError):
+        nucleo.conversar("Sí, recuérdalo")
+    assert not Path(config.MEMORY_FILE).exists()
+    nucleo.agente.permisos_concedidos.add("WRITE")
+    assert "Recordaré" in nucleo.conversar("Sí, recuérdalo")["respuesta"]
+    nucleo.agente.permisos_concedidos.discard("WRITE")
+    with pytest.raises(PermissionError):
+        nucleo.conversar("Aprueba ejemplo de apertura")
+    assert not (tmp_path / "data" / "ejemplos_aprobados.jsonl").exists()
+    with pytest.raises(PermissionError):
+        nucleo.conversar("Olvida el documento de calculo")
