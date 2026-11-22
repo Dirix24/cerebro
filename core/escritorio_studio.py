@@ -187,6 +187,9 @@ def intencion_archivo(texto):
         "explicame esto": "analizar",
         "analizalo": "analizar",
         "analizala": "analizar",
+        "analiza esta imagen": "analizar",
+        "explica este pdf": "explicar",
+        "explicame este pdf": "explicar",
         "evalua sobre esto": "evaluar",
         "evaluame": "evaluar",
     }.get(orden)

@@ -89,8 +89,8 @@ def interpretar(entrada, ahora=None):
     palabras = "|".join(numeros)
     relativo = re.search(rf"\b(?:dentro de|en) (\d{{1,4}}|{palabras}) (minutos?|horas?)\b", orden)
     dias = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
-    calendario = re.search(rf"\b(manana|esta tarde|(?:el )?proximo ({'|'.join(dias)}))"
-                           rf"(?: a (?:la|las) (\d{{1,2}}|{palabras})(?::(\d{{2}}))?)?\b", orden)
+    calendario = re.search(rf"\b(manana|esta tarde|(?:el )?(?:proximo )?({'|'.join(dias)}))"
+                           rf"(?: a (?:la|las) (\d{{1,2}}|{palabras})(?::(\d{{2}}))?)?( por la tarde)?\b", orden)
     instante = ahora or datetime.now().astimezone()
     if relativo:
         cantidad = int(relativo[1]) if relativo[1].isdecimal() else numeros[relativo[1]]
@@ -100,7 +100,7 @@ def interpretar(entrada, ahora=None):
         marca = relativo
     elif calendario:
         horas = calendario[3]
-        hora = (int(horas) if horas.isdecimal() else numeros[horas]) if horas else (17 if calendario[1] == "esta tarde" else 9)
+        hora = (int(horas) if horas.isdecimal() else numeros[horas]) if horas else (17 if calendario[1] == "esta tarde" or calendario[5] else 9)
         retraso = ((dias.index(calendario[2]) - instante.weekday()) % 7 or 7) if calendario[2] else int(calendario[1] == "manana")
         fecha = (instante.replace(tzinfo=None) + timedelta(days=retraso)).replace(hour=hora,
                       minute=int(calendario[4] or 0), second=0, microsecond=0)

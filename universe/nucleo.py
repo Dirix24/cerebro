@@ -92,6 +92,7 @@ class Nucleo:
         self.interfaces = {}
         self.archivo_en_contexto = None
         self.proyectos_studio = {}
+        self.generaciones_studio = OrderedDict()
         self.archivos_sueltos_studio = {}
         self.ejercicios_studio = {}
         self.ejercicios_recientes = OrderedDict()
@@ -284,6 +285,10 @@ class Nucleo:
             return {"salida": "Se solicitó abrir la carpeta con " + programa + "."}
         if accion == "herramienta":
             vista = proyecto.inspeccionar(nombre, pagina=datos.get("pagina", 1))
+            if datos.get("herramienta") == "explicar":
+                if vista.get("extension") != ".pdf":
+                    raise ValueError("Abre primero un archivo PDF.")
+                return self._herramienta_pdf(proyecto, nombre, vista, cliente, datos, analizar_texto)
             if datos.get("herramienta") == "preguntar":
                 return self._preguntar_documento(proyecto, nombre, vista, datos.get("consulta"))
             if vista.get("extension") == ".pdf":
@@ -330,6 +335,31 @@ class Nucleo:
                 except RuntimeError:
                     observaciones += " El modelo local de revisión no está disponible."
             return {"respuesta": observaciones}
+        if accion == "generar":
+            from core.generacion_proyecto import diferencias, validar
+
+            if not self.profesor.configurado:
+                raise ValueError("Configura un modelo local de código con Ollama o llama.cpp.")
+            archivos = validar(self.profesor.proponer_proyecto(datos.get("objetivo")))
+            identificador = os.urandom(12).hex()
+            if len(self.generaciones_studio) >= 16:
+                self.generaciones_studio.popitem(last=False)
+            self.generaciones_studio[identificador] = (cliente, proyecto, archivos)
+            return {"id": identificador, "archivos": list(archivos), "diff": diferencias(archivos)}
+        if accion == "publicar_generado":
+            self.exigir_permisos("WRITE")
+            if datos.get("confirmar") is not True:
+                raise PermissionError("Confirma la escritura del proyecto revisado.")
+            identificador = datos.get("id")
+            propuesta = self.generaciones_studio.get(identificador) if isinstance(identificador, str) else None
+            if not propuesta or propuesta[:2] != (cliente, proyecto):
+                raise ValueError("La propuesta caducó o pertenece a otro proyecto.")
+            try:
+                resultado = proyecto.publicar_generado(nombre, propuesta[2])
+            except FileExistsError:
+                raise ValueError("La carpeta de destino ya existe.") from None
+            del self.generaciones_studio[identificador]
+            return resultado
         if accion == "recordar":
             if self.solo_lectura or not self.agente.tiene_permisos("WRITE"):
                 return {"guardado": False}
@@ -396,6 +426,15 @@ class Nucleo:
         for pagina, fragmento in fragmentos:
             referencia = f"Página {pagina}" if es_pdf else nombre
             salida += f"\n\n{referencia} · {fragmento}"
+        if fragmentos and self.profesor.configurado and hasattr(self.profesor, "explicar_fragmentos"):
+            evidencias = [{"referencia": f"Página {pagina}" if es_pdf else nombre, "texto": texto[:280]}
+                          for pagina, texto in fragmentos]
+            try:
+                explicacion = self.profesor.explicar_fragmentos(consulta, evidencias)
+            except RuntimeError:
+                salida += "\n\nEl modelo local no respondió. Los extractos siguen disponibles."
+            else:
+                salida += "\n\nInterpretación del modelo local:\n" + explicacion
         if len(paginas) < total:
             salida += f"\n\nRevisé {len(paginas)} de {total} páginas."
         return {"archivo": nombre, "salida": salida}
@@ -410,20 +449,37 @@ class Nucleo:
                 resultado["salida"] = f"Página {pagina}\n\n" + resultado["salida"]
             return resultado
         paginas, total = proyecto.texto_pdf(nombre)
-        if datos.get("herramienta") == "resumir":
+        if datos.get("herramienta") in {"resumir", "explicar"}:
             extractos = [f"Página {n}: {' '.join(texto.split())[:240]}"
                          for n, texto in enumerate(paginas, 1) if texto]
             if not extractos:
                 raise ValueError("El PDF no contiene texto extraíble. Puede requerir OCR.")
-            return {"archivo": nombre, "salida": f"Extractos de {len(paginas)} de {total} páginas.\n\n"
-                    + "\n\n".join(extractos)}
+            salida = f"Extractos de {len(paginas)} de {total} páginas.\n\n" + "\n\n".join(extractos)
+            if datos.get("herramienta") == "explicar" and self.profesor.configurado and hasattr(self.profesor, "explicar_fragmentos"):
+                try:
+                    explicacion = self.profesor.explicar_fragmentos("Explica las ideas principales del PDF.", extractos[:4])
+                except RuntimeError:
+                    salida += "\n\nEl modelo local no respondió. Los extractos siguen disponibles."
+                else:
+                    salida += "\n\nInterpretación del modelo local sobre los primeros extractos:\n" + explicacion
+            return {"archivo": nombre, "salida": salida}
         return self._herramienta_documento(cliente, {**vista, "texto": "\n".join(paginas)}, datos, analizar)
 
     def _herramienta_documento(self, cliente, vista, datos, analizar):
         herramienta = datos.get("herramienta")
         if herramienta == "analizar" and vista.get("visor") == "imagen":
-            return {"archivo": vista["archivo"], "salida": f"Imagen {vista['extension']} de {vista['bytes']} bytes. "
-                    "La vista local muestra el archivo. El reconocimiento del contenido requiere un modelo visual."}
+            modelo = os.environ.get("CEREBRO_OLLAMA_VISION")
+            if not modelo:
+                return {"archivo": vista["archivo"], "salida": "Configura CEREBRO_OLLAMA_VISION con un modelo visual local de Ollama."}
+            from core.profesor_local import ProfesorLocal
+
+            try:
+                vision = ProfesorLocal(int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434")), ollama=modelo)
+                vision.ocupado = getattr(self.profesor, "ocupado", vision.ocupado)
+                descripcion = vision.describir_imagen(vista.get("base64"))
+            except (ValueError, RuntimeError) as error:
+                return {"archivo": vista["archivo"], "salida": f"No pude analizar la imagen con el motor local: {error}"}
+            return {"archivo": vista["archivo"], "salida": "Descripción del modelo visual local:\n" + descripcion}
         if herramienta not in ("analizar", "resumir", "evaluar", "validar") or not vista.get("texto"):
             raise ValueError("La herramienta requiere un formato con texto compatible.")
         resultado = analizar(vista["archivo"], vista["texto"], herramienta)
@@ -557,6 +613,27 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if modo == "studio" and not comando:
+            orden_generar = re.fullmatch(
+                r"(?:haz|crea|disena|programa|genera) (?:una? |el |la )?"
+                r"(?:calculadora|web|pagina web|programa|proyecto|script)(?: .*)?", intencion)
+            if orden_generar and intencion not in {"crea una pagina web", "crea pagina web"}:
+                configurado = self.profesor.configurado
+                proyecto = self.proyectos_studio.get(cliente)
+                generacion = None
+                if not proyecto:
+                    respuesta = "Abre y autoriza una carpeta en Studio para preparar el proyecto."
+                elif not configurado:
+                    respuesta = "Configura un modelo local de código con Ollama o llama.cpp para generar el proyecto."
+                else:
+                    try:
+                        generacion = self.operar_proyecto({"accion": "generar", "cliente": cliente,
+                            "carpeta_esperada": str(proyecto.raiz), "objetivo": pregunta})
+                        respuesta = "Preparé una propuesta. Revisa las diferencias antes de crear los archivos."
+                    except (RuntimeError, ValueError) as error:
+                        respuesta = f"No pude preparar una propuesta válida: {error}"
+                self._registrar_turno(pregunta, respuesta)
+                return {"respuesta": respuesta, "generacion": generacion}
         if modo == "studio" and isinstance(documento, dict) and cliente:
             from core.escritorio_studio import intencion_archivo
 
@@ -631,6 +708,17 @@ class Nucleo:
             ensenanza = self._consultar_competencias(intencion, cliente)
             if ensenanza is not None:
                 return ensenanza
+        if intencion in {"cuantos programas tengo instalados", "cuantas aplicaciones tengo instaladas"}:
+            from core.aplicaciones_linux import listar
+
+            self.exigir_permisos("READ")
+            try:
+                cantidad = len({app["id"] for app in listar() if app.get("id")})
+            except RuntimeError as error:
+                return {"respuesta": str(error)}
+            return {"respuesta": f"GIO encontró {cantidad} aplicaciones visibles en el menú de escritorio. "
+                    "El conteo incluye identificadores únicos del menú, con independencia de los paquetes instalados.",
+                    "aplicaciones_visibles": cantidad}
         if intencion in {"descubre modelos locales", "detecta inteligencias instaladas", "motores locales instalados"}:
             from core.motores_instalados import descubrir, resumir
 
@@ -638,7 +726,8 @@ class Nucleo:
             motores = descubrir(self.profesor)
             return {"respuesta": resumir(motores), "motores": motores}
         if intencion in {"diagnostico del equipo", "recursos del equipo", "que hardware tengo",
-                         "analiza mi ordenador", "analiza mi ordenador y dime que puedo mejorar"}:
+                         "analiza mi ordenador", "analiza mi ordenador y dime que puedo mejorar",
+                         "analiza mi rendimiento", "diagnostica mi ordenador"}:
             from core.recursos_locales import inspeccionar, resumir, sugerir
 
             self.exigir_permisos("READ")

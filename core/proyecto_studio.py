@@ -250,6 +250,28 @@ class ProyectoStudio:
                 return {"archivo": destino}
         return {"archivo": nombre}
 
+    def publicar_generado(self, carpeta, archivos):
+        partes = self._partes(carpeta)
+        if len(partes) != 1:
+            raise ValueError("Selecciona un nombre simple para la carpeta nueva.")
+        opciones = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        temporal = ".cerebro-" + secrets.token_hex(8)
+        with self.cerrojo, self._directorio() as raiz:
+            os.mkdir(temporal, 0o700, dir_fd=raiz)
+            try:
+                destino = os.open(temporal, opciones, dir_fd=raiz)
+                try:
+                    for nombre, texto in archivos.items():
+                        if len(self._partes(nombre)) != 1 or Path(nombre).suffix.lower() not in FORMATOS:
+                            raise ValueError("Selecciona archivos de texto de primer nivel.")
+                        self._publicar_nuevo(destino, nombre, texto.encode("utf-8"), 0o600)
+                    _renombrar_sin_reemplazar(raiz, temporal, raiz, carpeta)
+                finally:
+                    os.close(destino)
+            finally:
+                shutil.rmtree(temporal, dir_fd=raiz, ignore_errors=True)
+        return {"carpeta_creada": carpeta, "archivos": [f"{carpeta}/{nombre}" for nombre in archivos]}
+
     def _copiar_carpeta(self, padre, origen, destino, nombre):
         opciones = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
         temporal = ".cerebro-" + secrets.token_hex(8)

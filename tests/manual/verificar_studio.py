@@ -15,6 +15,7 @@ from universe.nucleo import Nucleo
 from universe.servidor import crear_servidor
 
 from tests.pdf_fixture import pdf_fixture
+from tests.modelo_fixture import ModeloDePrueba
 
 
 with TemporaryDirectory() as temporal:
@@ -143,6 +144,17 @@ with TemporaryDirectory() as temporal:
                 btn("Recuperar proyecto anterior").click()
                 expect(page.locator("#archivo-activo")).to_have_text("externo.md")
                 expect(page.locator("#mensajes")).to_contain_text("Preparé un plan")
+                profesor_original = n.profesor
+                n.profesor = ModeloDePrueba()
+                page.get_by_label("Mensaje para Cerebro").fill("Diseña una web")
+                btn("Enviar").click()
+                expect(page.locator("#resultado-central")).to_contain_text("+<h1>Una web</h1>")
+                assert not (carpeta / "web-propuesta").exists()
+                respuestas.append("web-propuesta")
+                btn("Guardar propuesta revisada").click()
+                expect(page.locator("#visor-central")).to_contain_text("Una web")
+                assert (carpeta / "web-propuesta" / "estilo.css").read_text().strip() == "h1{color:navy}"
+                n.profesor = profesor_original
                 page.get_by_label("Mensaje para Cerebro").fill("Quiero ver qué aprendiste")
                 btn("Enviar").click()
                 expect(page.locator("#universe")).to_be_visible()
@@ -154,7 +166,7 @@ with TemporaryDirectory() as temporal:
                 assert not errores, errores
                 browser.close()
                 print("Chromium: creación, edición, renombrado, búsqueda, imagen, navegación PDF, zoom renderizado, búsqueda PDF, consulta con página, documento, CSV, HTML inerte, "
-                      "diff aprobado, solicitud de prueba, simulación y evidencias, actualización automática y reapertura.")
+                      "diff aprobado, generación web con doble local y aprobación, solicitud de prueba, simulación y evidencias, actualización automática y reapertura.")
         finally:
             server.shutdown()
             worker.join()
