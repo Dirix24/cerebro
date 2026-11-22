@@ -83,6 +83,14 @@ Puedes decir «Mueve esta ventana a la izquierda» o «Pon las dos ventanas una 
 
 Para enseñar una rutina de escritorio, escribe «Empezar demostración Diseño», da las órdenes una a una y termina con «Guardar demostración». Luego usa «Repite la demostración Diseño». Cerebro guarda aperturas y cambios de ventana que haya podido verificar. La demostración se limita a las órdenes de Cerebro y no captura la pantalla. Si una aplicación desaparece o hay varias ventanas que coinciden, la repetición se detiene.
 
+### Enseñar una rutina con una ventana real
+
+En XFCE/X11, di «Observa controles de APLICACIÓN como NOMBRE» y responde **«Autoriza observación»** después de comprobar el título de la ventana. Cerebro observa los cambios de casillas accesibles mediante AT-SPI. El indicador **Observando · Detener** permanece visible durante la captura. También puedes decir «Ya terminé».
+
+Revisa el borrador, ajusta los pasos si hace falta y di **«Apruébalo»**. Deshaz el cambio en la aplicación para recuperar el estado inicial. Después di **«Repite la demostración NOMBRE»** y **«Confirma la repetición»**. Usa «Estado de la repetición» para ver cuántos pasos se han verificado. «Espera», «Continúa» y «Para» controlan la ejecución entre pasos.
+
+Para probar con una casilla sintética, ejecuta `NO_AT_BRIDGE=0 /usr/bin/python3 tests/fixtures/casillas_gtk.py` y elige **Casillas Cerebro Prueba** como aplicación. La observación interna cubre casillas compatibles y excluye campos de texto y contraseña. Consulta los requisitos y el alcance de la prueba en la [guía de motores y demostraciones](CEREBRO_MOTORES.md).
+
 **Modo táctil experimental.** En el panel local selecciona tu cámara y autorízala. **Ver cámara** muestra los puntos detectados y pausa el puntero. **Dibujar figura** permite trazar un contorno con una pinza. **Convertir a 3D** le da grosor y **Guardar OBJ** exporta la malla. **Pausar** libera la cámara.
 
 Requiere X11, `xdotool`, Tk, OpenCV y MediaPipe. Se comprobó MediaPipe 0.10.32 con Python 3.13. Para preparar un entorno propio:
