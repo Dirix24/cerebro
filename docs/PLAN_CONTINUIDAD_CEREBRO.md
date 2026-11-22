@@ -41,7 +41,7 @@ En Terminal, Chat web y Studio, «Entrenar alumno» abre una autorización de do
 | Capacidad | Estado de verificación |
 | --- | --- |
 | Profesor real, entrenamiento autorizado, promoción y consulta de hora | Probados desde la Terminal real en MX Linux |
-| Chat web | Consulta real de hora, solicitud y confirmación de entrenamiento comprobadas en Brave |
+| Chat web | Consulta real de hora, solicitud, confirmación y cancelación comprobadas en Brave. Un candidato empatado se rechazó y la cancelación posterior dejó activo el mismo checkpoint |
 | Studio | Ventana real en XFCE con respuesta visible de «Estado del alumno» |
 | Universe | Nodo del candidato verificado por el endpoint local |
 | Esfera y micrófono | Prueba visual y humana pendiente |
