@@ -23,6 +23,7 @@ from chat import Conversacion
 from core.actividad_neuronal import publicar, ultimos
 from core.conversaciones import Conversaciones
 from core import competencias
+from core.aprendizaje_autonomo import GestorAprendizaje, debiles
 from core.entorno_portatil import detectar_entorno
 from core.legado_identidad import leer_origen
 from core.profesor_local import GIB, ProfesorLocal, diagnostico as diagnostico_profesor
@@ -55,7 +56,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None, especialista=None):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None, especialista=None, aprendizaje=None):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -66,6 +67,7 @@ class Nucleo:
             raise ValueError("El directorio de Universe no puede ser un enlace simbólico.")
         self.estudio.mkdir(mode=0o700, exist_ok=True)
         self.agente = agente if agente is not None else ControlledAgent()
+        self.aprendizaje = aprendizaje if aprendizaje is not None else GestorAprendizaje()
         self.profesor = profesor if profesor is not None else ProfesorLocal.desde_entorno()
         self.especialista = especialista if especialista is not None else Especialista.cargar(
             self.raiz / "learning" / "especialista.npz", modelo)
@@ -102,7 +104,8 @@ class Nucleo:
         return Nucleo(self.perfil, cuota=self.cuota, modelo=self.chat.modelo, internet=self.internet,
                       solo_lectura=self.solo_lectura, meta=self.chat.info,
                       investigar_auto=self.investigar_auto, documentos_usuario=self.documentos_usuario,
-                      conversaciones_dir=carpeta, agente=self.agente, profesor=self.profesor, especialista=self.especialista)
+                      conversaciones_dir=carpeta, agente=self.agente, profesor=self.profesor, especialista=self.especialista,
+                      aprendizaje=self.aprendizaje)
 
     def exigir_permisos(self, *permisos):
         if self.solo_lectura and "WRITE" in permisos:
@@ -326,6 +329,9 @@ class Nucleo:
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
         if not comando:
+            estado_aprendizaje = self.aprendizaje.consultar(intencion, self, cliente)
+            if estado_aprendizaje is not None:
+                return {"respuesta": estado_aprendizaje}
             ensenanza = self._consultar_competencias(intencion, cliente)
             if ensenanza is not None:
                 return ensenanza
@@ -382,7 +388,9 @@ class Nucleo:
             objetivos = "\n".join("• " + tarea["objetivo"] for tarea in informe["propuestas"])
             return {"respuesta": (f"Evaluaciones registradas: {informe['evaluaciones']}. "
                                   f"Correcciones pendientes: {informe['correcciones_pendientes']}.\n"
-                                  + informe["resumen_competencias"] + "\n" + objetivos)}
+                                  + informe["resumen_competencias"] + "\n" + objetivos
+                                  + "\nMaterias a practicar: " + ", ".join(informe["prioridades_autonomas"])
+                                  + ". Di «Prepara entrenamiento autónomo» para revisar la propuesta.")}
         if re.fullmatch(r"(?:cerebro[, ]+)?(?:activa|abre) (?:el )?modo t[aá]ctil[.!]?", pregunta, re.I):
             self.exigir_permisos("READ")
             return {"respuesta": "Abre el modo táctil desde el lanzador local.", "abrir": "tactil"}
@@ -572,7 +580,11 @@ class Nucleo:
         informe["tipos"] = dict(tipos)
         informe["profesor_configurado"] = self.profesor.configurado
         progreso = competencias.historial(self.raiz)
+        informe["entrenamientos_registrados"] += sum(bool(r.get("entrenamiento_autonomo")) for r in progreso)
         informe["competencias"] = progreso[:2]
+        informe["prioridades_autonomas"] = debiles(progreso)
+        informe["estado_autonomo"] = self.aprendizaje.estado()
+        informe["puede_preparar_entrenamiento"] = self.chat.modelo is not None and self.agente.tiene_permisos("WRITE")
         informe["resumen_competencias"] = competencias.resumen(progreso[0] if progreso else None)
         informe["especialista"] = self.especialista.informe if self.especialista else None
         if self.especialista:
@@ -617,16 +629,22 @@ class Nucleo:
                               "detalle": f"{estado} · {ficha['aciertos']}/{ficha['total']} aciertos · "
                                          f"{ficha['falsos_positivos']} falsos positivos",
                               "origen": "Evaluación reservada del cabezal del alumno"})
+        acciones_aprendidas = set()
         categorias = {}
         for clave, entrada in list(self.memoria.long_term_memory.items())[-120:]:
             if isinstance(entrada, dict):
                 categoria = entrada.get("categoria", "general")
                 valor = entrada.get("valor")
                 if categoria == "demostracion_escritorio" and isinstance(valor, list):
+                    from agent.demostracion_escritorio import ACCIONES
+                    acciones = {p["accion"] for p in valor if isinstance(p, dict)
+                                and isinstance(p.get("accion"), str) and p["accion"] in ACCIONES}
+                    acciones_aprendidas.update(acciones)
                     nodos.append({"id": "procedimiento:" + sha256(clave.encode()).hexdigest()[:24],
                                   "tipo": "aprendizaje", "titulo": "Procedimiento: " + clave.partition(":")[2],
                                   "detalle": f"{len(valor)} pasos autorizados guardados",
-                                  "origen": "Demostración autorizada", "fecha": entrada.get("fecha")})
+                                  "origen": "Demostración autorizada", "fecha": entrada.get("fecha"),
+                                  "vinculos": ["accion-aprendida:" + a for a in sorted(acciones)]})
                     continue
                 if categoria == CATEGORIA_DOCUMENTO and isinstance(valor, dict):
                     identificador = sha256(clave.encode()).hexdigest()[:24]
@@ -653,6 +671,35 @@ class Nucleo:
                                   "detalle": detalle, "origen": "Medición local de un OBJ",
                                   "fecha": entrada.get("fecha"),
                                   "vinculos": ["memoria:" + clave]})
+        for accion in sorted(acciones_aprendidas):
+            nodos.append({"id": "accion-aprendida:" + accion, "tipo": "relaciones",
+                          "titulo": "Acción compartida: " + accion,
+                          "detalle": "Presente en al menos una demostración guardada.",
+                          "origen": "Pasos de procedimientos autorizados"})
+        recientes = competencias.historial(self.raiz)
+        informe = next((r for r in recientes if "materias" in r), None)
+        if informe:
+            for materia, nota in informe["materias"].items():
+                nodos.append({"id": "competencia:" + materia, "tipo": "razonamiento", "titulo": materia,
+                              "detalle": f"{nota['aciertos']}/{nota['total']} respuestas del alumno",
+                              "origen": "Evaluación neuronal reservada", "fecha": informe.get("fecha")})
+                errores = [r for r in nota["resultados"] if not r["correcta"]][:2]
+                for i, error in enumerate(errores):
+                    nodos.append({"id": f"error-competencia:{materia}:{i}", "tipo": "errores",
+                                  "titulo": f"Error del alumno: {materia}",
+                                  "detalle": f"{error['pregunta']} · Esperado: {error['esperada']} · "
+                                             f"Respuesta: {error['respuesta'] or '(vacía)'}",
+                                  "vinculos": ["competencia:" + materia], "origen": "Prueba reservada"})
+        for i, resultado in enumerate(r for r in recientes[:8] if r.get("entrenamiento_autonomo")):
+            materias = resultado["entrenamiento_autonomo"]
+            nodos.append({"id": f"entrenamiento:{i}", "tipo": "aprendizaje",
+                          "titulo": "Candidato evaluado",
+                          "detalle": ("Elegible para revisión" if resultado["elegible_para_revision"] else "Rechazado")
+                          + f" · pérdida {resultado['bpb_antes']:.3f} → {resultado['bpb_despues']:.3f}"
+                          + " · mejoras: " + (", ".join(resultado["mejoras"]) or "ninguna")
+                          + " · regresiones en competencias: " + (", ".join(resultado["regresiones"]) or "ninguna"),
+                          "vinculos": ["competencia:" + m for m in materias],
+                          "origen": "Entrenamiento aislado", "fecha": resultado.get("fecha")})
         for categoria, relacionados in categorias.items():
             if len(relacionados) > 1:
                 nodos.append({"id": "categoria:" + categoria, "tipo": "relaciones", "titulo": categoria,

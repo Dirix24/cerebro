@@ -24,6 +24,16 @@ Para iniciar el motor bajo demanda, usa `CEREBRO_PROFESOR_MOTOR=/ruta/llama-serv
 
 «¿Qué puedo hacer?» consulta disponibilidad de GIO, X11, carpetas y navegador, con permisos vigentes. «Revisa la demostración NOMBRE» muestra pasos guardados. «Genera ejercicios de la demostración NOMBRE» prepara ejemplos para revisión omitiendo los objetivos originales. Universe distingue las competencias neuronales, las fichas de conocimiento y los procedimientos autorizados.
 
+## Aprendizaje por observación y entrenamiento supervisado
+
+Para enseñar cambios de ventana en XFCE/X11, di «Observa la ventana de APLICACIÓN como NOMBRE». Comprueba el título y di «Autoriza observación». Durante un máximo de 90 segundos, Cerebro consulta los estados de foco, minimización y maximización de esa ventana. No captura la pantalla, el teclado, el ratón ni el contenido de la aplicación.
+
+Manipula la ventana y di «Detén la observación». Puedes usar «Quita el paso 2 de la observación» o «Interpreta la observación». Qwen recibe únicamente los nombres de las acciones y su comentario no cambia el borrador. Tras revisarlo, di «Aprueba la demostración» y después «Haz lo que te enseñé» si hay una sola rutina, o «Repite la demostración NOMBRE». La repetición local verifica cada paso, tolera cambios de título y se detiene si cambia la clase de aplicación, hay ambigüedad o no puede verificar la acción.
+
+En Studio, **ANALIZAR** presenta las materias débiles y permite preparar un entrenamiento por chat. También puedes escribir «Prepara entrenamiento autónomo» directamente. «Confirma entrenamiento autónomo» ejecuta ocho pasos en una copia. Qwen puede proponer variantes, que se convierten en ejercicios con referencias deterministas. El entrenador usa un hilo de cálculo, un límite de espacio de direcciones de 1 GiB y una ventana de ejecución de 120 segundos. Puedes solicitar la cancelación y consultar el estado desde el chat. Se compara el resultado en preguntas reservadas y en la validación anterior. Los candidatos quedan aislados para revisión y los pesos activos permanecen en su ubicación.
+
+Universe vincula procedimientos por acciones compartidas y muestra competencias, errores y candidatos evaluados junto a las fichas de conocimiento. Sus nodos representan registros y relaciones, con independencia de la estructura de pesos del alumno.
+
 ## Competencias y ejercicios verificables
 
 - «Ejercicio de matemáticas» propone una práctica. También admite español, programación, razonamiento y herramientas. El profesor elige una variante numérica y Cerebro construye el ejercicio y su referencia de forma determinista.

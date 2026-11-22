@@ -46,6 +46,10 @@ def elaborar(pregunta):
         if not re.fullmatch(r"[\w .,'()-]{2,120}", termino):
             raise ValueError("Indica un tema de búsqueda breve para YouTube.")
         return [Paso("abrir_web", {"url": "https://www.youtube.com/results?" + urlencode({"search_query": termino})})]
+    tutorial = re.fullmatch(r"busca(?:me)? (?:un |unos )?tutorial(?:es)? (?:de|sobre) ([\w .()-]{2,90})", normal)
+    if tutorial:
+        return [Paso("abrir_web", {"url": "https://www.youtube.com/results?" + urlencode(
+            {"search_query": "tutorial de " + tutorial[1]})})]
     enlace = re.fullmatch(r"(abre|analiza)\s+(?:(?:este enlace|el enlace)\s+)?(https?://\S+)", texto, re.I)
     if enlace:
         url = url_navegable(enlace[2])

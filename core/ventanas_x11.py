@@ -184,3 +184,18 @@ def actuar(accion, ventana):
                 return True
         sleep(.12)
     return False
+
+
+def estado_observable(ventana):
+    """Lee solo los atributos de estado de la ventana previamente autorizada."""
+    salida = _ejecutar("xprop", "-id", ventana["id"], "WM_CLASS", "_NET_WM_PID", "_NET_WM_STATE")
+    clase = re.search(r'^WM_CLASS\(STRING\) = "([^"]+)", "([^"]+)"', salida, re.M)
+    pid = re.search(r"^_NET_WM_PID\(CARDINAL\) = (\d+)", salida, re.M)
+    if not clase or ".".join(clase.groups()) != ventana["clase"] or (
+            ventana["pid"] not in {"0", pid[1] if pid else ""}):
+        raise RuntimeError("La ventana autorizada cambió o dejó de estar disponible.")
+    estado = set(re.findall(r"_NET_WM_STATE_[A-Z_]+", salida))
+    enfocada = activa([ventana]) is not None
+    return ("_NET_WM_STATE_HIDDEN" in estado,
+            {"_NET_WM_STATE_MAXIMIZED_VERT", "_NET_WM_STATE_MAXIMIZED_HORZ"} <= estado,
+            enfocada)

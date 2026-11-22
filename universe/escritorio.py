@@ -52,6 +52,7 @@ class Escritorio:
         self.ultimas_aplicaciones.clear()
         self.ultimas_ventanas.clear()
         self.demostraciones.activas.clear()
+        self.demostraciones.observador.limpiar()
 
     def _guardar_pendiente(self, cliente, **datos):
         self.pendientes[cliente] = (monotonic() + 300, datos)
@@ -168,6 +169,10 @@ class Escritorio:
         if accion != "bloquear" and any(
                 tarea["estado"] in {"en cola", "en ejecución"} for tarea in self.nucleo.consultar_tareas()):
             motivos.append("Cerebro tiene tareas en cola o en ejecución.")
+        aprendizaje = self.nucleo.aprendizaje.estado()
+        if accion != "bloquear" and aprendizaje and aprendizaje["estado"] in {
+                "preparando ejercicios", "entrenando y evaluando"}:
+            motivos.append("Hay un entrenamiento autónomo en curso.")
         if accion in {"apagar", "reiniciar", "cerrar sesión"}:
             abiertas = ventanas_x11.listar()
             if abiertas:

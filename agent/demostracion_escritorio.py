@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 import re
 from time import monotonic
 
+from agent.observacion_escritorio import Observador
+
 
 CATEGORIA = "demostracion_escritorio"
 ACCIONES = frozenset({"abrir", "enfoca", "maximiza", "minimiza", "restaura", "izquierda", "derecha"})
@@ -31,6 +33,7 @@ class Demostraciones:
     def __init__(self, escritorio):
         self.escritorio = escritorio
         self.activas = OrderedDict()
+        self.observador = Observador(escritorio, CATEGORIA)
 
     def registrar(self, cliente, accion, objetivo):
         activa = self.activas.get(cliente)
@@ -40,12 +43,15 @@ class Demostraciones:
             activa.pasos.append({"accion": accion, "objetivo": objetivo})
 
     def consultar(self, orden, cliente):
+        observada = self.observador.consultar(orden, cliente)
+        if observada is not None:
+            return observada
         if orden.startswith("te voy a ensenar") or orden.startswith("quiero ensenarte"):
-            return ("Para enseñar una rutina, escribe «Empezar demostración» seguido de un nombre. "
-                    "Después da las órdenes de escritorio en este chat y escribe «Guardar demostración». "
-                    "Puedes usar «Cancelar demostración» en cualquier momento.")
+            return ("Para observar una ventana, di «Observa la ventana de APLICACIÓN como NOMBRE». "
+                    "Te pediré permiso y solo observaré cambios de esa ventana. "
+                    "También puedes usar «Empezar demostración NOMBRE» para enseñar con órdenes de chat.")
         inicio = re.fullmatch(rf"empezar demostracion ({_NOMBRE})", orden)
-        repetir = re.fullmatch(rf"(?:repite la demostracion ({_NOMBRE})|repite lo que te ensene|ahora hazlo tu)", orden)
+        repetir = re.fullmatch(rf"(?:repite la demostracion ({_NOMBRE})|repite lo que te ensene|ahora hazlo tu|haz lo que te ensene|hazlo tu)", orden)
         revisar = re.fullmatch(rf"(revisa la demostracion|genera ejercicios de la demostracion) ({_NOMBRE})", orden)
         if not (inicio or repetir or revisar or orden in {"guardar demostracion", "cancelar demostracion"}):
             return None

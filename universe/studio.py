@@ -189,7 +189,15 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                  "Profesor local configurado." if informe.get("profesor_configurado")
                  else "Profesor local desactivado.", informe.get("resumen_competencias", ""), "",
                  *[f"{tarea['objetivo']}. {tarea['accion']}" for tarea in informe["propuestas"]]])
-            messagebox.showinfo("Análisis de aprendizaje", resumen, parent=app)
+            resumen += "\nPrioridades: " + ", ".join(informe.get("prioridades_autonomas", []))
+            if informe.get("estado_autonomo"):
+                tarea = informe["estado_autonomo"]
+                resumen += f"\nEntrenamiento: {tarea['estado']}. {tarea['detalle']}"
+            if informe.get("puede_preparar_entrenamiento") and messagebox.askyesno(
+                    "Análisis de aprendizaje", resumen + "\n\n¿Preparar un borrador de entrenamiento en el chat?", parent=app):
+                enviar("Prepara entrenamiento autónomo")
+            elif not informe.get("puede_preparar_entrenamiento"):
+                messagebox.showinfo("Análisis de aprendizaje", resumen, parent=app)
 
         publicar(lambda: pedir("analizar-aprendizaje"), responder)
 
