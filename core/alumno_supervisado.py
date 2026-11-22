@@ -38,7 +38,7 @@ RESERVA = (
 # a la fecha/hora local y rechaza combinaciones, citas y ubicaciones externas.
 CONSULTA = re.compile(
     r"(?:cerebro )?(?:(?:me )?(?:puedes |podrias )?(?:decir|dar|indicar|mostrar|consultar)(?:me)? |"
-    r"(?:dime|dame|muestra(?:me)?|indica(?:me)?|necesito saber|quisiera consultar|cual es|que|tienes|me dices|necesito) )?"
+    r"(?:dime|dame|muestra(?:me)?|indica(?:me)?|necesito saber|quisiera consultar|cual es|que|tienes|me dices) )?"
     r"(?:la )?(hora|fecha)(?: actual| exacta| local| de ahora| del sistema| de hoy| de este equipo)?"
     r"(?: es hoy| es| estamos ahora| en este equipo)?(?: por favor)?"
 )
@@ -53,13 +53,17 @@ def normalizar(texto):
 _DICTADO = {"dme la ora local": "dime la hora local", "que fechaa es": "que fecha es"}
 
 
-def verificar(texto):
+def verificar(texto, *, variantes=True):
     if any(c in texto for c in ('"', '«', '»', '“', '”')):
         return "abstener"
-    frase = normalizar(texto).removeprefix("cerebro ").removeprefix("por favor ")
-    frase = _DICTADO.get(frase, frase)
-    if frase == "dime que hora es":
-        return "hora"
+    frase = normalizar(texto)
+    if variantes:
+        frase = frase.removeprefix("cerebro ").removeprefix("por favor ")
+        frase = _DICTADO.get(frase, frase)
+        if frase == "dime que hora es":
+            return "hora"
+        if frase == "necesito la fecha de ahora":
+            return "fecha"
     if frase == "en que fecha estamos ahora":
         return "fecha"
     coincidencia = CONSULTA.fullmatch(frase)

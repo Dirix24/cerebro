@@ -77,6 +77,8 @@ class Ensenanza:
         pesos, informe = cargar_activo(nucleo.raiz_alumno)
         resultado = responder(pesos, pregunta)
         if resultado is None:
+            if verificar(pregunta, variantes=False) != "abstener":
+                return None
             respaldo = responder_etiqueta(verificar(pregunta))
             if respaldo is None:
                 return None
