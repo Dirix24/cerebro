@@ -16,7 +16,6 @@ def instalar(automatico=True):
     raiz = Path(__file__).resolve().parent.parent
     home = Path.home()
     base = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
-    config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
     binario = home / ".local" / "bin" / "cerebro"
     binario.parent.mkdir(parents=True, exist_ok=True)
     lanzador = ("#!/bin/sh\n# Lanzador de Cerebro\n"
@@ -31,13 +30,26 @@ def instalar(automatico=True):
                    f"Terminal={'true' if modo == 'terminal' else 'false'}\n"
                    "Categories=Utility;\nStartupNotify=false\n")
         escribir(base / "applications" / f"cerebro-{modo}.desktop", entrada, "X-Cerebro-Launcher=true")
-        if modo == "escritorio" and automatico:
-            escribir(config / "autostart" / "cerebro-escritorio.desktop", entrada, "X-Cerebro-Launcher=true")
-    if not automatico:
-        retirar_entrada(config / "autostart" / "cerebro-escritorio.desktop")
+    configurar_autoinicio(automatico)
     print(f"Comando: {binario}\nBusca Cerebro en el menú de aplicaciones.")
     if str(binario.parent) not in os.environ.get("PATH", "").split(os.pathsep):
         print('Para esta terminal: export PATH="$HOME/.local/bin:$PATH"')
+
+
+def configurar_autoinicio(activar):
+    home = Path.home()
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config")
+    ruta = config / "autostart" / "cerebro-escritorio.desktop"
+    if not activar:
+        retirar_entrada(ruta)
+        return
+    binario = home / ".local" / "bin" / "cerebro"
+    if not binario.is_file() or binario.is_symlink() or "# Lanzador de Cerebro" not in binario.read_text():
+        raise ValueError("Instala primero el lanzador de Cerebro.")
+    entrada = ("[Desktop Entry]\nType=Application\nX-Cerebro-Launcher=true\n"
+               "Name=Cerebro Escritorio\nOnlyShowIn=XFCE;\n"
+               f"Exec={desktop_exec(binario)} escritorio\nTerminal=false\nStartupNotify=false\n")
+    escribir(ruta, entrada, "X-Cerebro-Launcher=true")
 
 
 def retirar_entrada(ruta):
@@ -72,13 +84,6 @@ def main():
     ap.add_argument("--sin-autoinicio", action="store_true", help="no registrar el acompañante al iniciar sesión")
     args = ap.parse_args()
     instalar(automatico=not args.sin_autoinicio)
-    if not args.sin_autoinicio:
-        from universe.lanzador import lanzar_acompanante
-
-        try:
-            lanzar_acompanante()
-        except OSError as exc:
-            print(f"No se pudo iniciar el acompañante: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":

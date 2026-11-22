@@ -25,6 +25,11 @@ class DescargaGit:
         self.cerrojo = Lock()
         self.trabajos = {}
 
+    def cancelar_todas(self):
+        with self.cerrojo:
+            for trabajo in self.trabajos.values():
+                trabajo["cancelar"] = True
+
     def consultar(self, orden, clave):
         with self.cerrojo:
             trabajo = self.trabajos.get(clave)

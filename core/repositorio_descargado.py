@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 from time import monotonic
@@ -78,18 +79,25 @@ def _descargar(repo, deposito, avanzar, limite):
     destino = deposito / repo.replace("/", "--")
     if destino.exists() or destino.is_symlink():
         raise FileExistsError("Ya existe una descarga con ese nombre.")
-    with TemporaryDirectory(dir=deposito) as temporal:
+    if not any(linea.split(" - ", 1)[0].split()[4] == "/dev/shm"
+               and linea.split(" - ", 1)[1].split()[0] == "tmpfs"
+               for linea in Path("/proc/self/mountinfo").read_text().splitlines()):
+        raise RuntimeError("Git necesita /dev/shm montado en tmpfs para acotar los temporales.")
+    disponible = limite - _ocupacion(deposito)
+    if disponible <= 0:
+        raise RuntimeError("Se alcanzó el límite total de almacenamiento de repositorios.")
+    with TemporaryDirectory(prefix="cerebro-git-", dir="/dev/shm") as temporal:
         entorno = {"PATH": os.defpath, "HOME": temporal, "XDG_CONFIG_HOME": temporal,
                    "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0", "LC_ALL": "C"}
         copia = Path(temporal) / "git"
 
         def comprobar(fase):
             avanzar(fase)
-            if _ocupacion(deposito) >= limite:
+            if _ocupacion(deposito) + _ocupacion(temporal) >= limite:
                 raise RuntimeError("Se alcanzó el límite total de almacenamiento de repositorios.")
 
         def git(*args, timeout=5, fase="verificando"):
-            return _git(("-C", temporal, *args), entorno, lambda: comprobar(fase), limite, timeout)
+            return _git(("-C", temporal, *args), entorno, lambda: comprobar(fase), disponible, timeout)
 
         git("clone", "--bare", "--depth=1", "--single-branch", "--no-tags",
             "--template=", "--", "https://github.com/" + repo + ".git", str(copia), timeout=45, fase="clonando")
@@ -115,8 +123,10 @@ def _descargar(repo, deposito, avanzar, limite):
         # Reserva el nombre de forma exclusiva aunque lleguen dos solicitudes simultáneas.
         destino.mkdir(mode=0o700)
         try:
-            copia.rename(destino / "git")
-        except OSError:
-            destino.rmdir()
+            shutil.copytree(copia, destino / "git")
+            if _ocupacion(deposito) >= limite:
+                raise RuntimeError("Se alcanzó el límite total de almacenamiento al publicar.")
+        except (OSError, RuntimeError):
+            shutil.rmtree(destino)
             raise
     return {"repositorio": repo, "commit": commit, "archivos": entradas, "readme": extracto}

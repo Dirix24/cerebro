@@ -48,6 +48,13 @@ class GestorAprendizaje:
         self.cerrojo = RLock()
         self.pendientes = {}
         self.ensayo = None
+        self.hilo = None
+
+    def cancelar(self):
+        with self.cerrojo:
+            if self.ensayo is not None:
+                self.ensayo.cancelado.set()
+            return self.hilo
 
     def estado(self):
         with self.cerrojo:
@@ -94,7 +101,8 @@ class GestorAprendizaje:
                 return "Ya hay un entrenamiento autónomo en curso."
             ensayo = Ensayo(cliente, propuesta[1])
             self.ensayo = ensayo
-            Thread(target=self._ejecutar, args=(nucleo, ensayo), daemon=True).start()
+            self.hilo = Thread(target=self._ejecutar, args=(nucleo, ensayo), daemon=True)
+            self.hilo.start()
             return "Entrenamiento autorizado. Puedes consultar «Estado del entrenamiento autónomo»."
 
     def _actualizar(self, ensayo, estado, detalle=""):

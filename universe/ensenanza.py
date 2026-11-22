@@ -13,6 +13,10 @@ class Ensenanza:
         self.en_curso = False
         self.cancelado = False
 
+    def cancelar(self):
+        with self.cerrojo:
+            self.cancelado = True
+
     def consultar(self, nucleo, orden, cliente):
         if orden not in {"estado del alumno", "entrenar alumno", "confirma entrenar alumno",
                          "cancela entrenar alumno"}:
