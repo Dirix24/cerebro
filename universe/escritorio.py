@@ -177,6 +177,27 @@ class Escritorio:
             return f'{hecho} «{titulo}».'
         return f'Solicité {infinitivo} «{titulo}», pero el gestor no confirmó el cambio.'
 
+    def _ventana_para_casilla(self, clase):
+        candidatas = [v for v in ventanas_x11.listar() if v["clase"] == clase]
+        if len(candidatas) != 1:
+            raise RuntimeError("Abre una sola ventana de la aplicación enseñada.")
+        return candidatas[0]
+
+    def _comprobar_bloque_casillas(self, pasos, inicio):
+        estados = {}
+        for indice in range(inicio, len(pasos)):
+            paso = pasos[indice]
+            if paso["accion"] != "casilla":
+                break
+            clase, clave, antes, despues = controles_accesibles.selector(paso["objetivo"])
+            if clase not in estados:
+                ventana = self._ventana_para_casilla(clase)
+                estados[clase] = dict(controles_accesibles.estado(ventana))
+            if estados[clase].get(clave) != antes:
+                raise RuntimeError(f"Paso {indice + 1}: la casilla falta, es ambigua o su estado inicial cambió. "
+                                   "No inicié este bloque de casillas.")
+            estados[clase][clave] = despues
+
     def repetir_demostracion(self, pasos, cliente, reproduccion=None):
         resultados = []
         verificados = 0
@@ -190,11 +211,14 @@ class Escritorio:
             try:
                 if accion == "casilla":
                     self._autorizar_escritura()
+                    if indice == 1 or pasos[indice - 2]["accion"] != "casilla":
+                        self._comprobar_bloque_casillas(pasos, indice - 1)
+                    if reproduccion is not None and not reproduccion.esperar_paso():
+                        resultados.append("Repetición cancelada entre pasos.")
+                        break
+                    self._autorizar_escritura()
                     clase, _, _, _ = controles_accesibles.selector(objetivo)
-                    candidatas = [v for v in ventanas_x11.listar() if v["clase"] == clase]
-                    if len(candidatas) != 1:
-                        raise RuntimeError("Abre una sola ventana de la aplicación enseñada.")
-                    if controles_accesibles.ejecutar(candidatas[0], objetivo):
+                    if controles_accesibles.ejecutar(self._ventana_para_casilla(clase), objetivo):
                         avance.append("verificado")
                         respuesta = "Casilla accesible modificada y estado verificado."
                     else:

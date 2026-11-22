@@ -29,7 +29,8 @@ def test_repeticion_pausa_y_cancela_desde_otro_request(tmp_path, monkeypatch):
     n = Nucleo("local", documentos_usuario=True)
     cliente = "a" * 24
     paso = {"accion": "casilla", "objetivo": json.dumps(["gtk.Clase", "a" * 64, False, True])}
-    n.escritorio._guardar_pendiente(cliente, repetir_casillas=[paso] * 3, nombre_demostracion="prueba")
+    inverso = {"accion": "casilla", "objetivo": json.dumps(["gtk.Clase", "a" * 64, True, False])}
+    n.escritorio._guardar_pendiente(cliente, repetir_casillas=[paso, inverso, paso], nombre_demostracion="prueba")
     llamados = []
     liberaciones = [Event(), Event(), Event()]
 
@@ -39,6 +40,7 @@ def test_repeticion_pausa_y_cancela_desde_otro_request(tmp_path, monkeypatch):
         return liberaciones[indice].wait(4)
 
     monkeypatch.setattr(atspi, "ejecutar", ejecutar)
+    monkeypatch.setattr(atspi, "estado", lambda _: {"a" * 64: False})
     monkeypatch.setattr(ventanas_x11, "listar", lambda: [{"clase": "gtk.Clase"}])
 
     def esperar(predicado):
@@ -82,3 +84,22 @@ def test_repeticion_pausa_y_cancela_desde_otro_request(tmp_path, monkeypatch):
             servidor.shutdown()
             hilo.join(timeout=2)
             n.ejecutor.shutdown()
+
+
+
+def test_bloque_con_casilla_ausente_no_cambia_ninguna(monkeypatch):
+    from core import ventanas_x11
+    from universe.escritorio import Escritorio
+
+    ejecutadas = []
+    monkeypatch.setattr(ventanas_x11, "listar", lambda: [{"clase": "gtk.Clase"}])
+    monkeypatch.setattr(atspi, "estado", lambda _: {"a" * 64: False})
+    monkeypatch.setattr(atspi, "ejecutar", lambda *args: ejecutadas.append(args) or True)
+    escritorio = Escritorio(None)
+    monkeypatch.setattr(escritorio, "_autorizar", lambda: None)
+    monkeypatch.setattr(escritorio, "_autorizar_escritura", lambda: None)
+    pasos = [{"accion": "casilla", "objetivo": json.dumps(["gtk.Clase", letra * 64, False, True])}
+             for letra in ("a", "b")]
+    respuesta = escritorio.repetir_demostracion(pasos, "prueba")
+    assert "Paso 2" in respuesta and "No inicié este bloque" in respuesta
+    assert ejecutadas == []
