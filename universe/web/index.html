@@ -53,19 +53,39 @@
       <div class="studio">
         <aside class="panel explorador">
           <h2>Archivos</h2>
+          <button type="button" id="elegir-proyecto" disabled>Abrir proyecto</button>
+          <p id="proyecto-activo" class="nota"></p>
+          <button type="button" id="recuperar-proyecto" hidden>Recuperar proyecto anterior</button>
+          <label for="filtro-archivos">Buscar archivos</label>
+          <input id="filtro-archivos" type="search">
+          <label for="tipo-archivo">Tipo</label>
+          <select id="tipo-archivo"><option value="">Todos</option><option value="carpeta">Carpetas</option><option value="imagen">Imágenes</option><option value="texto">Texto y código</option><option value="pdf">PDF</option></select>
+          <div class="acciones" id="gestionar-proyecto" hidden>
+            <button data-archivo="crear">Nuevo archivo</button><button data-archivo="carpeta">Nueva carpeta</button>
+            <button data-archivo="mover">Mover o renombrar</button><button data-archivo="copiar">Copiar</button>
+            <button data-archivo="papelera">Papelera</button>
+          </div>
           <form id="abrir-archivo"><label for="archivo">Ruta relativa</label><input id="archivo" placeholder="notas/proyecto.md" required><button>Abrir</button></form>
           <div id="archivos"></div>
         </aside>
         <div class="columna">
-          <section class="panel editor">
+          <nav class="acciones" aria-label="Panel central">
+            <button data-central="editor-central" aria-pressed="true">Editor</button>
+            <button data-central="visor-central" aria-pressed="false">Visor</button>
+            <button data-central="resultado-central" aria-pressed="false">Resultados</button>
+            <button data-central="pruebas-central" aria-pressed="false">Validaciones</button>
+          </nav>
+          <section class="panel editor" id="editor-central">
             <h2>Editor <output id="archivo-activo">Sin archivo abierto</output></h2>
             <label for="contenido" class="oculto">Contenido del archivo</label>
             <textarea id="contenido" spellcheck="false" placeholder="Crea una nota o edita código de tu espacio de trabajo."></textarea>
-            <div class="acciones"><button id="guardar">Guardar</button><button data-tarea="sintaxis">Validar Python</button></div>
+            <div class="acciones"><button id="guardar">Guardar</button><button id="consultar-seleccion">Consultar selección</button><button data-tarea="sintaxis">Validar Python</button></div>
           </section>
-          <section class="panel tareas">
+          <section class="panel" id="visor-central" hidden aria-label="Vista previa"></section>
+          <section class="panel" id="resultado-central" hidden aria-label="Resultados de Cerebro"></section>
+          <section class="panel tareas" id="pruebas-central" hidden>
             <h2>Validaciones <span class="nota">Salida del núcleo</span></h2>
-            <div class="acciones"><button data-tarea="estado">Estado del núcleo</button><button id="limpiar-tareas">Limpiar historial</button></div>
+            <div class="acciones"><button data-tarea="estado">Estado del núcleo</button><button id="analizar-proyecto" hidden>Analizar proyecto</button><button id="pruebas-proyecto" hidden>Pruebas del proyecto</button><button id="limpiar-tareas">Limpiar historial</button></div>
             <div id="tareas"></div>
           </section>
         </div>
@@ -91,6 +111,7 @@
           <form id="chat" class="fila">
             <label for="mensaje" class="oculto">Mensaje para Cerebro</label><textarea id="mensaje" rows="2" maxlength="24000" placeholder="Escribe tu mensaje…" required></textarea><button id="enviar-chat">Enviar</button>
           </form>
+          <button type="button" id="cancelar-coordinacion" hidden>Cancelar coordinación</button>
           <div id="estado-chat" role="status" hidden>Consultando al núcleo…</div>
           <div class="acciones herramientas-chat"><button data-chat="¿Qué sabes hacer?">Capacidades</button>
             <label class="boton" for="adjunto">Adjuntar archivo</label>

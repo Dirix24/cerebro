@@ -294,6 +294,15 @@ def consultar(nucleo, pregunta, intencion):
             resultado = _consulta("CAZEL", "evidencia", pruebas[1], cancelacion=cancelacion)
         ident = memoria.guardar("Pruebas registradas en CAZEL · " + pruebas[1], [resultado])
         return {"respuesta": sintetizar([resultado]), "experiencia": ident, "especialistas": [resultado]}
+    if re.fullmatch(r"(?:muestrame|ensename|quiero ver) (?:el plan de daras|el ultimo resultado|que aprendiste)",
+                    intencion):
+        nucleo.exigir_permisos("READ")
+        region = "DARAS" if "plan" in intencion else None
+        recientes = memoria.recientes(region, limite=1)
+        if recientes:
+            return {"respuesta": sintetizar(recientes[0]["resultados"]), "experiencias": recientes,
+                    **({"vista": "universe"} if "aprendiste" in intencion else {})}
+        return {"respuesta": "Todavía no hay una experiencia guardada para esta consulta."}
     recuperar = re.fullmatch(
         r"(?:muestrame|ensename|quiero ver) (?:que aprendiste de|las simulaciones de|las conexiones entre) "
         r"(cazel|daras|profesor)(?: y cerebro)?", intencion)
@@ -323,7 +332,7 @@ def consultar(nucleo, pregunta, intencion):
         nota = evaluar_dependencia(ejercicio, evaluar[2])
         resultado = _resultado("PROFESOR", "ok", evaluacion={**nota, "experiencia": activa})
         ident = memoria.guardar("Evaluación de " + activa, [resultado])
-        return {"respuesta": sintetizar([resultado]), "experiencia": ident}
+        return {"respuesta": sintetizar([resultado]), "experiencia": ident, "especialistas": [resultado]}
     trabajos, profesor = _trabajos(intencion, nucleo.internet)
     if not trabajos:
         return None

@@ -379,3 +379,35 @@ alternativa, configura `CEREBRO_CAZEL_DATOS` con esa ruta.
 expresamente. Ctrl+C cancela la coordinación desde Terminal.
 
 Consulta [el contrato, sus pruebas y sus límites](docs/COORDINACION_V1.md).
+
+### Trabajar con un proyecto en Studio
+
+Usa **Abrir proyecto** y autoriza una carpeta concreta. El explorador de
+Studio navega carpetas, busca por nombre y filtra tipos. Permite crear,
+mover y copiar, y envía lo eliminado a `.cerebro-papelera` dentro del
+proyecto. La reapertura del último proyecto requiere autorización.
+
+El centro dispone de editor, visor, validaciones, cambios y resultados.
+HTML se previsualiza como contenido estático. El visor PDF dibuja la primera
+página y extrae texto de hasta ocho páginas con `poppler-utils` y `prlimit`. Pillow es opcional para ampliar
+los formatos de imagen del Studio nativo. El navegador permite operar sobre
+proyectos al entrar desde el núcleo del lanzador de escritorio.
+
+En el chat de Studio, «Planifica un robot simulado, revisa el código y
+comprueba lo aprendido» presenta una respuesta de CEREBRO y abre las
+evidencias en **Resultados**. «Quiero ver qué aprendiste» abre **Universe**.
+«Crea una página web» ofrece crear una plantilla local con confirmación.
+Las propuestas del agente CAZEL se revisan en la sesión indicada de CAZEL
+Studio. Los arreglos sintácticos del proyecto abierto se previsualizan y
+se aprueban en CEREBRO Studio.
+
+La prueba reproducible de navegador usa los repositorios hermanos de DARAS y
+CAZEL, Playwright, Pillow y Chromium:
+
+```sh
+PYTHONPATH=. python3 tests/manual/verificar_studio.py
+```
+
+Para documentos de oficina sin visor interno, **Abrir en aplicación local**
+solicita confirmación y usa la aplicación predeterminada del escritorio.
+Esa acción excluye HTML y los archivos ejecutables.

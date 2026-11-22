@@ -172,6 +172,15 @@ class Nucleo:
             raise ValueError("Identificador de Studio inválido.")
         self.exigir_permisos("READ")
         accion = datos.get("accion")
+        if accion == "recordado":
+            ruta = self.estudio / "studio-proyecto.json"
+            if not ruta.is_file() or ruta.is_symlink() or ruta.stat().st_size > 8192:
+                return {}
+            try:
+                recordado = json.loads(ruta.read_text(encoding="utf-8"))
+                return recordado if isinstance(recordado, dict) else {}
+            except (OSError, ValueError):
+                return {}
         if accion == "abrir":
             if datos.get("confirmar") is not True:
                 raise PermissionError("Autoriza la carpeta elegida en Studio.")
@@ -192,6 +201,70 @@ class Nucleo:
             return proyecto.listar()
         if accion == "leer":
             return {"texto": proyecto.leer(nombre)}
+        if accion == "inspeccionar":
+            return proyecto.inspeccionar(nombre)
+        if accion == "abrir_externo":
+            if not self.documentos_usuario or datos.get("confirmar") is not True:
+                raise PermissionError("Autoriza la aplicación local para abrir este documento.")
+            if not proyecto.inspeccionar(nombre, contenido=False)["app_externa"]:
+                raise ValueError("Este tipo no se admite para abrir en otra aplicación.")
+            from core.aplicaciones_linux import abrir_documento
+            resultado = abrir_documento(proyecto.raiz / nombre)
+            if not resultado.get("aceptado"):
+                raise ValueError("La aplicación predeterminada no aceptó el documento.")
+            return {"salida": resultado["aplicacion"] + " aceptó la solicitud de apertura."}
+        if accion == "fragmento":
+            from textwrap import dedent
+
+            proyecto.ruta(nombre)
+            texto, pregunta = datos.get("texto"), datos.get("pregunta")
+            if not isinstance(texto, str) or not 1 <= len(texto) <= 4000 or not isinstance(pregunta, str) or not 1 <= len(pregunta) <= 300:
+                raise ValueError("Selecciona un fragmento y escribe una pregunta breve.")
+            observaciones = f"El fragmento de «{nombre}» tiene {len(texto.splitlines())} líneas."
+            if nombre.lower().endswith(".py"):
+                try:
+                    analizado = ast.parse(dedent(texto))
+                    funciones = [n.name for n in ast.walk(analizado) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+                    observaciones += " El fragmento tiene sintaxis Python válida."
+                    if funciones:
+                        observaciones += " Funciones: " + ", ".join(funciones[:8]) + "."
+                except SyntaxError as error:
+                    observaciones += f" La selección no forma un bloque Python completo: {error.msg}."
+            if self.profesor.configurado and len(texto) + len(pregunta) <= 550:
+                try:
+                    respuesta = self.profesor.conversar("Revisa este fragmento sin ejecutar código. " + pregunta + "\n" + texto)
+                    return {"respuesta": respuesta + "\n\n" + observaciones}
+                except RuntimeError:
+                    observaciones += " El modelo local de revisión no está disponible."
+            return {"respuesta": observaciones}
+        if accion == "recordar":
+            if self.solo_lectura or not self.agente.tiene_permisos("WRITE"):
+                return {"guardado": False}
+            if nombre is not None:
+                proyecto.inspeccionar(nombre, contenido=False)
+            with NamedTemporaryFile(dir=self.estudio, mode="w", encoding="utf-8", delete=False) as tmp:
+                json.dump({"carpeta": str(proyecto.raiz), "archivo": nombre}, tmp)
+            try:
+                Path(tmp.name).replace(self.estudio / "studio-proyecto.json")
+            finally:
+                Path(tmp.name).unlink(missing_ok=True)
+            return {"guardado": True}
+        if accion in {"crear", "crear_pagina", "carpeta", "mover", "copiar", "papelera"}:
+            self.exigir_permisos("WRITE")
+            if datos.get("confirmar") is not True:
+                raise PermissionError("Confirma la operación en el proyecto.")
+            texto = datos.get("texto", "")
+            if accion == "crear_pagina":
+                from core.visores_studio import HTML_INICIAL
+                if not isinstance(nombre, str) or Path(nombre).suffix.lower() != ".html":
+                    raise ValueError("La página requiere extensión .html.")
+                accion, texto = "crear", HTML_INICIAL
+            try:
+                return proyecto.gestionar(accion, nombre, datos.get("destino"), texto=texto)
+            except FileExistsError:
+                raise ValueError("Ya existe un archivo o carpeta con ese nombre.") from None
+            except FileNotFoundError:
+                raise ValueError("El origen o la carpeta de destino ya no existe.") from None
         if accion == "analizar":
             return proyecto.analizar()
         if accion == "validar":
@@ -336,12 +409,27 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if modo == "studio" and re.fullmatch(r"(?:muestrame|ensename|quiero ver) (?:el )?robot(?: simulado)?", intencion):
+            simulado = self.body()
+            respuesta = "Abrí la vista del simulador local."
+            self._registrar_turno(pregunta, respuesta)
+            return {"respuesta": respuesta, "vista": "robot", "robot": simulado}
         if not comando:
             from universe.especialidades import consultar as consultar_especialidades
             from universe.herramientas import resolver
 
             coordinacion = consultar_especialidades(self, pregunta, intencion)
             if coordinacion is not None:
+                if modo == "studio":
+                    from core.visores_studio import narrar
+                    resultados = coordinacion.get("especialistas", [])
+                    if not resultados:
+                        resultados = [r for exp in coordinacion.get("experiencias", [])
+                                      for r in exp["resultados"]]
+                    if resultados:
+                        coordinacion["respuesta"] = narrar(resultados)
+                        if any(r.get("sesion") for r in resultados):
+                            coordinacion["respuesta"] += "\n\nLa sesión de revisión está en Resultados."
                 self._registrar_turno(pregunta, coordinacion["respuesta"])
                 return coordinacion
 

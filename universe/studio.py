@@ -1,7 +1,8 @@
 """Estudio nativo para el núcleo de Cerebro, con un HUD inspirado en ARUS."""
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from contextlib import suppress
-from io import StringIO
+from io import BytesIO, StringIO
+from csv import Error as ErrorCSV
 import keyword
 import json
 from pathlib import Path
@@ -10,10 +11,11 @@ from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
 import tokenize
-from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Listbox, StringVar, Text, Tk, TclError
-from tkinter import filedialog, messagebox, ttk
+from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote
 
+from core.visores_studio import HTML_INICIAL, html_estatico, tabla
 from universe.lanzador import ErrorAPI, api, abrir, carpeta, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
@@ -98,6 +100,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     ruta = StringVar()
     filtro_archivos = StringVar()
     inventario = []
+    entradas_archivos = []
+    subcarpeta = ""
+    imagen_activa = None
+    solicitud_archivo = 0
     entrada = StringVar()
     pendientes = SimpleQueue()
     tareas_en_curso = set()
@@ -170,7 +176,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cabecera.pack(fill=X)
     ttk.Label(cabecera, text="Cerebro Studio", style="Titulo.TLabel").pack(side=LEFT, padx=(0, 15))
     boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"), lado=RIGHT)
-    boton(cabecera, "Acompañante", app.iconify, lado=RIGHT)
+    def abrir_acompanante():
+        if not lanzar_acompanante():
+            estado.set("El entorno gráfico no pudo abrir el acompañante.")
+
+    boton(cabecera, "Acompañante", abrir_acompanante, lado=RIGHT)
     boton(cabecera, "Terminal", lanzar_terminal, lado=RIGHT)
     paginas = ttk.Notebook(app)
     paginas.pack(fill=BOTH, expand=True, padx=14, pady=4)
@@ -230,7 +240,13 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     ttk.Label(archivos, textvariable=proyecto_titulo, wraplength=190).pack(anchor="w", pady=(0, 6))
     ttk.Label(archivos, text="Filtrar archivos · Ctrl+P").pack(anchor="w", pady=(0, 4))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
-    buscador.pack(fill=X, pady=(0, 7))
+    buscador.pack(fill=X, pady=(0, 4))
+    tipo_archivos = ttk.Combobox(archivos, state="readonly",
+                                 values=("Todo", "Carpetas", "Código", "Documentos", "Imágenes"))
+    tipo_archivos.current(0)
+    tipo_archivos.pack(fill=X, pady=(0, 4))
+    ubicacion = StringVar(value="/")
+    ttk.Label(archivos, textvariable=ubicacion, wraplength=175).pack(anchor="w")
     lista = Listbox(archivos, width=19, bg=PANEL, fg=TEXTO, selectbackground=SELECCION, selectforeground=ACENTO,
                     relief="flat", highlightthickness=0, exportselection=False)
     desplazamiento_archivos = ttk.Scrollbar(archivos, command=lista.yview)
@@ -291,6 +307,18 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     diff.tag_configure("bloque", foreground=ACENTO)
     acciones_cambio = ttk.Frame(pagina_cambios)
     acciones_cambio.pack(fill=X)
+    pagina_visor = ttk.Frame(vistas_editor, padding=6)
+    pagina_resultados = ttk.Frame(vistas_editor, padding=6)
+    vistas_editor.add(pagina_visor, text="Visor")
+    vistas_editor.add(pagina_resultados, text="Resultados")
+    imagen = ttk.Label(pagina_visor)
+    acciones_visor = ttk.Frame(pagina_visor)
+    acciones_visor.pack(fill=X)
+    visor = campo_texto(pagina_visor, codigo=True)
+    visor.tag_configure("titulo", foreground=ACENTO, font=("TkDefaultFont", 16, "bold"))
+    visor.tag_configure("codigo", foreground=TEXTO, font="TkFixedFont")
+    grafica = Canvas(pagina_resultados, bg=EDITOR, height=90, highlightthickness=0)
+    detalles = campo_texto(pagina_resultados)
     acciones_proyecto = ttk.Frame(codigo)
     acciones_proyecto.pack(fill=X)
 
@@ -320,42 +348,225 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     def filtrar_archivos(*_args):
         filtro = filtro_archivos.get().strip().casefold()
-        lista.delete(0, END)
-        for nombre in inventario:
-            if filtro in nombre.casefold():
+        tipo = tipo_archivos.get()
+        previo = lista.get(lista.curselection()[0]) if lista.curselection() else None
+        visibles = ["../"] if subcarpeta and not filtro else []
+        for item in entradas_archivos:
+            nombre = item["ruta"]
+            es_carpeta = item["tipo"] == "carpeta"
+            extension = Path(nombre).suffix.lower()
+            coincide = (tipo == "Todo" or
+                        (tipo == "Carpetas" and es_carpeta) or
+                        (tipo == "Código" and not es_carpeta and extension in {
+                            ".py", ".js", ".ts", ".css", ".html", ".rs", ".c", ".cpp", ".java", ".sh", ".sql"}) or
+                        (tipo == "Documentos" and extension in {".txt", ".md", ".pdf", ".csv", ".tsv", ".docx"}) or
+                        (tipo == "Imágenes" and extension in {".png", ".gif", ".jpg", ".jpeg", ".webp"}))
+            padre = nombre.rpartition("/")[0]
+            if coincide and (filtro in nombre.casefold() if filtro else padre == subcarpeta):
+                visibles.append(nombre + ("/" if es_carpeta else ""))
+        if tuple(visibles) != lista.get(0, END):
+            lista.delete(0, END)
+            for nombre in visibles:
                 lista.insert(END, nombre)
+            if previo in visibles:
+                lista.selection_set(visibles.index(previo))
+        ubicacion.set("/" + subcarpeta)
 
     filtro_archivos.trace_add("write", filtrar_archivos)
+    tipo_archivos.bind("<<ComboboxSelected>>", filtrar_archivos)
+
+    def inventariar(datos):
+        inventario[:] = datos["archivos"]
+        entradas_archivos[:] = datos.get("entradas", [{"ruta": n, "tipo": "archivo"} for n in inventario])
+        filtrar_archivos()
 
     def actualizar_archivos():
-        def cargar(datos):
-            inventario[:] = datos["archivos"]
-            filtrar_archivos()
         esperado = proyecto_activo
+
+        def cargar(datos):
+            if esperado == proyecto_activo:
+                inventariar(datos)
+
         publicar(lambda: proyecto("listar", esperada=esperado) if esperado else pedir("archivos"), cargar)
 
-    def cargar_archivo(_evento=None):
-        seleccionado = lista.curselection()
-        if not seleccionado:
-            return
-        if editor.edit_modified() and not messagebox.askyesno("Cambios sin guardar", "¿Abrir otro archivo?"):
-            return
-        nombre = lista.get(seleccionado[0])
+    def es_seguro_salir(mensaje):
+        return not editor.edit_modified() or messagebox.askyesno(
+            "Cambios sin guardar", mensaje, parent=app)
 
+    def visualizar(datos):
+        nonlocal imagen_activa
+        imagen.pack_forget()
+        imagen.configure(image="")
+        imagen_activa = None
+        for hijo in acciones_visor.winfo_children():
+            hijo.destroy()
+        extension = datos.get("extension", "")
+        nombre = datos["archivo"]
+        contenido = datos.get("texto", "")
+        mensaje = datos.get("aviso") or f"{nombre} · {datos['bytes']} bytes"
+        if datos.get("base64") and datos.get("visor") in {"imagen", "pdf"}:
+            try:
+                bruto = b64decode(datos["base64"], validate=True)
+                try:
+                    from PIL import Image, ImageTk
+                except ImportError:
+                    Image = None
+                if Image is not None:
+                    try:
+                        fuente = Image.open(BytesIO(bruto))
+                    except Image.DecompressionBombError as error:
+                        raise ValueError("La imagen supera el tamaño de vista previa.") from error
+                    with fuente:
+                        if fuente.width * fuente.height > 12_000_000:
+                            raise ValueError("La imagen supera el tamaño de vista previa.")
+                        fuente.thumbnail((650, 470))
+                        imagen_activa = ImageTk.PhotoImage(fuente, master=app)
+                else:
+                    if bruto.startswith(b"\x89PNG\r\n\x1a\n") and len(bruto) >= 24:
+                        ancho = int.from_bytes(bruto[16:20], "big")
+                        alto = int.from_bytes(bruto[20:24], "big")
+                    elif bruto.startswith((b"GIF87a", b"GIF89a")) and len(bruto) >= 10:
+                        ancho = int.from_bytes(bruto[6:8], "little")
+                        alto = int.from_bytes(bruto[8:10], "little")
+                    else:
+                        raise ValueError("Instala Pillow para previsualizar este formato.")
+                    if not 0 < ancho * alto <= 12_000_000:
+                        raise ValueError("La imagen supera el tamaño de vista previa.")
+                    imagen_activa = PhotoImage(master=app, data=datos["base64"])
+                    reduccion = max(1, (max(ancho, alto) + 649) // 650)
+                    if reduccion > 1:
+                        imagen_activa = imagen_activa.subsample(reduccion, reduccion)
+                imagen.configure(image=imagen_activa)
+                imagen.pack(side="top", before=visor.master, pady=5)
+            except (OSError, ValueError, TclError) as error:
+                mensaje += "\n" + str(error)
+        mostrar(visor, mensaje)
+        if datos.get("app_externa") and proyecto_activo:
+            esperado = proyecto_activo
+
+            def externa():
+                if messagebox.askyesno("Abrir en otra aplicación", f"¿Abrir «{nombre}» en la aplicación predeterminada?", parent=app):
+                    publicar(lambda: proyecto("abrir_externo", nombre=nombre, confirmar=True, esperada=esperado),
+                             lambda dato: estado.set(dato["salida"]))
+
+            boton(acciones_visor, "Abrir en aplicación local", externa)
+        if extension in {".html", ".md", ".csv", ".tsv", ".pdf"} and "texto" in datos:
+            visor.configure(state="normal")
+            visor.insert(END, "\n\n")
+            if extension == ".html":
+                visor.insert(END, "Vista estática · sin scripts, estilos ni recursos externos\n")
+                for texto, etiqueta in html_estatico(contenido):
+                    visor.insert(END, texto, etiqueta)
+            elif extension in {".csv", ".tsv"}:
+                try:
+                    for fila in tabla(contenido, extension):
+                        visor.insert(END, " │ ".join(fila) + "\n")
+                except ErrorCSV as error:
+                    visor.insert(END, "Tabla inválida: " + str(error))
+            elif extension == ".md":
+                for linea in contenido.splitlines():
+                    visor.insert(END, linea.lstrip("# ") + "\n" if linea.startswith("# ") or linea.startswith("## ")
+                                 else linea + "\n", "titulo" if linea.startswith("#") else "")
+            else:
+                visor.insert(END, contenido)
+            visor.configure(state="disabled")
+        vistas_editor.select(pagina_visor)
+
+    def cargar_nombre(nombre):
+        nonlocal solicitud_archivo
+        solicitud_archivo += 1
+        solicitud = solicitud_archivo
+        copia_editor = editor.get("1.0", "end-1c")
         abierto_en = proyecto_activo
 
         def copiar(datos):
             nonlocal archivo_proyecto, original_proyecto
-            if proyecto_activo != abierto_en:
+            if proyecto_activo != abierto_en or solicitud != solicitud_archivo:
                 return
-            archivo_proyecto, original_proyecto = nombre, datos["texto"]
-            ruta.set(nombre)
-            vistas_editor.select(pagina_editor)
-            mostrar(editor, datos["texto"])
-            editor.edit_modified(False)
-            programar_resaltado()
+            if editor.edit_modified() and editor.get("1.0", "end-1c") != copia_editor:
+                estado.set("El editor cambió mientras se abría el archivo.")
+                return
+            if abierto_en and datos.get("visor") != "texto":
+                visualizar(datos)
+            else:
+                archivo_proyecto, original_proyecto = nombre, datos["texto"]
+                ruta.set(nombre)
+                mostrar(editor, datos["texto"])
+                editor.edit_modified(False)
+                programar_resaltado()
+                if Path(nombre).suffix.lower() in {".html", ".md", ".csv", ".tsv"} and abierto_en:
+                    visualizar(datos)
+                else:
+                    vistas_editor.select(pagina_editor)
+            if abierto_en:
+                publicar(lambda: proyecto("recordar", nombre=nombre, esperada=abierto_en))
 
-        publicar(lambda: proyecto("leer", nombre=nombre, esperada=abierto_en) if abierto_en else pedir("archivo?nombre=" + quote(nombre)), copiar)
+        publicar(lambda: proyecto("inspeccionar", nombre=nombre, esperada=abierto_en)
+                 if abierto_en else pedir("archivo?nombre=" + quote(nombre)), copiar)
+
+    def cargar_archivo(_evento=None):
+        nonlocal subcarpeta
+        seleccionado = lista.curselection()
+        if not seleccionado:
+            return
+        nombre = lista.get(seleccionado[0])
+        if nombre.endswith("/"):
+            subcarpeta = subcarpeta.rpartition("/")[0] if nombre == "../" else nombre[:-1]
+            filtro_archivos.set("")
+            filtrar_archivos()
+            return
+        if es_seguro_salir("¿Abrir otro archivo?"):
+            cargar_nombre(nombre)
+
+    def gestionar_archivo(accion, *, nombre=None, contenido=""):
+        if not proyecto_activo:
+            estado.set("Abre primero una carpeta de proyecto.")
+            return
+        seleccion = lista.curselection()
+        origen = lista.get(seleccion[0]).rstrip("/") if seleccion else ""
+        if accion in {"crear", "carpeta"}:
+            nombre = nombre or simpledialog.askstring(
+                "Nuevo archivo" if accion == "crear" else "Nueva carpeta", "Ruta relativa al proyecto",
+                initialvalue=subcarpeta + "/" if subcarpeta else "", parent=app)
+            if not nombre:
+                return
+        elif not origen or origen == "..":
+            estado.set("Selecciona un archivo o carpeta.")
+            return
+        else:
+            nombre = origen
+        destino = (simpledialog.askstring("Destino", "Ruta nueva relativa al proyecto",
+                                          initialvalue=nombre, parent=app)
+                   if accion in {"mover", "copiar"} else None)
+        if accion in {"mover", "copiar"} and (not destino or destino == nombre):
+            return
+        afecta = bool(archivo_proyecto and
+                      (archivo_proyecto == nombre or archivo_proyecto.startswith(nombre + "/")))
+        if afecta and editor.edit_modified() and accion in {"mover", "papelera"}:
+            estado.set("Guarda primero los cambios del editor.")
+            return
+        if accion == "papelera" and not messagebox.askyesno(
+                "Enviar a la papelera", f"¿Mover «{nombre}» a la papelera del proyecto?", parent=app):
+            return
+        esperado = proyecto_activo
+
+        def terminado(respuesta):
+            nonlocal archivo_proyecto, original_proyecto
+            if esperado != proyecto_activo:
+                return
+            if afecta and accion in {"mover", "papelera"}:
+                archivo_proyecto = original_proyecto = None
+                ruta.set("")
+                mostrar(editor, "")
+                editor.edit_modified(False)
+            estado.set("Papelera: " + respuesta["papelera"] if "papelera" in respuesta
+                       else "Proyecto actualizado: " + respuesta["archivo"])
+            actualizar_archivos()
+            if accion == "crear" and not editor.edit_modified():
+                cargar_nombre(respuesta["archivo"])
+
+        publicar(lambda: proyecto(accion, nombre=nombre, destino=destino, texto=contenido,
+                                   confirmar=True, esperada=esperado), terminado)
 
     def guardar():
         nombre = ruta.get().strip()
@@ -403,21 +614,22 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         mostrar(validaciones, "Validando «" + nombre + "»…\n", anexar=True)
         estado.set("Validación solicitada.")
 
-    def abrir_proyecto():
-        if editor.edit_modified() and not messagebox.askyesno("Cambios sin guardar", "¿Cambiar de proyecto?", parent=app):
+    def abrir_proyecto(carpeta=None, recuperar=None):
+        if not es_seguro_salir("¿Cambiar de proyecto?"):
             return
-        carpeta = filedialog.askdirectory(title="Elegir carpeta de proyecto", mustexist=True, parent=app)
+        carpeta = carpeta or filedialog.askdirectory(title="Elegir carpeta de proyecto", mustexist=True, parent=app)
         if not carpeta:
             return
         if not messagebox.askyesno("Autorizar proyecto", f"¿Permitir a Cerebro inspeccionar «{carpeta}»?", parent=app):
             return
 
         def abierto(datos):
-            nonlocal proyecto_activo, archivo_proyecto, original_proyecto
+            nonlocal proyecto_activo, archivo_proyecto, original_proyecto, subcarpeta
             proyecto_activo = datos["carpeta"]
             proyecto_titulo.set(Path(proyecto_activo).name)
-            inventario[:] = datos["archivos"]
-            filtrar_archivos()
+            subcarpeta = ""
+            filtro_archivos.set("")
+            inventariar(datos)
             ruta.set("")
             archivo_proyecto = original_proyecto = None
             mostrar(editor, "")
@@ -425,6 +637,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             cargar_propuestas([])
             cambios_aplicados.clear()
             estado.set("Proyecto abierto" + (" · inventario limitado" if datos["limitado"] else ""))
+            esperado = proyecto_activo
+            if recuperar and any(item["ruta"] == recuperar for item in entradas_archivos):
+                cargar_nombre(recuperar)
+            else:
+                publicar(lambda: proyecto("recordar", esperada=esperado))
 
         publicar(lambda: proyecto("abrir", carpeta=carpeta, confirmar=True), abierto)
 
@@ -503,9 +720,90 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         mostrar(validaciones, "Ejecutando unittest…\n", anexar=True)
         publicar(lambda: proyecto("pruebas", confirmar=True, esperada=esperado), lambda dato: tareas_en_curso.add(dato["id"]))
 
+    def presentar_resultado(dato):
+        from universe.especialidades import sintetizar
+
+        if dato.get("vista") == "robot":
+            simulado = dato["robot"]
+            grafica.pack_forget()
+            mostrar(detalles, "Robot simulado\n\n" +
+                    f"Posición: {simulado['posicion']} · Ángulo: {simulado['angulo']}°\n" +
+                    ("Detenido." if simulado["parado"] else "Armado en simulación."))
+            vistas_editor.select(pagina_resultados)
+            return
+        resultados = dato.get("especialistas", [])
+        if not resultados:
+            resultados = [r for exp in dato.get("experiencias", []) for r in exp["resultados"]]
+        if not resultados:
+            return
+        simulacion = next((r["simulacion"] for r in resultados if r.get("simulacion")), None)
+        grafica.pack_forget()
+        grafica.delete("all")
+        if simulacion:
+            grafica.pack(side="top", before=detalles.master, fill=X)
+            documentado = max(1, simulacion["p90_horas"], simulacion["p50_horas"])
+            for y, clave, color in ((28, "p50", ACENTO), (61, "p90", "#ADD79A")):
+                valor = simulacion[clave + "_horas"]
+                grafica.create_text(12, y, text=clave, fill=TEXTO, anchor="w")
+                grafica.create_rectangle(52, y - 8, 52 + 175 * valor / documentado, y + 8, fill=color, width=0)
+                grafica.create_text(237, y, text=f"{valor:.2f} h", fill=TEXTO, anchor="w")
+        bloques = []
+        for resultado in resultados:
+            if plan := resultado.get("plan"):
+                bloques.append("Plan de trabajo\n" + "\n".join(
+                    f"{paso['id']} · {paso['titulo']} · {paso.get('estado', 'previsto')}" +
+                    (f" · Depende de: {', '.join(paso['depende_de'])}" if paso.get("depende_de") else "")
+                    for paso in plan))
+            for evidencia in resultado.get("evidencia", []):
+                if evidencia["tipo"] == "fuente":
+                    bloques.append(f"{evidencia['titulo']}\n{evidencia['url']}\n{evidencia.get('extracto', '')}")
+        mostrar(detalles, "\n\n".join([*bloques, "Actividad y evidencias", sintetizar(resultados)]))
+        if dato.get("vista") == "universe":
+            paginas.select(mapa)
+        else:
+            vistas_editor.select(pagina_resultados)
+
+    def previsualizar_editor():
+        nombre = ruta.get()
+        if not nombre or Path(nombre).suffix.lower() not in {".html", ".md", ".csv", ".tsv"}:
+            estado.set("El visor del editor admite HTML estático, Markdown y tablas CSV/TSV.")
+            return
+        texto = editor.get("1.0", "end-1c")
+        visualizar({"archivo": nombre, "extension": Path(nombre).suffix.lower(),
+                    "visor": "texto", "bytes": len(texto.encode("utf-8")), "texto": texto})
+
+    def usar_seleccion():
+        if not editor.tag_ranges("sel"):
+            estado.set("Selecciona código en el editor.")
+            return
+        fragmento = editor.get("sel.first", "sel.last")[:4000]
+        pregunta = simpledialog.askstring("Consultar selección", "¿Qué quieres preguntar sobre este fragmento?",
+                                           initialvalue="Explícame este fragmento", parent=app)
+        if pregunta:
+            esperado, nombre = proyecto_activo, archivo_proyecto
+            if not esperado or not nombre:
+                estado.set("Abre el código de un proyecto autorizado primero.")
+                return
+            mostrar_mensaje("Tú", pregunta)
+            publicar(lambda: proyecto("fragmento", nombre=nombre, texto=fragmento, pregunta=pregunta,
+                                       esperada=esperado), lambda dato: mostrar_mensaje("Cerebro", dato["respuesta"]))
+
     def enviar(texto=None):
         texto = (entrada.get() if texto is None else texto).strip()
         if not texto or chat_activo is None:
+            return
+        if re.fullmatch(r"(?:cerebro[, ]+)?crea (?:una )?p[aá]gina web[.!]?", texto, re.I):
+            if not proyecto_activo:
+                estado.set("Abre y autoriza el proyecto donde quieres crear la página.")
+                return
+            destino = simpledialog.askstring("Crear página estática", "Confirma el nombre del archivo nuevo",
+                                              initialvalue="index.html", parent=app)
+            if destino and Path(destino).suffix.lower() == ".html":
+                entrada.set("")
+                mostrar_mensaje("Tú", texto)
+                gestionar_archivo("crear", nombre=destino, contenido=HTML_INICIAL)
+            elif destino:
+                estado.set("La página requiere la extensión .html.")
             return
         entrada.set("")
         mostrar_mensaje("Tú", texto)
@@ -548,9 +846,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 revision_visible = dato["revision"]
             if not ya_visible:
                 mostrar_mensaje("Cerebro", dato["respuesta"])
+            presentar_resultado(dato)
             estado.set("Núcleo conectado")
 
-        publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador, "conversacion": activa}), respondido)
+        publicar(lambda: pedir("chat", {"mensaje": texto, "modo": "studio", "cliente": identificador,
+                                       "conversacion": activa}, tiempo=78), respondido)
 
     def mostrar_chat(datos):
         nonlocal revision_chat, chat_activo, revision_visible
@@ -669,6 +969,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                     estado.set("Núcleo conectado")
 
             publicar(consultar_chat, sincronizado)
+        if visible and proyecto_activo:
+            actualizar_archivos()
         if tareas_en_curso:
             def mostrar_tareas(datos):
                 for tarea in datos:
@@ -707,6 +1009,15 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         app.destroy()
 
     boton(barra_archivos, "Actualizar", actualizar_archivos)
+    menu_archivos = ttk.Menubutton(barra_archivos, text="Archivos")
+    acciones_archivos = Menu(menu_archivos, tearoff=False)
+    for texto_menu, accion_archivo in (("Nuevo archivo", "crear"), ("Nueva carpeta", "carpeta"),
+                                        ("Mover o renombrar", "mover"), ("Copiar", "copiar"),
+                                        ("Enviar a la papelera", "papelera")):
+        acciones_archivos.add_command(label=texto_menu,
+                                      command=lambda accion=accion_archivo: gestionar_archivo(accion))
+    menu_archivos.configure(menu=acciones_archivos)
+    menu_archivos.pack(side=LEFT, pady=3)
     boton(acciones_proyecto, "Abrir proyecto", abrir_proyecto)
     boton(acciones_proyecto, "Analizar", analizar_proyecto)
     boton(acciones_proyecto, "Pruebas", probar_proyecto)
@@ -714,8 +1025,14 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     elegir_cambio.bind("<<ComboboxSelected>>", mostrar_diff)
     boton(barra_editor, "Guardar · Ctrl+S", guardar, "Principal.TButton")
     boton(barra_editor, "Validar Python", revisar)
+    boton(barra_editor, "Vista previa", previsualizar_editor)
+    boton(barra_editor, "Consultar selección", usar_seleccion)
     boton(barra_chat, "Enviar", enviar, "Principal.TButton")
     boton(barra_chat, "Adjuntar", adjuntar)
+    boton(barra_chat, "Cancelar coordinación", lambda: publicar(
+        lambda: pedir("chat", {"mensaje": "Cancela la coordinación", "modo": "studio",
+                               "cliente": identificador}),
+        lambda dato: estado.set(dato["respuesta"])))
     boton(barra_conversaciones, "Nuevo chat", gestionar_chat)
     boton(barra_conversaciones, "Eliminar chat", lambda: gestionar_chat(borrar=True), "Eliminar.TButton")
     def ver_chats():
@@ -724,7 +1041,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     boton(barra_conversaciones, "Chats", ver_chats)
     selector.bind("<<ComboboxSelected>>", seleccionar_chat)
-    lista.bind("<<ListboxSelect>>", cargar_archivo)
+    lista.bind("<<ListboxSelect>>", lambda evento: cargar_archivo(evento)
+               if lista.curselection() and not lista.get(lista.curselection()[0]).endswith("/") else None)
+    lista.bind("<Double-Button-1>", lambda evento: cargar_archivo(evento)
+               if lista.curselection() and lista.get(lista.curselection()[0]).endswith("/") else None)
+    lista.bind("<Return>", cargar_archivo)
     consulta.bind("<Return>", lambda _: enviar())
 
     def guardar_atajo(_evento):
@@ -745,6 +1066,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     if inicial == "universe":
         paginas.select(mapa)
     actualizar_archivos()
+
+    def recordar_al_abrir(datos):
+        if datos.get("carpeta") and proyecto_activo is None and inicial != "universe":
+            abrir_proyecto(datos["carpeta"], datos.get("archivo"))
+
+    publicar(lambda: proyecto("recordado"), recordar_al_abrir)
     publicar(lambda: pedir("conversaciones"), mostrar_chat)
     publicar(lambda: pedir("estado"), lambda _: estado.set("Núcleo conectado"))
     informar(True)

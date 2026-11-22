@@ -261,3 +261,12 @@ button[aria-pressed="true"], .navegacion-principal [aria-current="page"] { borde
 #gestor-chats input { accent-color: #168BFF; }
 #borrar-chats-marcados { color: #ff9da8; }
 #aviso-chats:not(:empty) { margin-top: .65rem; }
+
+#visor-central img { display: block; max-width: 100%; max-height: 56vh; object-fit: contain; margin: .65rem auto; }
+#visor-central pre, #resultado-central pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#visor-central table { border-collapse: collapse; display: block; max-width: 100%; overflow: auto; }
+#visor-central td { border: 1px solid var(--linea); padding: .4rem .6rem; }
+#filtro-archivos, #tipo-archivo { width: 100%; margin: .2rem 0 .45rem; }
+#resultado-central meter { display: block; width: 100%; }
+.html-estatico { white-space: pre-wrap; overflow-wrap: anywhere; }
+.html-estatico strong { color: var(--acento); font-size: 1.3rem; }

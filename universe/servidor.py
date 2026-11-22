@@ -40,7 +40,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy",
-                             "default-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+                             "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
             self.end_headers()
             self.wfile.write(cuerpo)
@@ -215,7 +215,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     }
                 else:
                     acciones = {
-                        "/api/estado": nucleo.estado, "/api/historial": motor.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
+                        "/api/estado": lambda: {**nucleo.estado(), "proyectos_autorizables": abrir_estudio is not None}, "/api/historial": motor.historial, "/api/nodos": nucleo.nodos, "/api/archivos": nucleo.archivos,
                         "/api/conversaciones": motor.estado_conversaciones,
                         "/api/conversacion-activa": motor.conversaciones.version_activa,
                         "/api/analizar-aprendizaje": nucleo.analizar_aprendizaje,
