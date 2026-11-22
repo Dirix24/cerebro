@@ -59,3 +59,7 @@ Worktree `work/cerebro-auditoria`, rama `feature/auditoria-maestro-alumno`. Corr
 ## Seguimiento de cancelación, almacenamiento y voz
 
 En `feature/auditoria-maestro-alumno`, los commits `948dd2d`, `2b4218e` y `05b0337` añaden cancelación Git y presupuesto agregado supervisado, ajustan la cobertura de hora/fecha con promoción estricta frente a las reglas y prueban la cancelación por chat. Verifica la sección de seguimiento de `VALIDACION_CANDIDATO.md`. La instalación limpia, el reinicio aislado, Brave, la edición de una nota en Studio y el texto en la esfera se probaron. Falta confirmar voz real con una persona y cerrar el problema del acompañante residual, además del límite agregado instantáneo si se exige como garantía. No integrar en `main` mientras siga pendiente la prueba crítica de micrófono.
+
+## Entrega de instalación y cierre
+
+`ca8be85` coordina el cierre de Studio, núcleo y acompañante, registra el autoinicio XDG de XFCE, añade los comandos del README y prepara clones Git en tmpfs antes de copiar al depósito. `9d6e0d3` prueba arranque, chat y reinicio sin audio ni pantalla. La voz sigue pendiente de verificación manual. La aplicación y los datos se gestionan por separado; la desinstalación conserva por defecto el código, proyectos, memoria y modelos.
