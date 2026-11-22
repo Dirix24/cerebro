@@ -62,14 +62,21 @@ def diagnostico(ruta):
 
 
 class ProfesorLocal:
-    def __init__(self, puerto=None):
+    def __init__(self, puerto=None, *, ollama=None):
         if puerto is not None and (type(puerto) is not int or not 1024 <= puerto <= 65535):
             raise ValueError("El puerto del profesor local debe estar entre 1024 y 65535.")
+        if ollama is not None and (puerto is None or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,150}", ollama)
+                                   or re.search(r"(?:[:-]cloud)(?:[:/]|$)", ollama, re.I)):
+            raise ValueError("Indica el nombre de un modelo local válido de Ollama.")
         self.puerto = puerto
+        self.ollama = ollama
         self.ocupado = Lock()
 
     @classmethod
     def desde_entorno(cls):
+        ollama = os.environ.get("CEREBRO_OLLAMA_MODELO")
+        if ollama:
+            return cls(int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434")), ollama=ollama)
         valor = os.environ.get("CEREBRO_PROFESOR_PUERTO")
         if valor:
             return cls(int(valor))
@@ -154,24 +161,33 @@ class ProfesorLocal:
         try:
             puerto = self._asegurar_servidor()
             conexion = HTTPConnection("127.0.0.1", puerto, timeout=40)
-            peticion = json.dumps({
-                "messages": [
-                    {"role": "system", "content": instruccion + " Responde solo con texto."},
-                    *[{"role": rol, "content": contenido[:240]} for par in contexto[-2:]
-                      for rol, contenido in zip(("user", "assistant"), par)],
-                    {"role": "user", "content": mensaje_usuario},
-                ],
-                "max_tokens": max_tokens, "temperature": (0 if esquema else 0.2) if temperatura is None else temperatura, "stream": False,
-                **({"response_format": {"type": "json_schema", "schema": esquema}} if esquema else {}),
-            }).encode()
-            conexion.request("POST", "/v1/chat/completions", peticion, {"Content-Type": "application/json"})
+            mensajes = [
+                {"role": "system", "content": instruccion + " Responde solo con texto."},
+                *[{"role": rol, "content": contenido[:240]} for par in contexto[-2:]
+                  for rol, contenido in zip(("user", "assistant"), par)],
+                {"role": "user", "content": mensaje_usuario},
+            ]
+            temperatura = (0 if esquema else 0.2) if temperatura is None else temperatura
+            if self.ollama:
+                ruta = "/api/chat"
+                carga = {"model": self.ollama, "messages": mensajes, "stream": False, "keep_alive": 0,
+                         "options": {"num_predict": max_tokens, "num_ctx": 2048, "temperature": temperatura}}
+                if esquema:
+                    carga["format"] = esquema
+            else:
+                ruta = "/v1/chat/completions"
+                carga = {"messages": mensajes, "max_tokens": max_tokens, "temperature": temperatura, "stream": False}
+                if esquema:
+                    carga["response_format"] = {"type": "json_schema", "schema": esquema}
+            conexion.request("POST", ruta, json.dumps(carga).encode(), {"Content-Type": "application/json"})
             with conexion.getresponse() as respuesta:
                 if respuesta.status != 200:
                     raise RuntimeError("El profesor local rechazó la consulta.")
                 datos = respuesta.read(MAX_RESPUESTA + 1)
             if len(datos) > MAX_RESPUESTA:
                 raise RuntimeError("La respuesta del profesor excede el límite.")
-            mensaje = json.loads(datos)["choices"][0]["message"]
+            carga = json.loads(datos)
+            mensaje = carga["message"] if self.ollama else carga["choices"][0]["message"]
             texto = mensaje["content"]
             if mensaje.get("tool_calls") or not isinstance(texto, str) or not texto.strip() or len(texto) > 6000:
                 raise ValueError("Respuesta textual inválida.")

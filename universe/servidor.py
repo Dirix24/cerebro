@@ -104,7 +104,8 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             anterior = nucleo.conversaciones.version_activa()
             if "conversacion" in datos and datos["conversacion"] != anterior["activa"]:
                 raise ValueError("La conversación activa cambió. Actualiza antes de enviar el mensaje.")
-            resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"), cliente=datos.get("cliente"))
+            resultado = nucleo.conversar(datos.get("mensaje"), modo=datos.get("modo"), cliente=datos.get("cliente"),
+                                       documento=datos.get("documento"))
             if resultado.get("abrir") == "studio" and abrir_estudio is not None:
                 if abrir_estudio():
                     resultado.update(abrir="studio_nativo", respuesta="Abrí Cerebro Studio en el escritorio.")
@@ -114,7 +115,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                 else:
                     resultado["respuesta"] = "No pude abrir la Terminal de Cerebro en esta sesión."
             if resultado.get("abrir") == "tactil" and abrir_tactil is not None and abrir_tactil():
-                resultado["respuesta"] = "Solicité el modo táctil. Elige una cámara y autoriza su uso en la ventana local."
+                resultado["respuesta"] = "Solicité el modo gestual. Elige una cámara y autoriza su uso en la ventana local."
             if "abrir_url" in resultado and abrir_url is not None:
                 url = resultado["abrir_url"]
                 abierto = abrir_url(url)

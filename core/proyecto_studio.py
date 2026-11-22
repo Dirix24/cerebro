@@ -171,10 +171,19 @@ class ProyectoStudio:
                 return respuesta
             except (ValueError, UnicodeError) as error:
                 return {**datos, "aviso": str(error)}
-        if extension in IMAGENES | {".pdf"}:
+        if extension in IMAGENES | {".pdf", ".docx", ".odt"}:
             if info.st_size > MAX_VISOR:
                 return {**datos, "aviso": "La vista previa admite archivos de hasta 4 MiB."}
             bruto = self._bytes(nombre, MAX_VISOR)
+            if extension in {".docx", ".odt"}:
+                from core.documentos_oficina import extraer_texto
+
+                try:
+                    texto = extraer_texto(bruto, extension)
+                except ValueError as error:
+                    return {**datos, "aviso": str(error)}
+                return {**datos, "visor": "texto", "texto": texto, "solo_lectura": True,
+                        "aviso": "Texto extraído en solo lectura." if texto else "El documento no contiene texto legible."}
             if extension == ".pdf":
                 from core.visores_studio import pdf_vista
 

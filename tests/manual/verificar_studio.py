@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Thread
 from collections import deque
+from zipfile import ZipFile
 import os
 import shutil
 
@@ -47,6 +48,10 @@ with TemporaryDirectory() as temporal:
     Image.new("RGB", (12, 9), "green").save(carpeta / "grafico.png")
     (carpeta / "informe.pdf").write_bytes(pdf_fixture())
     (carpeta / "plan.md").write_text("# Plan del robot\nPasos del proyecto.\n")
+    with ZipFile(carpeta / "guia.docx", "w") as guia:
+        guia.writestr("word/document.xml",
+                      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                      '<w:p><w:r><w:t>La fotosíntesis transforma la energía luminosa.</w:t></w:r></w:p></w:document>')
     (carpeta / "datos.csv").write_text("paso,distancia\nuno,2\n")
     (carpeta / "vista.html").write_text("<h1>Vista local</h1><script>window.pruebaActiva=1</script><p>Seguro</p>")
     (carpeta / "rota.py").write_text("def averia()\n    return 1\n")
@@ -101,6 +106,18 @@ with TemporaryDirectory() as temporal:
                     expect(page.locator("#visor-central")).to_contain_text("Informe Cerebro")
                 fila("plan.md").click()
                 expect(page.locator("#visor-central")).to_contain_text("Pasos del proyecto.")
+                fila("guia.docx").click()
+                expect(page.locator("#visor-central")).to_contain_text("Texto extraído en solo lectura")
+                expect(page.locator("#visor-central")).to_contain_text("fotosíntesis")
+                page.get_by_label("Mensaje para Cerebro").fill("Resúmelo")
+                btn("Enviar").click()
+                expect(page.locator("#resultado-central")).to_contain_text("Resumen extractivo")
+                page.get_by_label("Mensaje para Cerebro").fill("Profesor, evalúame")
+                btn("Enviar").click()
+                expect(btn("Responder ejercicio")).to_be_visible()
+                respuestas.append("fotosíntesis")
+                btn("Responder ejercicio").click()
+                expect(page.locator("#resultado-central")).to_contain_text("Correcto.")
                 fila("datos.csv").click()
                 expect(page.locator("#visor-central table")).to_contain_text("distancia")
                 fila("vista.html").click()
