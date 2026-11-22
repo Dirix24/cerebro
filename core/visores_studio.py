@@ -4,6 +4,7 @@ import base64
 import csv
 from html.parser import HTMLParser
 from io import StringIO
+import os
 import re
 import shutil
 import subprocess
@@ -87,7 +88,7 @@ def _poppler(programa, opciones, bruto):
     try:
         with TemporaryFile() as salida:
             resultado = subprocess.run(comando, input=bruto, stdout=salida,
-                                       stderr=subprocess.DEVNULL, timeout=6)
+                                       stderr=subprocess.DEVNULL, timeout=6, env={**os.environ, "LC_ALL": "C"})
             if resultado.returncode:
                 raise ValueError("No pude leer el PDF o se superó el límite del visor.")
             salida.seek(0)
@@ -96,13 +97,48 @@ def _poppler(programa, opciones, bruto):
         raise ValueError("La vista previa del PDF agotó el tiempo.") from None
 
 
-def pdf_vista(bruto):
-    texto = _poppler("pdftotext", ["-f", "1", "-l", "8", "-layout", "-", "-"], bruto)
-    vista = {"texto": texto[:256 * 1024].decode("utf-8", "replace")}
+def pdf_paginas(bruto):
+    ficha = _poppler("pdfinfo", ["-"], bruto)
+    total = re.search(rb"^Pages:\s*([0-9]+)", ficha, re.M)
+    if not total or not int(total[1]):
+        raise ValueError("No pude determinar cuántas páginas contiene el PDF.")
+    return int(total[1])
+
+
+def pdf_texto(bruto, primera, ultima):
+    return _poppler("pdftotext", ["-f", str(primera), "-l", str(ultima), "-layout", "-", "-"], bruto)
+
+
+def pdf_buscar(bruto, consulta):
+    consulta = consulta.strip() if isinstance(consulta, str) else ""
+    if not 1 <= len(consulta) <= 160:
+        raise ValueError("Escribe una búsqueda de hasta 160 caracteres.")
+    total = pdf_paginas(bruto)
+    limite = min(total, 50)
+    texto = pdf_texto(bruto, 1, limite).decode("utf-8", "replace")
+    coincidencias = []
+    for numero, pagina in enumerate(texto.split("\f")[:limite], 1):
+        plana = " ".join(pagina.split())
+        if consulta.casefold() in plana.casefold():
+            linea = next((l.strip() for l in pagina.splitlines() if consulta.casefold() in l.casefold()), "")
+            coincidencias.append({"pagina": numero, "fragmento": linea[:280]})
+    return {"coincidencias": coincidencias, "revisadas": limite, "paginas": total}
+
+
+def pdf_vista(bruto, pagina=1, resolucion=980):
+    total = pdf_paginas(bruto)
+    if type(pagina) is not int or not 1 <= pagina <= total:
+        raise ValueError(f"Selecciona una página entre 1 y {total}.")
+    if type(resolucion) is not int or not 320 <= resolucion <= 2200:
+        raise ValueError("La resolución del visor debe estar entre 320 y 2200 píxeles.")
+    intervalo = ["-f", str(pagina), "-l", str(pagina)]
+    texto = pdf_texto(bruto, pagina, pagina)
+    vista = {"texto": texto[:256 * 1024].decode("utf-8", "replace").strip(),
+             "pagina": pagina, "paginas": total, "resolucion": resolucion}
     try:
-        imagen = _poppler("pdftoppm", ["-f", "1", "-l", "1", "-scale-to", "720", "-png", "-singlefile", "-"], bruto)
+        imagen = _poppler("pdftoppm", [*intervalo, "-scale-to", str(resolucion), "-png", "-singlefile", "-"], bruto)
     except ValueError:
-        vista["aviso"] = "Se muestra el texto disponible. No se pudo dibujar la primera página."
+        vista["aviso"] = "Se muestra el texto de la página. No se pudo dibujar con esa resolución."
     else:
         if imagen.startswith(b"\x89PNG\r\n\x1a\n"):
             vista["base64"] = base64.b64encode(imagen).decode("ascii")

@@ -202,3 +202,43 @@ def intencion_carpeta(texto, carpetas):
     if peticion:
         return next((ruta for nombre, ruta in carpetas.items() if _normalizar(nombre) == peticion[1]), None)
     return None
+
+
+def pagina_solicitada(texto):
+    from core.documentos_usuario import _normalizar
+
+    orden = _normalizar(texto).strip(" ¿?¡!.")
+    peticion = re.fullmatch(r"(?:(?:cerebro|profesor)[, ]+)?(?:explicame|analiza|resume|muestrame) "
+                           r"(?:la )?pagina (\d{1,5}|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)", orden)
+    if not peticion:
+        return None
+    valor = peticion[1]
+    if valor.isdecimal():
+        return int(valor)
+    return ("una", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve", "diez").index(
+        "una" if valor == "uno" else valor) + 1
+
+
+def pregunta_documental(texto):
+    from core.documentos_usuario import _normalizar
+
+    orden = _normalizar(texto)
+    pregunta = re.fullmatch(r"\s*(?:segun (?:el documento|el pdf|este archivo)[, :]\s*)(.{2,350})", orden)
+    return pregunta[1] if pregunta else None
+
+
+def recuperar_fragmentos(consulta, paginas):
+    from core.documentos_usuario import _normalizar
+
+    comunes = {"como", "cual", "cuales", "donde", "dice", "sobre", "para", "este", "esta", "tiene", "cuando"}
+    terminos = set(re.findall(r"\b\w{4,}\b", _normalizar(consulta))) - comunes
+    candidatos = []
+    for numero, pagina in enumerate(paginas, 1):
+        for fragmento in re.split(r"\n\s*\n|(?<=[.!?])\s+", pagina):
+            fragmento = " ".join(fragmento.split())
+            palabras = set(re.findall(r"\w+", _normalizar(fragmento)))
+            puntos = len(terminos & palabras)
+            if puntos:
+                candidatos.append((puntos, numero, fragmento[:500]))
+    candidatos.sort(key=lambda item: -item[0])
+    return [(numero, texto) for _, numero, texto in candidatos[:4]]

@@ -269,3 +269,6 @@ button[aria-pressed="true"], .navegacion-principal [aria-current="page"] { borde
 .html-estatico strong { color: var(--acento); font-size: 1.3rem; }
 #marco-web { width: 100%; min-height: 480px; border: 1px solid var(--linea); }
 #navegar-web input { min-width: 8rem; flex: 1; }
+
+.visor-desplazable { overflow: auto; max-height: 64vh; }
+#visor-central .visor-desplazable img { max-width: none; max-height: none; }

@@ -3,3 +3,6 @@ numpy>=1.24
 
 # Arrastrar archivos desde el gestor en Studio nativo (Linux).
 tkinterdnd2>=0.4.3; sys_platform == "linux"
+
+# Visor nativo de imágenes con interpolación.
+Pillow>=9.2

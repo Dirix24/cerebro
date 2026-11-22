@@ -69,6 +69,7 @@ def test_limite_total_considera_repositorios_anteriores(tmp_path):
 
 def test_git_termina_grupo_real_al_cancelar(tmp_path):
     import os
+    from time import monotonic, sleep
 
     from core.repositorio_descargado import _git
 
@@ -85,11 +86,17 @@ def test_git_termina_grupo_real_al_cancelar(tmp_path):
         _git((), {**os.environ, "PATH": str(tmp_path) + os.pathsep + os.defpath,
                   "PWD": str(tmp_path)}, comprobar, 1024 * 1024, 2, directorio=tmp_path)
     estado = Path("/proc") / hijo.read_text().strip() / "stat"
-    try:
-        stat = estado.read_text()
-    except (FileNotFoundError, ProcessLookupError):
-        return
-    assert stat.rsplit(")", 1)[1].split()[0] == "Z"
+    limite = monotonic() + 1
+    while monotonic() < limite:
+        try:
+            stat = estado.read_text()
+        except (FileNotFoundError, ProcessLookupError):
+            return
+        if stat.rsplit(")", 1)[1].split()[0] == "Z":
+            return
+        # El kernel puede entregar SIGKILL tras terminar el proceso padre.
+        sleep(.01)
+    pytest.fail("El proceso descendiente seguía activo tras cancelar Git.")
 
 
 def test_cancelacion_git_esta_vinculada_al_chat(tmp_path, monkeypatch):

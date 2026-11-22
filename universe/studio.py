@@ -15,7 +15,7 @@ from tkinter import END, BOTH, LEFT, RIGHT, X, Y, BooleanVar, Canvas, Listbox, M
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote, urlsplit
 
-from core.escritorio_studio import archivo_soltado, intencion_archivo, intencion_carpeta
+from core.escritorio_studio import archivo_soltado, intencion_archivo, intencion_carpeta, pagina_solicitada, pregunta_documental
 from core.visores_studio import HTML_INICIAL, html_estatico, tabla
 from universe.lanzador import ErrorAPI, api, abrir, abrir_web, carpeta, lanzar_acompanante, lanzar_tactil, lanzar_terminal
 from universe.mapa_studio import MapaStudio
@@ -281,6 +281,15 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cuerpo.add(codigo, weight=4)
     cuerpo.add(chat, weight=3)
 
+    def alternar_panel(panel, posicion, peso):
+        if str(panel) in cuerpo.panes():
+            cuerpo.forget(panel)
+        else:
+            cuerpo.insert(min(posicion, len(cuerpo.panes())), panel, weight=peso)
+
+    menu_opciones.add_command(label="Mostrar u ocultar archivos", command=lambda: alternar_panel(archivos, 0, 1))
+    menu_opciones.add_command(label="Mostrar u ocultar conversación", command=lambda: alternar_panel(chat, 2, 3))
+
     ttk.Label(archivos, text="EXPLORADOR", style="Seccion.TLabel").pack(anchor="w", pady=(0, 7))
     ttk.Label(archivos, textvariable=proyecto_titulo, wraplength=190).pack(anchor="w", pady=(0, 6))
     favoritas = ttk.Combobox(archivos, state="readonly")
@@ -358,7 +367,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     pagina_resultados = ttk.Frame(vistas_editor, padding=6)
     vistas_editor.add(pagina_visor, text="Visor")
     vistas_editor.add(pagina_resultados, text="Resultados")
-    imagen = ttk.Label(pagina_visor)
+    revision_vista = 0
     acciones_visor = ttk.Frame(pagina_visor)
     acciones_visor.pack(fill=X)
     visor = campo_texto(pagina_visor, codigo=True)
@@ -441,9 +450,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             "Cambios sin guardar", mensaje, parent=app)
 
     def visualizar(datos):
-        nonlocal imagen_activa
-        imagen.pack_forget()
-        imagen.configure(image="")
+        nonlocal imagen_activa, revision_vista
+        revision_vista += 1
+        revision = revision_vista
+        visor.unbind("<Control-MouseWheel>")
+        visor.unbind("<Control-Button-4>")
+        visor.unbind("<Control-Button-5>")
         imagen_activa = None
         for hijo in acciones_visor.winfo_children():
             hijo.destroy()
@@ -452,42 +464,92 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         contenido = datos.get("texto", "")
         mensaje = datos.get("aviso") or f"{nombre} · {datos['bytes']} bytes"
         if datos.get("base64") and datos.get("visor") in {"imagen", "pdf"}:
+            zoom = datos.get("zoom_imagen", 100)
+            pagina = datos.get("pagina", 1)
+            resolucion = datos.get("resolucion", 980)
+
+            def ajustar(nueva_pagina=pagina, escala=resolucion, porcentaje=zoom):
+                nonlocal revision_vista
+                if datos["visor"] == "imagen":
+                    visualizar({**datos, "zoom_imagen": max(25, min(200, porcentaje))})
+                    return
+                referencia = documento_activo
+                revision_vista += 1
+                turno = revision_vista
+                accion = "suelto" if datos.get("suelto") else "inspeccionar"
+                publicar(lambda: proyecto(accion, nombre=nombre, pagina=nueva_pagina,
+                                           resolucion=max(320, min(2200, escala)),
+                                           esperada=referencia[0] if referencia else None),
+                         lambda vista: visualizar(vista) if documento_activo == referencia
+                         and turno == revision_vista else None)
+
+            def cambiar_zoom(paso):
+                ajustar(escala=round(resolucion * (1.25 if paso > 0 else .8)), porcentaje=zoom + paso * 25)
+                return "break"
+
+            def buscar():
+                consulta = simpledialog.askstring("Buscar en PDF", "Texto a buscar", parent=app)
+                if not consulta or documento_activo is None:
+                    return
+                referencia = documento_activo
+                accion = "buscar_pdf_suelto" if datos.get("suelto") else "buscar_pdf"
+                def encontrado(resultado):
+                    if documento_activo != referencia or revision != revision_vista:
+                        return
+                    paginas = ", ".join(str(fila["pagina"]) for fila in resultado["coincidencias"])
+                    messagebox.showinfo("Buscar en PDF",
+                                        f"Coincidencias en páginas: {paginas or 'ninguna'}. "
+                                        f"Revisadas: {resultado['revisadas']} de {resultado['paginas']}.", parent=app)
+                publicar(lambda: proyecto(accion, nombre=nombre, consulta=consulta, esperada=referencia[0]), encontrado)
+
+            barra_zoom = ttk.Frame(acciones_visor)
+            barra_zoom.pack(side="bottom", fill=X)
+            if datos["visor"] == "pdf":
+                boton(acciones_visor, "‹", lambda: ajustar(pagina - 1)).configure(state="normal" if pagina > 1 else "disabled")
+                ttk.Label(acciones_visor, text=f"{pagina} / {datos['paginas']}").pack(side=LEFT)
+                boton(acciones_visor, "›", lambda: ajustar(pagina + 1)).configure(
+                    state="normal" if pagina < datos["paginas"] else "disabled")
+                boton(acciones_visor, "Buscar", buscar)
+            boton(barra_zoom, "−", lambda: cambiar_zoom(-1))
+            boton(barra_zoom, "+", lambda: cambiar_zoom(1))
+            boton(barra_zoom, "100 %", lambda: ajustar(escala=980, porcentaje=100))
+            visor.bind("<Control-MouseWheel>", lambda evento: cambiar_zoom(1 if evento.delta > 0 else -1))
+            visor.bind("<Control-Button-4>", lambda _: cambiar_zoom(1))
+            visor.bind("<Control-Button-5>", lambda _: cambiar_zoom(-1))
             try:
-                bruto = b64decode(datos["base64"], validate=True)
-                try:
-                    from PIL import Image, ImageTk
-                except ImportError:
-                    Image = None
-                if Image is not None:
-                    try:
-                        fuente = Image.open(BytesIO(bruto))
-                    except Image.DecompressionBombError as error:
-                        raise ValueError("La imagen supera el tamaño de vista previa.") from error
-                    with fuente:
-                        if fuente.width * fuente.height > 12_000_000:
-                            raise ValueError("La imagen supera el tamaño de vista previa.")
-                        fuente.thumbnail((650, 470))
-                        imagen_activa = ImageTk.PhotoImage(fuente, master=app)
-                else:
-                    if bruto.startswith(b"\x89PNG\r\n\x1a\n") and len(bruto) >= 24:
-                        ancho = int.from_bytes(bruto[16:20], "big")
-                        alto = int.from_bytes(bruto[20:24], "big")
-                    elif bruto.startswith((b"GIF87a", b"GIF89a")) and len(bruto) >= 10:
-                        ancho = int.from_bytes(bruto[6:8], "little")
-                        alto = int.from_bytes(bruto[8:10], "little")
-                    else:
-                        raise ValueError("Instala Pillow para previsualizar este formato.")
-                    if not 0 < ancho * alto <= 12_000_000:
+                from PIL import Image, ImageTk
+                with Image.open(BytesIO(b64decode(datos["base64"], validate=True))) as fuente:
+                    if fuente.width * fuente.height > 12_000_000:
                         raise ValueError("La imagen supera el tamaño de vista previa.")
-                    imagen_activa = PhotoImage(master=app, data=datos["base64"])
-                    reduccion = max(1, (max(ancho, alto) + 649) // 650)
-                    if reduccion > 1:
-                        imagen_activa = imagen_activa.subsample(reduccion, reduccion)
-                imagen.configure(image=imagen_activa)
-                imagen.pack(side="top", before=visor.master, pady=5)
-            except (OSError, ValueError, TclError) as error:
+                    if datos["visor"] == "imagen":
+                        escala = min(1.0, 850 / max(fuente.size)) * zoom / 100
+                        medidas = tuple(max(1, round(dimension * escala)) for dimension in fuente.size)
+                        fuente = fuente.resize(medidas, Image.Resampling.LANCZOS)
+                    imagen_activa = ImageTk.PhotoImage(fuente, master=app)
+            except ImportError:
+                mensaje += "\nInstala Pillow para el visor con zoom."
+            except (OSError, ValueError, TclError, Image.DecompressionBombError) as error:
                 mensaje += "\n" + str(error)
-        mostrar(visor, mensaje)
+            if imagen_activa is not None:
+                mostrar(visor, "")
+                visor.configure(state="normal")
+                visor.image_create("1.0", image=imagen_activa)
+                visor.configure(state="disabled")
+                if datos["visor"] == "pdf":
+                    ancho, alto = imagen_activa.width(), imagen_activa.height()
+                    boton(barra_zoom, "Ajustar ancho", lambda: ajustar(
+                        escala=round(resolucion * max(1, visor.winfo_width() - 35) / ancho)))
+                    boton(barra_zoom, "Ajustar página", lambda: ajustar(escala=round(resolucion * min(
+                        max(1, visor.winfo_width() - 35) / ancho, max(1, visor.winfo_height() - 35) / alto))))
+                boton(acciones_visor, "Información", lambda: messagebox.showinfo(
+                    nombre, mensaje + ("\n\n" + contenido[:1800] if contenido else ""), parent=app))
+                return_visual = True
+            else:
+                return_visual = False
+        else:
+            return_visual = False
+        if not return_visual:
+            mostrar(visor, mensaje)
         if datos.get("app_externa") and proyecto_activo:
             esperado = proyecto_activo
 
@@ -497,7 +559,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                              lambda dato: estado.set(dato["salida"]))
 
             boton(acciones_visor, "Abrir en aplicación local", externa)
-        if (datos.get("suelto") or extension in {".html", ".md", ".csv", ".tsv", ".pdf", ".docx", ".odt"}) and "texto" in datos:
+        if not return_visual and (datos.get("suelto") or extension in {".html", ".md", ".csv", ".tsv", ".pdf", ".docx", ".odt"}) and "texto" in datos:
             visor.configure(state="normal")
             visor.insert(END, "\n\n")
             if extension == ".html":
@@ -662,7 +724,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return ("refuse_drop", dnd[0], "")
         return (dnd[1], dnd[0], (str(Path(proyecto_activo) / nombre),))
 
-    def herramienta_archivo(herramienta):
+    def herramienta_archivo(herramienta, pagina=None, consulta=None):
         if documento_activo is None:
             estado.set("Abre un archivo primero.")
             return
@@ -688,7 +750,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                          lambda nota: mostrar(detalles, pregunta + "\n\n" + nota["salida"]))
 
         accion = "herramienta" if esperado else "herramienta_suelto"
-        publicar(lambda: proyecto(accion, nombre=nombre, herramienta=herramienta, esperada=esperado), resultado)
+        publicar(lambda: proyecto(accion, nombre=nombre, herramienta=herramienta, esperada=esperado, consulta=consulta,
+                                   **({"pagina": pagina} if pagina is not None else {})), resultado)
 
     def abrir_pagina_web():
         valor = simpledialog.askstring("Abrir página web", "Dirección https://", parent=app)
@@ -1020,10 +1083,13 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             abrir_proyecto(destino_personal)
             return
         accion_contextual = intencion_archivo(texto)
-        if accion_contextual and documento_activo:
+        pagina_consulta = pagina_solicitada(texto)
+        consulta = pregunta_documental(texto)
+        if documento_activo and (consulta or accion_contextual or
+                                 (pagina_consulta is not None and documento_activo[2] == "pdf")):
             entrada.set("")
             mostrar_mensaje("Tú", texto)
-            herramienta_archivo(accion_contextual)
+            herramienta_archivo("preguntar" if consulta else accion_contextual or "analizar", pagina_consulta, consulta)
             return
         if re.fullmatch(r"(?:cerebro[, ]+)?crea (?:una )?p[aá]gina web[.!]?", texto, re.I):
             if not proyecto_activo:

@@ -15,3 +15,27 @@ def analizar(codigo):
         elif isinstance(n, ast.ImportFrom):
             importaciones.append(n.module or "")
     return {"funciones": funciones, "clases": clases, "importaciones": importaciones}
+
+
+def consultar(entrada):
+    """Detecta código Python reconocible o un bloque Markdown declarado."""
+    import re
+
+    bloque = re.fullmatch(r"```(python|py)\s*\n([\s\S]+?)\n?```", entrada, re.I)
+    if bloque:
+        codigo = bloque[2]
+    elif re.match(r"(?:async\s+def|def|class|from|import)\s+\w|[a-zA-Z_]\w*\s*=(?!=)|print\s*\(", entrada):
+        codigo = entrada
+    else:
+        return None
+    try:
+        informe = analizar(codigo)
+    except SyntaxError as error:
+        return f"Sintaxis Python: línea {error.lineno}, columna {error.offset or 1}. {error.msg}."
+    except ValueError as error:
+        return str(error)
+    partes = ["Sintaxis Python válida."]
+    for clave, etiqueta in (("funciones", "Funciones"), ("clases", "Clases"), ("importaciones", "Importaciones")):
+        if informe[clave]:
+            partes.append(f"{etiqueta}: {', '.join(informe[clave][:15])}.")
+    return " ".join(partes) + " Inspección estática. Para comprobar el comportamiento, ejecuta pruebas autorizadas del proyecto."

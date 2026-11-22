@@ -48,6 +48,7 @@ COMANDOS = {
     "/memoria", "/recuerdo", "/recordar", "/olvidar", "/extraer-recuerdos", "/insertar-recuerdo",
     "/origen", "/configurar-creador", "/conocimiento", "/enseñar-habilidad", "/corregir-habilidad",
     "/usar-habilidad", "/encadenar-habilidades", "/aprender-ficha", "/internet",
+    "/recordar-tarea", "/recordatorios", "/cancelar-recordatorio",
     "/buscar-corpus", "/resumir", "/palabras-clave", "/github-explorar", "/github-leer", "/web",
 }
 EVENTOS = {
@@ -205,12 +206,19 @@ class Nucleo:
                 self.archivos_sueltos_studio.pop(next(iter(self.archivos_sueltos_studio)))
             self.archivos_sueltos_studio[cliente] = suelto, ruta.name
             return {**vista, "suelto": True, "app_externa": False}
-        if accion in {"suelto", "estado_suelto", "herramienta_suelto"}:
+        if accion in {"suelto", "estado_suelto", "herramienta_suelto", "buscar_pdf_suelto"}:
             referencia = self.archivos_sueltos_studio.get(cliente)
             if referencia is None:
                 raise ValueError("Abre y autoriza un archivo primero.")
             suelto, nombre_suelto = referencia
-            vista = suelto.inspeccionar(nombre_suelto, contenido=accion != "estado_suelto")
+            if accion == "buscar_pdf_suelto":
+                return suelto.buscar_pdf(nombre_suelto, datos.get("consulta"))
+            vista = suelto.inspeccionar(nombre_suelto, contenido=accion != "estado_suelto",
+                                        pagina=datos.get("pagina", 1), resolucion=datos.get("resolucion", 980))
+            if accion == "herramienta_suelto" and datos.get("herramienta") == "preguntar":
+                return self._preguntar_documento(suelto, nombre_suelto, vista, datos.get("consulta"))
+            if accion == "herramienta_suelto" and vista.get("extension") == ".pdf":
+                return self._herramienta_pdf(suelto, nombre_suelto, vista, cliente, datos, analizar_texto)
             if accion in {"suelto", "estado_suelto"}:
                 return {**vista, "suelto": True, "app_externa": False}
             return self._herramienta_documento(cliente, vista, datos, analizar_texto)
@@ -275,11 +283,19 @@ class Nucleo:
                 programa = abrir_carpeta(proyecto.raiz.joinpath(*partes))
             return {"salida": "Se solicitó abrir la carpeta con " + programa + "."}
         if accion == "herramienta":
-            return self._herramienta_documento(cliente, proyecto.inspeccionar(nombre), datos, analizar_texto)
+            vista = proyecto.inspeccionar(nombre, pagina=datos.get("pagina", 1))
+            if datos.get("herramienta") == "preguntar":
+                return self._preguntar_documento(proyecto, nombre, vista, datos.get("consulta"))
+            if vista.get("extension") == ".pdf":
+                return self._herramienta_pdf(proyecto, nombre, vista, cliente, datos, analizar_texto)
+            return self._herramienta_documento(cliente, vista, datos, analizar_texto)
+        if accion == "buscar_pdf":
+            return proyecto.buscar_pdf(nombre, datos.get("consulta"))
         if accion == "leer":
             return {"texto": proyecto.leer(nombre)}
         if accion in {"inspeccionar", "estado_archivo"}:
-            return proyecto.inspeccionar(nombre, contenido=accion == "inspeccionar")
+            return proyecto.inspeccionar(nombre, contenido=accion == "inspeccionar",
+                                         pagina=datos.get("pagina", 1), resolucion=datos.get("resolucion", 980))
         if accion == "abrir_externo":
             if not self.documentos_usuario or datos.get("confirmar") is not True:
                 raise PermissionError("Autoriza la aplicación local para abrir este documento.")
@@ -362,6 +378,46 @@ class Nucleo:
             self.ejecutor.submit(self._probar_proyecto, tarea, proyecto, cliente)
             return {"id": tarea["id"]}
         raise ValueError("Acción de proyecto desconocida.")
+
+    def _preguntar_documento(self, proyecto, nombre, vista, consulta):
+        from core.escritorio_studio import recuperar_fragmentos
+        from core.visores_studio import html_estatico
+
+        if not isinstance(consulta, str) or not 2 <= len(consulta) <= 350:
+            raise ValueError("Escribe una pregunta de hasta 350 caracteres.")
+        es_pdf = vista["extension"] == ".pdf"
+        texto = vista.get("texto", "")
+        if vista["extension"] == ".html":
+            texto = "".join(t for t, _ in html_estatico(texto))
+        paginas, total = proyecto.texto_pdf(nombre) if es_pdf else ([texto], 1)
+        fragmentos = recuperar_fragmentos(consulta, paginas)
+        salida = ("Fragmentos relevantes del documento:" if fragmentos
+                  else "No encontré un fragmento con términos de la pregunta.")
+        for pagina, fragmento in fragmentos:
+            referencia = f"Página {pagina}" if es_pdf else nombre
+            salida += f"\n\n{referencia} · {fragmento}"
+        if len(paginas) < total:
+            salida += f"\n\nRevisé {len(paginas)} de {total} páginas."
+        return {"archivo": nombre, "salida": salida}
+
+    def _herramienta_pdf(self, proyecto, nombre, vista, cliente, datos, analizar):
+        pagina = datos.get("pagina")
+        if pagina is not None:
+            if "pagina" not in vista:
+                raise ValueError(vista.get("aviso", "Página de PDF no disponible."))
+            resultado = self._herramienta_documento(cliente, vista, datos, analizar)
+            if "salida" in resultado:
+                resultado["salida"] = f"Página {pagina}\n\n" + resultado["salida"]
+            return resultado
+        paginas, total = proyecto.texto_pdf(nombre)
+        if datos.get("herramienta") == "resumir":
+            extractos = [f"Página {n}: {' '.join(texto.split())[:240]}"
+                         for n, texto in enumerate(paginas, 1) if texto]
+            if not extractos:
+                raise ValueError("El PDF no contiene texto extraíble. Puede requerir OCR.")
+            return {"archivo": nombre, "salida": f"Extractos de {len(paginas)} de {total} páginas.\n\n"
+                    + "\n\n".join(extractos)}
+        return self._herramienta_documento(cliente, {**vista, "texto": "\n".join(paginas)}, datos, analizar)
 
     def _herramienta_documento(self, cliente, vista, datos, analizar):
         herramienta = datos.get("herramienta")
@@ -505,15 +561,29 @@ class Nucleo:
             from core.escritorio_studio import intencion_archivo
 
             herramienta = intencion_archivo(pregunta)
-            if herramienta:
+            from core.escritorio_studio import pagina_solicitada, pregunta_documental
+
+            pagina = pagina_solicitada(pregunta)
+            consulta = pregunta_documental(pregunta)
+            if herramienta or pagina is not None or consulta:
                 resultado = self.operar_proyecto({
                     "accion": "herramienta", "cliente": cliente, "nombre": documento.get("nombre"),
-                    "carpeta_esperada": documento.get("carpeta"), "herramienta": herramienta,
+                    "carpeta_esperada": documento.get("carpeta"),
+                    "herramienta": "preguntar" if consulta else herramienta or "analizar", "consulta": consulta,
+                    **({"pagina": pagina} if pagina is not None else {}),
                 })
                 respuesta = resultado.get("salida") or resultado["ejercicio"]["pregunta"]
                 resultado["salida"] = respuesta
                 self._registrar_turno(pregunta, respuesta)
                 return {"respuesta": respuesta, "documento": resultado}
+        if modo == "terminal" and not comando:
+            from core.analizador_codigo_local import consultar as consultar_codigo
+
+            analisis = consultar_codigo(pregunta)
+            if analisis is not None:
+                self.exigir_permisos("READ")
+                self._registrar_turno(pregunta, analisis)
+                return {"respuesta": analisis, "origen": "analisis_python"}
         if modo == "studio" and re.fullmatch(r"(?:muestrame|ensename|quiero ver) (?:el )?robot(?: simulado)?", intencion):
             simulado = self.body()
             respuesta = "Abrí la vista del simulador local."
