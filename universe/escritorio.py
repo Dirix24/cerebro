@@ -38,13 +38,26 @@ def _accion_energia(orden):
     return next((accion for accion, patron in _ENERGIA.items() if re.fullmatch(patron, orden)), None)
 
 
+class ErrorComprobacion(RuntimeError):
+    def __init__(self, paso, detalle):
+        self.paso = paso
+        super().__init__(f"Paso {paso}: {detalle} No inicié este bloque de casillas.")
+
+
 class Reproduccion:
     def __init__(self, nombre, total):
         self.nombre, self.total = nombre, total
         self.verificados = 0
         self.estado = "en curso"
         self.resultado = ""
+        self.pasos = [{"paso": i, "estado": "no ejecutado"} for i in range(1, total + 1)]
         self.condicion = Condition()
+
+    def registrar(self, paso, estado, detalle):
+        with self.condicion:
+            self.pasos[paso - 1].update(estado=estado, detalle=detalle)
+            if estado == "verificado":
+                self.verificados += 1
 
     def esperar_paso(self):
         with self.condicion:
@@ -64,7 +77,8 @@ class Reproduccion:
                 self.estado = "en curso"
                 self.condicion.notify_all()
             return f"«{self.nombre}»: {self.estado}. {self.verificados}/{self.total} pasos verificados." + (
-                "\n" + self.resultado if self.resultado else "")
+                "\n" + self.resultado + "\n" + "; ".join(
+                    f"Paso {p['paso']}: {p['estado']}" for p in self.pasos) if self.resultado else "")
 
 
 
@@ -159,13 +173,15 @@ class Escritorio:
             return f'{app["nombre"]} aceptó la solicitud de apertura.'
         return f'No pude iniciar {app["nombre"]}.'
 
-    def _ventana(self, cliente, accion, ventana, avance=None):
+    def _ventana(self, cliente, accion, ventana, avance=None, *, registrar_intento=False):
         self._autorizar()
         titulo = ventana["titulo"]
         if accion == "cierra":
             self._autorizar_escritura()
             self._guardar_pendiente(cliente, cierre=ventana)
             return f'¿Cerrar «{titulo}»? Responde «Confirmar cierre» o «Cancelar».'
+        if registrar_intento and avance is not None:
+            avance.append(True)
         verificado = ventanas_x11.actuar(accion, ventana)
         hecho, infinitivo = _VERBOS[accion]
         if verificado:
@@ -173,7 +189,7 @@ class Escritorio:
             if ventana["clase"] and ventana["clase"] != "N/A":
                 self.demostraciones.registrar(cliente, accion, ventana["clase"])
             if avance is not None:
-                avance.append("verificado")
+                avance[:] = ["verificado"]
             return f'{hecho} «{titulo}».'
         return f'Solicité {infinitivo} «{titulo}», pero el gestor no confirmó el cambio.'
 
@@ -189,26 +205,29 @@ class Escritorio:
             paso = pasos[indice]
             if paso["accion"] != "casilla":
                 break
-            clase, clave, antes, despues = controles_accesibles.selector(paso["objetivo"])
-            if clase not in estados:
-                ventana = self._ventana_para_casilla(clase)
-                estados[clase] = dict(controles_accesibles.estado(ventana))
-            if estados[clase].get(clave) != antes:
-                raise RuntimeError(f"Paso {indice + 1}: la casilla falta, es ambigua o su estado inicial cambió. "
-                                   "No inicié este bloque de casillas.")
+            try:
+                clase, clave, antes, despues = controles_accesibles.selector(paso["objetivo"])
+                if clase not in estados:
+                    ventana = self._ventana_para_casilla(clase)
+                    estados[clase] = dict(controles_accesibles.estado(ventana))
+                if estados[clase].get(clave) != antes:
+                    raise RuntimeError("La casilla falta, es ambigua o su estado inicial cambió.")
+            except (OSError, RuntimeError, ValueError) as exc:
+                raise ErrorComprobacion(indice + 1, str(exc)) from exc
             estados[clase][clave] = despues
 
     def repetir_demostracion(self, pasos, cliente, reproduccion=None):
         resultados = []
-        verificados = 0
         for indice, paso in enumerate(pasos, 1):
             if reproduccion is not None and not reproduccion.esperar_paso():
                 resultados.append("Repetición cancelada entre pasos.")
                 break
-            self._autorizar()
             accion, objetivo = paso["accion"], paso["objetivo"]
             avance = []
+            fase = "comprobación previa"
+            paso_evidencia = indice
             try:
+                self._autorizar()
                 if accion == "casilla":
                     self._autorizar_escritura()
                     if indice == 1 or pasos[indice - 2]["accion"] != "casilla":
@@ -218,8 +237,10 @@ class Escritorio:
                         break
                     self._autorizar_escritura()
                     clase, _, _, _ = controles_accesibles.selector(objetivo)
-                    if controles_accesibles.ejecutar(self._ventana_para_casilla(clase), objetivo):
-                        avance.append("verificado")
+                    ventana = self._ventana_para_casilla(clase)
+                    avance.append(True)
+                    if controles_accesibles.ejecutar(ventana, objetivo):
+                        avance[-1] = "verificado"
                         respuesta = "Casilla accesible modificada y estado verificado."
                     else:
                         respuesta = "El estado final de la casilla quedó sin verificar."
@@ -229,18 +250,32 @@ class Escritorio:
                                  else "La aplicación enseñada ya no está disponible.")
                 else:
                     ventanas = [v for v in ventanas_x11.listar() if v["clase"] == objetivo]
-                    respuesta = (self._ventana(cliente, accion, ventanas[0], avance) if len(ventanas) == 1
+                    respuesta = (self._ventana(cliente, accion, ventanas[0], avance, registrar_intento=True)
+                                 if len(ventanas) == 1
                                  else "La ventana enseñada cambió o hay varias coincidencias.")
-            except (ValueError, RuntimeError) as exc:
+            except ErrorComprobacion as exc:
+                paso_evidencia = exc.paso
                 respuesta = str(exc)
-            resultados.append(f"{indice}. {respuesta}")
-            if avance != ["verificado"]:
-                resultados.append("Detuve la demostración. Revisa la aplicación antes de volver a enseñarme este paso.")
-                break
-            verificados += 1
+            except PermissionError as exc:
+                if reproduccion is None:
+                    raise
+                fase = "permisos"
+                respuesta = str(exc)
+            except (OSError, ValueError, RuntimeError) as exc:
+                respuesta = str(exc)
+            estado = "verificado" if avance == ["verificado"] else (
+                "efecto sin verificar" if avance else "bloqueado en " + fase)
             if reproduccion is not None:
-                with reproduccion.condicion:
-                    reproduccion.verificados = verificados
+                reproduccion.registrar(paso_evidencia, estado, respuesta)
+            resultados.append(respuesta if paso_evidencia != indice else f"{indice}. {respuesta}")
+            if avance != ["verificado"]:
+                if avance:
+                    resultados.append("Comprueba el efecto en la aplicación y recupera el estado inicial antes de repetir.")
+                else:
+                    resultados.append("Corrige el requisito indicado antes de volver a confirmar la repetición.")
+                if reproduccion is not None and reproduccion.verificados:
+                    resultados.append("Los cambios verificados de pasos anteriores siguen aplicados.")
+                break
         return "\n".join(resultados)
 
     def _ejecutar_reproduccion(self, pasos, cliente, reproduccion):
@@ -250,7 +285,8 @@ class Escritorio:
                 if self.nucleo.agente.tiene_permisos("READ", "WRITE") and not self.nucleo.solo_lectura:
                     self.nucleo.memoria.cargar_memoria()
                     self.nucleo.memoria.guardar_largo_plazo("ejecucion_demostracion:" + reproduccion.nombre,
-                        {"verificados": reproduccion.verificados, "total": reproduccion.total},
+                        {"verificados": reproduccion.verificados, "total": reproduccion.total,
+                         "pasos": reproduccion.pasos},
                         categoria="ejecucion_demostracion")
         except (OSError, RuntimeError, ValueError) as exc:
             resultado = f"La repetición se detuvo: {exc}"

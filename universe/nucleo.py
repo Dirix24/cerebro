@@ -638,10 +638,14 @@ class Nucleo:
                 if categoria == "ejecucion_demostracion" and isinstance(valor, dict):
                     nombre = clave.partition(":")[2]
                     original = "demostracion_escritorio:" + nombre
+                    pasos = valor.get("pasos", [])
+                    resumen = ", ".join(f"{p['paso']}: {p['estado']}" for p in pasos
+                                        if isinstance(p, dict) and "paso" in p and "estado" in p)
                     nodos.append({"id": "ejecucion:" + sha256(clave.encode()).hexdigest()[:24],
                                   "tipo": "conocimiento" if valor.get("verificados") == valor.get("total") else "errores",
                                   "titulo": "Última ejecución: " + nombre,
-                                  "detalle": f"{valor.get('verificados')}/{valor.get('total')} pasos verificados",
+                                  "detalle": f"{valor.get('verificados')}/{valor.get('total')} pasos verificados"
+                                             + (f" · {resumen}" if resumen else ""),
                                   "vinculos": ["procedimiento:" + sha256(original.encode()).hexdigest()[:24]],
                                   "origen": "Comprobación de estado AT-SPI", "fecha": entrada.get("fecha")})
                     continue

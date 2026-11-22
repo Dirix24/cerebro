@@ -78,6 +78,7 @@ def test_repeticion_pausa_y_cancela_desde_otro_request(tmp_path, monkeypatch):
             liberaciones[1].set()
             esperar(lambda: "cancelada" in ordenar("Estado de la repetición"))
             assert llamados == [0, 1]
+            assert "Paso 3: no ejecutado" in ordenar("Estado de la repetición")
         finally:
             for liberacion in liberaciones:
                 liberacion.set()
@@ -89,7 +90,7 @@ def test_repeticion_pausa_y_cancela_desde_otro_request(tmp_path, monkeypatch):
 
 def test_bloque_con_casilla_ausente_no_cambia_ninguna(monkeypatch):
     from core import ventanas_x11
-    from universe.escritorio import Escritorio
+    from universe.escritorio import Escritorio, Reproduccion
 
     ejecutadas = []
     monkeypatch.setattr(ventanas_x11, "listar", lambda: [{"clase": "gtk.Clase"}])
@@ -100,6 +101,21 @@ def test_bloque_con_casilla_ausente_no_cambia_ninguna(monkeypatch):
     monkeypatch.setattr(escritorio, "_autorizar_escritura", lambda: None)
     pasos = [{"accion": "casilla", "objetivo": json.dumps(["gtk.Clase", letra * 64, False, True])}
              for letra in ("a", "b")]
-    respuesta = escritorio.repetir_demostracion(pasos, "prueba")
+    reproduccion = Reproduccion("prueba", len(pasos))
+    respuesta = escritorio.repetir_demostracion(pasos, "prueba", reproduccion)
     assert "Paso 2" in respuesta and "No inicié este bloque" in respuesta
     assert ejecutadas == []
+    assert [p["estado"] for p in reproduccion.pasos] == ["no ejecutado", "bloqueado en comprobación previa"]
+
+    monkeypatch.setattr(atspi, "estado", lambda _: dict.fromkeys(("a" * 64, "b" * 64, "c" * 64), False))
+    def ejecutar(ventana, objetivo):
+        ejecutadas.append(objetivo)
+        return len(ejecutadas) == 1
+
+    monkeypatch.setattr(atspi, "ejecutar", ejecutar)
+    pasos.append({"accion": "casilla", "objetivo": json.dumps(["gtk.Clase", "c" * 64, False, True])})
+    reproduccion = Reproduccion("prueba", len(pasos))
+    escritorio.repetir_demostracion(pasos, "prueba", reproduccion)
+    assert reproduccion.verificados == 1
+    assert len(ejecutadas) == 2
+    assert [p["estado"] for p in reproduccion.pasos] == ["verificado", "efecto sin verificar", "no ejecutado"]
