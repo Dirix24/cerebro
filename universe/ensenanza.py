@@ -25,7 +25,7 @@ class Ensenanza:
                 resumen = self.estado
                 if ultimo:
                     evaluacion = ultimo["despues"]
-                    resumen += f". Último candidato: {evaluacion['aciertos']}/{evaluacion['total']}."
+                    resumen = resumen.rstrip(".") + f". Último candidato: {evaluacion['aciertos']}/{evaluacion['total']}."
                     resumen += " Promovido." if ultimo["promovido"] else " Rechazado."
                 return {"respuesta": resumen, "activo": activo, "ultimo": ultimo}
             nucleo.exigir_permisos("WRITE")

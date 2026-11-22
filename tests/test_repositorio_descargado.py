@@ -42,3 +42,13 @@ def test_permisos_impiden_descarga(internet):
     mensaje = "Clona https://github.com/a/b y explícame cómo funciona"
     with pytest.raises(PermissionError, match="WRITE" if internet else "internet"):
         resolver(nucleo, mensaje, mensaje.lower())
+
+
+@pytest.mark.parametrize("url", [
+    "https://ejemplo.org/gastos.pdf",
+    "https://github.com/a/b/blob/main/gastos.pdf",
+    "https://github.com/a/b/releases/download/v1/gastos.pdf",
+])
+def test_descarga_de_pdf_no_reclama_herramienta_git(url):
+    mensaje = f"Descarga el PDF {url}"
+    assert resolver(object(), mensaje, mensaje.lower()) is None
