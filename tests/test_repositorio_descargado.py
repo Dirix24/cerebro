@@ -90,3 +90,43 @@ def test_git_termina_grupo_real_al_cancelar(tmp_path):
             assert estado.read_text().rsplit(")", 1)[1].split()[0] == "Z"
         except FileNotFoundError:
             pass
+
+
+def test_cancelacion_git_esta_vinculada_al_chat(tmp_path, monkeypatch):
+    from threading import Event
+    from time import monotonic, sleep
+
+    import config
+    from universe import herramientas
+    from universe.nucleo import Nucleo
+
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memory.json"))
+    empezado, liberar = Event(), Event()
+    def descargar_lento(url, raiz, *, avanzar):
+        avanzar("clonando")
+        empezado.set()
+        assert liberar.wait(5)
+        avanzar("publicando")
+        pytest.fail("Una descarga cancelada no debe publicarse.")
+
+    monkeypatch.setattr(herramientas, "descargar", descargar_lento)
+    n = Nucleo("local", internet=True)
+    origen, otro = "a" * 24, "b" * 24
+    try:
+        assert "en cola" in n.conversar("Clona https://github.com/a/b", cliente=origen)["respuesta"]
+        assert empezado.wait(5)
+        assert "No hay" in n.conversar("Cancela descarga Git", cliente=otro)["respuesta"]
+        assert "clonando" in n.conversar("Estado de descarga Git", cliente=origen)["respuesta"]
+        assert "solicitada" in n.conversar("Cancela descarga Git", cliente=origen)["respuesta"]
+        liberar.set()
+        fin = monotonic() + 5
+        while monotonic() < fin:
+            if "cancelada" in n.conversar("Estado de descarga Git", cliente=origen)["respuesta"]:
+                break
+            sleep(.01)
+        else:
+            pytest.fail("La cancelación no llegó al trabajo.")
+    finally:
+        liberar.set()
+        n.ejecutor.shutdown()
