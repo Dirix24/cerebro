@@ -1,108 +1,341 @@
-# Cerebro 🧠
+# 🧠 Cerebro — Asistente personal de IA local y de código abierto
 
-**Asistente personal de IA local, de código abierto y desarrollado con ayuda de inteligencia artificial.**
+**Cerebro** es un asistente personal experimental para **MX Linux, XFCE y X11**, construido en Python. Une conversación, memoria, archivos, proyectos, navegación, herramientas del escritorio y aprendizaje neuronal supervisado en un núcleo local compartido.
 
-Cerebro es un proyecto experimental para **MX Linux con XFCE/X11** que reúne conversación, archivos, proyectos, herramientas de escritorio y un sistema de aprendizaje **maestro–alumno**. Su objetivo es que puedas pedir acciones en lenguaje natural, revisar qué hará el asistente y trabajar desde varias interfaces conectadas a un mismo núcleo.
+**Repositorio:** https://github.com/Dirix24/cerebro · **Licencia:** [MIT](LICENSE) · **Estado:** desarrollo activo / experimental
 
-> **Transparencia:** Cerebro fue ideado y dirigido por su creador, **Dirix24**, y gran parte de su código, documentación y pruebas se ha desarrollado con asistencia de herramientas de IA, como ChatGPT y Codex. El código generado por IA se revisa y prueba; no se presenta como escrito enteramente a mano.
+> **Creación con IA, sin ocultarlo:** la idea, los objetivos y la dirección del proyecto corresponden a **Dirix24**. El software se ha desarrollado en gran medida **con asistencia de inteligencia artificial**, incluidos ChatGPT y Codex, para diseño, programación, documentación y pruebas. El código asistido por IA requiere revisión y verificación como cualquier otro código.
 >
-> **Estado:** proyecto en desarrollo. No es una IA general ni todas las funciones están completas. Las capacidades y pruebas descritas dependen de la versión y del equipo.
+> **No es una IA general ni un sustituto de los grandes modelos comerciales.** Muchas funciones son específicas, otras experimentales y algunas siguen pendientes de pruebas reales.
 
-## ¿Qué puede hacer?
+## Índice
 
-- **Cuatro interfaces:** Terminal, Chat web, Cerebro Studio y esfera de escritorio, conectadas al núcleo local.
-- **Cerebro Studio:** explorar proyectos y archivos autorizados, leer y editar texto, revisar cambios y ejecutar pruebas de Python en un entorno aislado cuando esté disponible.
-- **Herramientas locales:** búsqueda de documentos, lectura de PDF de texto, apertura de aplicaciones y control autorizado de ventanas en XFCE/X11.
-- **Memoria y Universe:** guardar y consultar recuerdos, relaciones y evidencias de acciones y evaluaciones.
-- **Git y web:** consultar fuentes públicas y clonar repositorios HTTPS con comprobación de resultados, progreso, cancelación y presupuesto de almacenamiento.
-- **Maestro–alumno experimental:** Qwen local mediante llama.cpp puede proponer ejemplos; un alumno pequeño entrena pesos reales, se evalúa y solo se promociona si cumple los criterios. Hay opción de cancelar y revertir.
-- **Voz opcional:** la esfera admite interacción por texto; dictado y respuesta hablada requieren hardware y pruebas manuales adicionales.
+1. [Qué es Cerebro](#qué-es-cerebro)
+2. [Instalación, desinstalación y comandos](#instalación-desinstalación-y-comandos)
+3. [Las cuatro interfaces](#las-cuatro-interfaces)
+4. [Ejemplos de cosas que puedes pedirle](#ejemplos-de-cosas-que-puedes-pedirle)
+5. [Maestro Qwen y alumno neuronal](#maestro-qwen-y-alumno-neuronal)
+6. [Memoria, Universe y ANALIZAR](#memoria-universe-y-analizar)
+7. [Studio y programación](#studio-y-programación)
+8. [Escritorio, demostraciones y voz](#escritorio-demostraciones-y-voz)
+9. [Internet, descargas y GitHub](#internet-descargas-y-github)
+10. [Arquitectura y seguridad](#arquitectura-y-seguridad)
+11. [Pruebas y estado real](#pruebas-y-estado-real)
+12. [Cómo colaborar y licencia](#cómo-colaborar-y-licencia)
 
-**Límites importantes:** el alumno se ha probado en competencias acotadas, especialmente consultas de hora y fecha. **No se ha demostrado que supere a las reglas tradicionales ni que aprenda cualquier tarea.** Las predicciones experimentales para archivos, web y estado del sistema no deben confundirse con acciones autónomas ya habilitadas. El funcionamiento sin micrófono es válido.
+## Qué es Cerebro
 
-## Instalación en MX Linux
+La idea de Cerebro es tener **un asistente propio, local y extensible** que pueda entender órdenes habituales y usar herramientas reales con permisos, en lugar de limitarse a producir texto. Su diseño conecta cuatro interfaces a un servicio local y a las mismas herramientas, recuerdos y registros.
 
-Requisitos principales: MX Linux con XFCE/X11, Python 3 y las dependencias indicadas en el proyecto. Algunas funciones requieren programas adicionales; consulta [la guía de interfaces](docs/INTERFACES_MX.md).
+Cerebro puede realizar tareas acotadas como buscar documentos autorizados, abrir aplicaciones, consultar fuentes públicas, inspeccionar proyectos, ejecutar verificaciones controladas y registrar demostraciones de escritorio. Cuando una acción necesita autorización, el sistema debe pedirla y verificar el resultado.
 
-Desde una copia del repositorio:
+**Local por diseño:** los modelos, recuerdos y proyectos pueden permanecer en el equipo. Las consultas web y las descargas sí usan internet. El maestro Qwen es opcional y requiere tener instalados por separado llama.cpp y los pesos GGUF; Cerebro no los descarga automáticamente.
+
+### Qué no significa
+
+- Tener memoria **no significa** que un modelo haya entrenado sus pesos.
+- Registrar una demostración **no significa** aprender a controlar cualquier aplicación.
+- Tener un maestro y un alumno **no significa** disponer de inteligencia general.
+- Superar pruebas automáticas **no demuestra** que todas las interfaces funcionen en todos los equipos.
+
+## Instalación, desinstalación y comandos
+
+### Requisitos
+
+Proyecto orientado a **MX Linux / Debian con XFCE y X11**. Se necesita Python 3. Las capacidades de escritorio dependen de herramientas como `wmctrl`, `xdotool`, `xprop` y AT-SPI; la ejecución aislada de pruebas requiere Bubblewrap y namespaces disponibles. Para PDF de texto se usa `pdftotext` de Poppler. Algunas funciones utilizan Pillow, Vosk, OpenCV, MediaPipe o PyTorch opcionalmente.
+
+Desde la carpeta del repositorio:
 
 ```bash
+# Instalar Cerebro para tu usuario
 ./instalar
+
+# Hacer disponible el comando en esta terminal
 export PATH="$HOME/.local/bin:$PATH"
+
+# Arrancar Cerebro
+cerebro iniciar
+
+# Consultar estado
+cerebro estado
 ```
 
-Para instalar **sin autoinicio**:
+Instalar sin activar el inicio automático:
 
 ```bash
 ./instalar --sin-autoinicio
 ```
 
-### Comandos de uso
+### Comandos principales
 
 | Acción | Comando |
 | --- | --- |
-| Iniciar Cerebro | `cerebro iniciar` |
-| Detener Cerebro y sus tareas | `cerebro detener` |
-| Consultar estado | `cerebro estado` |
+| Instalar | `./instalar` |
+| Instalar sin autoinicio | `./instalar --sin-autoinicio` |
+| Iniciar Cerebro con Studio como ventana principal | `cerebro iniciar` |
+| Detener servicio y tareas | `cerebro detener` |
+| Ver estado | `cerebro estado` |
 | Abrir Studio | `cerebro studio` |
 | Abrir Chat web | `cerebro chat` |
 | Abrir Terminal de Cerebro | `cerebro terminal` |
-| Abrir esfera | `cerebro escritorio` |
+| Abrir esfera de escritorio | `cerebro escritorio` |
 | Activar autoinicio en XFCE | `cerebro autoinicio activar` |
 | Desactivar autoinicio | `cerebro autoinicio desactivar` |
-| Desinstalar | `./desinstalar` |
+| Desinstalar conservando datos | `./desinstalar` |
+| Desinstalar y solicitar borrado de datos conocidos | `./desinstalar --borrar-datos` |
 
-El autoinicio se realiza al **entrar en la sesión de XFCE**. La X de la ventana principal de Studio solicita el cierre del servicio compartido y avisa si hay cambios sin guardar. El cierre de ventanas secundarias tiene un comportamiento diferente para evitar pérdidas de trabajo.
+El **autoinicio** se registra para la siguiente entrada en tu sesión de XFCE, no antes de iniciar sesión. Studio actúa como ventana principal; su **X** solicita apagar el servicio compartido, avisando si hay cambios sin guardar. Cerrar una ventana secundaria no siempre significa cerrar todo Cerebro.
 
-La desinstalación normal **conserva proyectos, recuerdos, modelos y datos**. La opción `./desinstalar --borrar-datos` solicita una confirmación explícita y solo debe usarse si deseas eliminar los datos que gestiona el instalador. Haz una copia de seguridad antes.
+**La desinstalación normal conserva** repositorio, proyectos, recuerdos, modelos y datos. La variante `--borrar-datos` exige escribir la frase de confirmación `BORRAR MIS DATOS` y solo afecta a las ubicaciones reconocidas por el desinstalador. Haz copias de seguridad antes de usarla.
 
-## Maestro y alumno: qué significa «aprender»
+El comando `cerebro` se instala en `~/.local/bin/`. Si tu shell no lo encuentra, añade esa carpeta al `PATH` o abre una terminal nueva tras configurarlo.
 
-El ciclo experimental sigue esta secuencia:
+### Herramientas CLI adicionales del proyecto
 
-1. **Maestro:** Qwen ejecutado localmente propone ejemplos para una habilidad acotada.
-2. **Validación:** se filtran ejemplos incorrectos o inseguros.
-3. **Alumno:** un modelo pequeño se entrena y modifica sus pesos.
-4. **Evaluación:** se compara el candidato con el modelo anterior y con reglas, usando bancos separados.
-5. **Promoción o rechazo:** solo se activa el candidato cuando cumple la política de evaluación; se conserva la posibilidad de revertir.
+El repositorio conserva también comandos del sistema clásico de Cerebro. No todos equivalen al núcleo compartido de Studio:
 
-En las interfaces compatibles puedes usar **«Entrenar alumno»**, **«Confirma entrenar alumno»**, **«Estado del alumno»** y **«Cancela entrenar alumno»**. El entrenamiento requiere confirmación en la conversación que lo inició y se ejecuta en segundo plano.
+```bash
+python3 cerebro.py --help
+python3 cerebro.py diagnostico
+python3 cerebro.py motores
+python3 evaluate.py --rapido
+python3 -m pytest -q -ra
+```
 
-Este mecanismo **sí entrena parámetros neuronales**, pero no convierte automáticamente a Cerebro en una inteligencia general. Consulta [el informe de validación](docs/VALIDACION_CANDIDATO.md) para conocer las pruebas y sus limitaciones.
+Para entrenamientos especializados consulta [la guía de motores](CEREBRO_MOTORES.md). No ejecutes entrenamientos largos sobre checkpoints importantes sin respaldos.
 
-## Seguridad y privacidad
+## Las cuatro interfaces
 
-Cerebro prioriza la ejecución local y los permisos explícitos. Las operaciones sensibles pueden requerir autorización, los cambios en Studio se revisan y las pruebas de código usan aislamiento con Bubblewrap cuando está disponible. Si el aislamiento requerido no funciona, esa ejecución se rechaza.
+| Interfaz | Uso principal |
+| --- | --- |
+| **Terminal** | Conversación y comandos locales; puede tener chat separado o sincronizarse con el chat activo |
+| **Chat web** | Conversación desde el navegador local, adjuntos y herramientas |
+| **Cerebro Studio** | Explorador de proyectos, editor, revisiones, pruebas, chat contextual y Universe |
+| **Esfera azul** | Acompañante flotante, interacción por texto y opciones experimentales de voz |
 
-**Local no significa infalible:** revisa las acciones propuestas, evita abrir proyectos no confiables con permisos amplios y mantén copias de seguridad. Las búsquedas públicas y descargas sí necesitan conexión a internet. Los modelos y bibliotecas de terceros tienen sus propias condiciones de licencia.
+El servicio se comunica por **loopback** (`127.0.0.1`) y usa una clave de sesión. Las interfaces comparten un núcleo y pueden compartir el chat activo, según el modo elegido.
 
-## Pruebas y desarrollo
+### Conversaciones y memoria
 
-Desde el repositorio, con las dependencias de desarrollo instaladas:
+- `/nuevo-chat`: abrir conversación nueva.
+- `/chats`: consultar conversaciones.
+- `/historial`: ver historial disponible.
+- `/sincronizar` o **«sincronízate»**: usar en Terminal el chat activo de Studio, Chat web y esfera.
+- `/separar`: volver al ámbito separado de Terminal.
+- `/guardar-en-studio` o **«guarda esto en Studio»**: guardar la última respuesta como nota TXT.
+- `/recordar proyecto = Atlas`: guardar un dato explícito.
+- `/recuerdo proyecto`: recuperar ese dato.
+
+La memoria persistente y el historial son funciones distintas del entrenamiento neuronal.
+
+## Ejemplos de cosas que puedes pedirle
+
+Los ejemplos muestran rutas concretas del proyecto. Su resultado depende de permisos, aplicaciones instaladas, datos disponibles y compatibilidad del sistema.
+
+| Petición | Qué intenta hacer |
+| --- | --- |
+| «¿Qué hora es?» | Consultar la hora local |
+| «¿Cuánto es dos más dos?» | Usar cálculo determinista |
+| «Búscame todos mis PDF» | Buscar en carpetas autorizadas |
+| «Busca los vídeos que descargué esta semana» | Filtrar archivos por tipo y fecha |
+| «Busca en mis documentos: presupuesto» | Buscar texto en archivos compatibles y acotados |
+| «Abre Blender» | Localizar y abrir la aplicación disponible |
+| «Enfoca el navegador» | Seleccionar la ventana real en X11 |
+| «Maximiza Blender» | Cambiar la ventana y verificar el resultado |
+| «Cierra LibreOffice» | Solicitar confirmación y enviar cierre normal |
+| «Muéstrame todas las ventanas abiertas» | Consultar ventanas X11 |
+| «Abre YouTube y busca un tutorial de Blender» | Abrir resultados en el navegador |
+| «Analiza este enlace de Wikipedia» | Consultar la introducción de un artículo público |
+| «Estado del profesor» | Consultar disponibilidad y configuración del maestro |
+| «Estado del alumno» | Consultar modelo activo y evaluación |
+| «Entrenar alumno» | Solicitar un ciclo supervisado, con confirmación |
+| «Estado de descarga Git» | Consultar una clonación en segundo plano |
+| «Cancela descarga Git» | Cancelar una clonación iniciada desde ese chat |
+
+**Ejemplo con confirmación:** «Cierra LibreOffice» no debe cerrar inmediatamente una ventana sin comprobar la autorización correspondiente. **Ejemplo con contexto:** después de buscar documentos, puedes seleccionar un resultado por número cuando haya varias coincidencias.
+
+## Maestro Qwen y alumno neuronal
+
+Una de las líneas de investigación de Cerebro es un **ciclo maestro–alumno local**:
+
+1. **Maestro:** Qwen2.5-1.5B-Instruct en GGUF Q4_K_M, ejecutado mediante llama.cpp en CPU, propone ejemplos para una tarea concreta.
+2. **Validador independiente:** filtra propuestas incorrectas o que no cumplen el contrato.
+3. **Alumno:** un clasificador neuronal pequeño en NumPy entrena con ejemplos aprobados y **modifica pesos reales**.
+4. **Evaluación:** compara el candidato con bancos separados, reglas y criterios de abstención.
+5. **Promoción o rechazo:** conserva el candidato anterior si el nuevo no mejora lo necesario; admite reversión.
+6. **Uso local:** el núcleo puede consultar un alumno aprobado sin mantener Qwen cargado continuamente.
+
+### Comandos del ciclo supervisado
+
+| Escribe en una interfaz compatible | Función |
+| --- | --- |
+| `Entrenar alumno` | Preparar solicitud de entrenamiento |
+| `Confirma entrenar alumno` | Autorizar desde la conversación de origen |
+| `Estado del alumno` | Consultar progreso, evaluación y candidato activo |
+| `Cancela entrenar alumno` | Solicitar cancelación segura |
+| `Estado del profesor` | Consultar el profesor local |
+
+Para configurar Qwen bajo demanda, después de instalar llama.cpp y descargar legalmente el GGUF de forma separada:
+
+```bash
+export CEREBRO_PROFESOR_MOTOR="/ruta/a/llama-server"
+export CEREBRO_PROFESOR_MODELO="/ruta/a/qwen.gguf"
+cerebro iniciar
+```
+
+También existe la opción de un servidor local previamente autorizado mediante `CEREBRO_PROFESOR_PUERTO`; consulta [CEREBRO_MOTORES.md](CEREBRO_MOTORES.md). **No incluyas pesos GGUF en un pull request** sin revisar su licencia y tamaño.
+
+### Resultados y límites
+
+Los informes del proyecto documentan inferencia real de Qwen, generación y filtrado de ejemplos, cambios de pesos, uso de un candidato desde el núcleo y rollback. Las pruebas se han centrado en **hora y fecha**. **No se ha demostrado una ventaja neuronal general frente a las reglas**; algunos bancos pequeños dieron resultados equivalentes. Por eso las nuevas clases de intención se prueban primero en observación y no ejecutan automáticamente acciones.
+
+Cerebro también contiene otros motores y experimentos de entrenamiento NumPy/PyTorch, evaluación de competencias y análisis. **No son todos el mismo alumno ni están necesariamente integrados en el chat habitual.** Consulta [Motores](CEREBRO_MOTORES.md) y [validación](docs/VALIDACION_CANDIDATO.md).
+
+## Memoria, Universe y ANALIZAR
+
+**Memoria** conserva información explícita y permite recuperarla entre sesiones. **Universe** representa conocimientos, relaciones, procedimientos, candidatos y evidencias; un nodo de Universe **no es** por sí mismo una neurona ni una prueba de aprendizaje de pesos.
+
+**ANALIZAR** examina registros y resultados, señala debilidades y permite preparar ciclos controlados de entrenamiento. Las propuestas no deben considerarse mejoras hasta superar validación.
+
+Se distinguen tres cosas:
+
+- **Recordar:** almacenar un dato.
+- **Aprender un procedimiento:** registrar una secuencia autorizada y verificable.
+- **Entrenar un modelo:** cambiar pesos y medir su rendimiento fuera del entrenamiento.
+
+## Studio y programación
+
+Studio es el entorno de trabajo de Cerebro. Su objetivo es reunir **explorador, editor, visualizadores, chat contextual, revisión de cambios, pruebas y Universe**.
+
+Flujo típico:
+
+1. Abre Studio con `cerebro studio`.
+2. Selecciona **Abrir proyecto** y autoriza una carpeta.
+3. Explora y abre archivos compatibles.
+4. Pide analizar un proyecto Python.
+5. Revisa errores y propuestas en **Cambios**.
+6. Confirma las modificaciones que quieras aplicar.
+7. Ejecuta pruebas compatibles desde **Pruebas** y revisa **Validaciones**.
+
+El análisis estático puede compilar Python sin ejecutarlo y proponer correcciones acotadas. No es un programador general capaz de reparar cualquier proyecto.
+
+### Documentos
+
+Cerebro puede trabajar con TXT, Markdown, código, DOCX y PDF con texto extraíble según la ruta utilizada. Los PDF escaneados necesitan OCR. Los visores y la apertura externa dependen del formato y de las aplicaciones instaladas.
+
+### Ejecución segura de pruebas
+
+La ruta de `unittest` desde Studio utiliza **Bubblewrap** cuando el sistema lo permite, con copia de trabajo acotada, límites de recursos y red aislada. Si el aislamiento no está disponible, la ejecución se rechaza. El aislamiento no equivale a una garantía absoluta frente a todo código malicioso.
+
+## Escritorio, demostraciones y voz
+
+En **XFCE/X11**, Cerebro usa utilidades del sistema para localizar, enfocar, minimizar, maximizar, mover y solicitar el cierre de ventanas. Verifica estados cuando la operación lo permite. Wayland necesita adaptadores específicos.
+
+### Enseñar una demostración
+
+Ejemplo de rutina autorizada:
+
+1. «Empezar demostración Diseño».
+2. Ejecuta las acciones compatibles una a una.
+3. «Guardar demostración».
+4. «Repite la demostración Diseño».
+
+En los flujos de observación semántica con **AT-SPI**, Cerebro puede detectar cambios de casillas accesibles de una ventana autorizada, guardar un borrador, solicitar revisión y reproducir los pasos con comprobaciones. No equivale a grabar toda la pantalla ni a aprender libremente cualquier interfaz.
+
+El sistema también tiene un **modo táctil experimental** basado en cámara y detección de manos, sujeto a dependencias y compatibilidad. No debe presentarse como una función universal ya verificada.
+
+### Esfera y voz
+
+La esfera puede mostrar estados e interactuar por **texto**. El dictado y la respuesta hablada son opcionales y necesitan micrófono, configuración y pruebas humanas. **Cerebro puede utilizarse sin micrófono.** La falta de una prueba de voz no debe ocultarse ni convertirse en una afirmación de que la voz ya está verificada.
+
+## Internet, descargas y GitHub
+
+Las funciones públicas son **acotadas**: por ejemplo, consultas a Wikipedia, fuentes de noticias, búsquedas abiertas en navegador y algunas descargas desde fuentes verificadas. No es un navegador autónomo universal.
+
+### Clonar repositorios
+
+Ejemplo:
+
+```text
+Clona https://github.com/octocat/Hello-World
+Estado de descarga Git
+Cancela descarga Git
+```
+
+La clonación HTTPS se ejecuta en segundo plano, valida el repositorio y comprueba el commit y el README. La cancelación se vincula a la conversación que inició el trabajo. El depósito utiliza un presupuesto agregado documentado de **128 MiB** con comprobaciones durante la operación y almacenamiento temporal controlado; los límites exactos dependen del sistema de archivos y la versión. No debe prometerse una cuota instantánea universal sin verificarla.
+
+Una URL de PDF no debe enviarse al clonador Git. Los repositorios descargados son **contenido no confiable**: leerlos o inspeccionarlos no implica ejecutar su código.
+
+## Arquitectura y seguridad
+
+Componentes principales del repositorio:
+
+| Área | Papel |
+| --- | --- |
+| `universe/nucleo.py` | Núcleo de conversación, memoria, herramientas y coordinación |
+| `universe/lanzador.py` | Arranque y conexión de interfaces al servicio local |
+| `universe/instalar_escritorio.py` | Comandos, accesos y autoinicio de XFCE |
+| `universe/herramientas.py` | Catálogo y ejecución de herramientas, incluida descarga Git |
+| `universe/` | Studio, esfera, servidor y adaptadores |
+| `core/` | Utilidades, modelos, validadores, seguridad y componentes |
+| `agent/` | Orquestación y agentes auxiliares |
+| `memory/` | Memoria y recuperación |
+| `checkpoints/` | Pesos y checkpoints del proyecto |
+| `tests/` | Pruebas automatizadas |
+| `docs/` | Guías técnicas y continuidad |
+
+La estructura exacta puede evolucionar; usa el árbol del repositorio como referencia para tu commit.
+
+### Principios de seguridad
+
+- Permisos **READ/WRITE** para operaciones relevantes.
+- Confirmaciones vinculadas a la conversación para acciones sensibles.
+- Validación de rutas, destinos y parámetros.
+- Comprobación del resultado cuando sea posible.
+- Cancelación y límites de recursos para trabajos prolongados.
+- Copias y candidatos separados para proteger checkpoints.
+- Servicio local limitado a loopback con token de sesión.
+- No ejecutar automáticamente código descargado.
+
+Los datos persistentes pueden incluir `data/`, `memory/`, `universe-datos/`, `learning/` y `checkpoints/`. **No publiques datos personales, tokens, conversaciones ni modelos privados** al colaborar.
+
+## Pruebas y estado real
+
+Comando habitual:
 
 ```bash
 python3 -m pytest -q -ra
 ```
 
-Algunas pruebas requieren loopback, Bubblewrap, X11 o intervención manual. Un resultado positivo de la suite no sustituye la prueba real de las interfaces. Consulta la [documentación de continuidad](docs/PLAN_CONTINUIDAD_CEREBRO.md) y la [validación del candidato](docs/VALIDACION_CANDIDATO.md). Las cifras de pruebas de informes antiguos no garantizan el estado de cada nueva revisión.
+También hay herramientas de diagnóstico y evaluación específicas. Algunas pruebas requieren acceso a loopback, Bubblewrap, XFCE/X11, cámara o micrófono. Un entorno sin esos recursos puede dejar verificaciones manuales pendientes.
 
-## Cómo colaborar 🤝
+Los informes de auditoría han registrado **entrenamiento real del maestro y alumno, pruebas de Studio y Chat, regresiones, protección de checkpoints y validación de clonación Git**. Los resultados corresponden a commits concretos y **no garantizan automáticamente cualquier versión posterior**.
 
-**¡Se aceptan contribuciones!** Puedes ayudar con Python, Linux, interfaces, accesibilidad, documentación, pruebas, traducciones, seguridad y evaluación del aprendizaje.
+Para detalles y evidencias: [validación del candidato](docs/VALIDACION_CANDIDATO.md), [continuidad](docs/PLAN_CONTINUIDAD_CEREBRO.md), [interfaces MX Linux](docs/INTERFACES_MX.md), [motores](CEREBRO_MOTORES.md).
 
-1. Abre un **Issue** para describir un error o proponer una mejora.
-2. Haz un **fork** del repositorio y crea una rama.
-3. Añade pruebas o explica cómo verificaste el cambio.
-4. Envía un **Pull Request** con una descripción clara.
+### Hoja de ruta
 
-Las contribuciones pequeñas son bienvenidas. Si una función todavía es experimental, indícalo con claridad. No incluyas credenciales, datos personales ni pesos de modelos de terceros sin comprobar sus licencias.
+- Mejorar estabilidad, instalación y recuperación.
+- Terminar verificaciones manuales de voz y de interfaces.
+- Ampliar pruebas de generalización del alumno y comparaciones con reglas.
+- Mejorar Studio, navegación y contexto entre herramientas.
+- Ampliar las capacidades del escritorio sin perder permisos ni verificaciones.
+- Explorar integraciones futuras de cuentas, automatizaciones, clúster y móvil **sin anunciarlas como ya terminadas**.
 
-**Repositorio:** https://github.com/Dirix24/cerebro
+## Cómo colaborar y licencia
 
-## Licencia abierta: MIT
+**Cerebro está abierto a colaboradores.** Se agradecen informes de errores, pruebas en Linux, documentación, traducciones, mejoras de accesibilidad, diseño, seguridad y experimentos de aprendizaje reproducibles.
 
-Cerebro se distribuye bajo la **[licencia MIT](LICENSE)**. Puedes usar, estudiar, modificar y redistribuir el código, incluso con fines comerciales, siempre que conserves el aviso de copyright y el texto de la licencia. Los componentes y modelos externos mantienen sus licencias independientes.
+1. Revisa los [Issues](https://github.com/Dirix24/cerebro/issues) o abre uno con los pasos para reproducir el problema.
+2. Haz un fork y crea una rama con un cambio acotado.
+3. Añade pruebas cuando cambies el comportamiento.
+4. Indica qué comprobaste realmente y qué quedó pendiente.
+5. Envía un Pull Request con la explicación del cambio.
 
----
+No hace falta contribuir con una función enorme: corregir un fallo pequeño o mejorar una guía también ayuda.
 
-**Cerebro es un proyecto abierto creado a partir de una idea humana y desarrollado con ayuda de IA.** Su propósito es aprender, experimentar y construir un asistente personal útil que otras personas también puedan estudiar y mejorar.
+### Licencia MIT
+
+El código y la documentación de Cerebro se ofrecen bajo la **[licencia MIT](LICENSE)**. Se permite utilizar, copiar, estudiar, modificar, distribuir y vender software derivado, conservando los avisos de copyright y licencia exigidos. Las dependencias, modelos de terceros y otros recursos pueden tener licencias diferentes.
+
+**Cerebro es una idea humana desarrollada con ayuda de IA y abierta a que la comunidad la mejore.** 🧠💙
