@@ -635,6 +635,16 @@ class Nucleo:
             if isinstance(entrada, dict):
                 categoria = entrada.get("categoria", "general")
                 valor = entrada.get("valor")
+                if categoria == "ejecucion_demostracion" and isinstance(valor, dict):
+                    nombre = clave.partition(":")[2]
+                    original = "demostracion_escritorio:" + nombre
+                    nodos.append({"id": "ejecucion:" + sha256(clave.encode()).hexdigest()[:24],
+                                  "tipo": "conocimiento" if valor.get("verificados") == valor.get("total") else "errores",
+                                  "titulo": "Última ejecución: " + nombre,
+                                  "detalle": f"{valor.get('verificados')}/{valor.get('total')} pasos verificados",
+                                  "vinculos": ["procedimiento:" + sha256(original.encode()).hexdigest()[:24]],
+                                  "origen": "Comprobación de estado AT-SPI", "fecha": entrada.get("fecha")})
+                    continue
                 if categoria == "demostracion_escritorio" and isinstance(valor, list):
                     from agent.demostracion_escritorio import ACCIONES
                     acciones = {p["accion"] for p in valor if isinstance(p, dict)

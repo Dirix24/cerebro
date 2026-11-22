@@ -3,12 +3,13 @@ from collections import OrderedDict
 import os
 from pathlib import Path
 import re
+from threading import Event, Lock
 from time import monotonic, sleep
 
 from agent.control_ventanas import buscar, etiquetas, interpretar
 from agent import coordinador_hibrido
 from agent.demostracion_escritorio import Demostraciones
-from core import aplicaciones_linux, documentos_usuario, energia_linux, ventanas_x11
+from core import aplicaciones_linux, controles_accesibles, documentos_usuario, energia_linux, ventanas_x11
 
 
 CATEGORIA = "documento_escritorio"
@@ -40,6 +41,8 @@ def _accion_energia(orden):
 class Escritorio:
     def __init__(self, nucleo):
         self.nucleo = nucleo
+        self.reproducciones = {}
+        self.cerrojo_reproducciones = Lock()
         self.pendientes = OrderedDict()
         self.enlaces = OrderedDict()
         self.ultimas_aplicaciones = OrderedDict()
@@ -141,14 +144,29 @@ class Escritorio:
             return f'{hecho} «{titulo}».'
         return f'Solicité {infinitivo} «{titulo}», pero el gestor no confirmó el cambio.'
 
-    def repetir_demostracion(self, pasos, cliente):
+    def repetir_demostracion(self, pasos, cliente, detener=None, nombre=None):
         resultados = []
+        verificados = 0
         for indice, paso in enumerate(pasos, 1):
+            if detener is not None and detener.is_set():
+                resultados.append("Repetición cancelada entre pasos.")
+                break
             self._autorizar()
             accion, objetivo = paso["accion"], paso["objetivo"]
             avance = []
             try:
-                if accion == "abrir":
+                if accion == "casilla":
+                    self._autorizar_escritura()
+                    clase, _, _, _ = controles_accesibles.selector(objetivo)
+                    candidatas = [v for v in ventanas_x11.listar() if v["clase"] == clase]
+                    if len(candidatas) != 1:
+                        raise RuntimeError("Abre una sola ventana de la aplicación enseñada.")
+                    if controles_accesibles.ejecutar(candidatas[0], objetivo):
+                        avance.append("verificado")
+                        respuesta = "Casilla accesible modificada y estado verificado."
+                    else:
+                        respuesta = "El estado final de la casilla quedó sin verificar."
+                elif accion == "abrir":
                     app = next((a for a in aplicaciones_linux.listar() if a["id"] == objetivo), None)
                     respuesta = (self._aplicacion(app, cliente, avance) if app
                                  else "La aplicación enseñada ya no está disponible.")
@@ -156,12 +174,17 @@ class Escritorio:
                     ventanas = [v for v in ventanas_x11.listar() if v["clase"] == objetivo]
                     respuesta = (self._ventana(cliente, accion, ventanas[0], avance) if len(ventanas) == 1
                                  else "La ventana enseñada cambió o hay varias coincidencias.")
-            except RuntimeError as exc:
+            except (ValueError, RuntimeError) as exc:
                 respuesta = str(exc)
             resultados.append(f"{indice}. {respuesta}")
             if avance != ["verificado"]:
                 resultados.append("Detuve la demostración. Revisa la aplicación antes de volver a enseñarme este paso.")
                 break
+            verificados += 1
+        if nombre and self.nucleo.agente.tiene_permisos("WRITE"):
+            self.nucleo.memoria.cargar_memoria()
+            self.nucleo.memoria.guardar_largo_plazo("ejecucion_demostracion:" + nombre,
+                {"verificados": verificados, "total": len(pasos)}, categoria="ejecucion_demostracion")
         return "\n".join(resultados)
 
     def _impedimentos_energia(self, accion):
@@ -578,6 +601,12 @@ class Escritorio:
     def consultar(self, pregunta, cliente):
         texto = re.sub(r"^cerebro(?:[,\s]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
         normal = documentos_usuario._normalizar(texto)
+        if normal in {"para", "cancela la repeticion"}:
+            with self.cerrojo_reproducciones:
+                evento = self.reproducciones.get(cliente)
+                if evento:
+                    evento.set()
+                    return "Solicité detener la repetición al terminar el paso en curso."
         propuesta = coordinador_hibrido.PREGUNTA_PLAN.fullmatch(texto)
         if propuesta:
             return self._proponer_plan(propuesta[1], cliente)
@@ -690,6 +719,21 @@ class Escritorio:
         if confirmacion in _RECHAZAR:
             self.pendientes.pop(cliente)
             return "De acuerdo. Cancelé la operación pendiente."
+        if "repetir_casillas" in datos and confirmacion == "confirma la repeticion":
+            self._autorizar()
+            self._autorizar_escritura()
+            with self.cerrojo_reproducciones:
+                if self.reproducciones:
+                    return "Ya hay una repetición accesible en curso."
+                evento = Event()
+                self.reproducciones[cliente] = evento
+            self.pendientes.pop(cliente, None)
+            try:
+                return self.repetir_demostracion(datos["repetir_casillas"], cliente, evento,
+                                                  datos["nombre_demostracion"])
+            finally:
+                with self.cerrojo_reproducciones:
+                    self.reproducciones.pop(cliente, None)
         if "plan_profesor" in datos and confirmacion == "confirmar plan de escritorio":
             self._autorizar()
             plan = datos["plan_profesor"]

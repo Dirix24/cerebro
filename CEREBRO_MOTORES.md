@@ -169,3 +169,11 @@ Pruebas:
 ```bash
 python3 -m pytest -q tests/test_cerebro_torch.py tests/test_local_search.py
 ```
+
+## Demostración semántica en XFCE
+
+La rama de demostración incorpora un adaptador AT-SPI para **casillas visibles y habilitadas**. Usa PID, marco accesible único, clase X11 y una huella de la etiqueta. El borrador conserva estados booleanos. La lectura excluye campos de texto, contraseñas y diálogos. Se muestrea únicamente durante la observación autorizada y con el objetivo enfocado. Si cambian varias casillas entre muestras, se detiene porque el orden es ambiguo.
+
+Para una prueba humana, abre la aplicación GTK de prueba con `NO_AT_BRIDGE=0 /usr/bin/python3 tests/fixtures/casillas_gtk.py` desde la rama. Pulsa **Dictar** en la esfera, revisa lo transcrito y envíalo. Di «Observa controles de Casillas Cerebro Prueba como cuadrícula» y luego «Autoriza observación». Haz clic en **Mostrar cuadrícula** una vez y espera un segundo. Pulsa **Detener** en el indicador o di «Ya terminé». Revisa el borrador y di «Apruébalo». Desmarca la casilla, mueve la ventana y di «Repite la demostración cuadrícula» y «Confirma la repetición». Comprueba que la casilla vuelve a quedar marcada y que Cerebro informa de la verificación.
+
+La repetición exige una ventana única y el estado previo observado. «Para» solicita detenerla entre pasos. Universe conserva el último número de pasos verificados, vinculado al procedimiento. El adaptador observa los cambios de estado, por lo que un clic y una tecla que producen el mismo cambio generan el mismo paso semántico.

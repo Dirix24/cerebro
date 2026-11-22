@@ -1,11 +1,12 @@
 """Observación consentida de estados X11, sin captura de entrada ni de pantalla."""
 from dataclasses import dataclass, field
+import json
 import re
 from threading import Event, RLock, Thread
 from time import monotonic
 
 from agent.control_ventanas import buscar
-from core import ventanas_x11
+from core import controles_accesibles, ventanas_x11
 
 
 _NOMBRE = r"[\w -]{1,48}"
@@ -17,11 +18,13 @@ class Observacion:
     ventana: dict
     estado: tuple
     caduca: float
+    controles: dict | None = None
     pasos: list = field(default_factory=list)
     detener: Event = field(default_factory=Event)
     listo: bool = False
     motivo: str = ""
     revisado: bool = False
+    indicador: object = None
 
 
 def acciones(antes, despues):
@@ -54,12 +57,17 @@ class Observador:
     def _observar(self, rutina):
         agente = self.escritorio.nucleo.agente
         while not rutina.detener.wait(.4) and monotonic() < rutina.caduca:
+            if rutina.indicador is not None and rutina.indicador.poll() is not None:
+                rutina.detener.set()
+                break
             if not agente.tiene_permisos("READ", "WRITE"):
                 rutina.motivo = "Se revocó un permiso."
                 rutina.detener.set()
                 break
             try:
                 nuevo = ventanas_x11.estado_observable(rutina.ventana)
+                controles = (controles_accesibles.estado(rutina.ventana)
+                             if rutina.controles is not None and nuevo[2] else None)
             except RuntimeError as exc:
                 rutina.motivo = str(exc)
                 rutina.detener.set()
@@ -69,14 +77,40 @@ class Observador:
                     break
                 for accion in acciones(rutina.estado, nuevo):
                     rutina.pasos.append({"accion": accion, "objetivo": rutina.ventana["clase"]})
+                if controles is not None:
+                    cambios = [clave for clave in sorted(controles.keys() & rutina.controles.keys())
+                               if controles[clave] != rutina.controles[clave]] if rutina.estado[2] else []
+                    if len(cambios) > 1:
+                        rutina.motivo = "Varias casillas cambiaron entre dos lecturas; el orden es ambiguo."
+                        rutina.detener.set()
+                        break
+                    for clave in cambios:
+                        selector = [rutina.ventana["clase"], clave, rutina.controles[clave], controles[clave]]
+                        rutina.pasos.append({"accion": "casilla", "objetivo": json.dumps(selector)})
+                    rutina.controles = controles
                 rutina.estado = nuevo
+                rutina.pasos = rutina.pasos[:12]
                 if len(rutina.pasos) >= 12:
                     break
+        if rutina.indicador is not None:
+            if rutina.indicador.poll() is None:
+                rutina.indicador.terminate()
+            rutina.indicador.wait()
         with self.cerrojo:
             rutina.listo = True
 
     def consultar(self, orden, cliente):
-        solicitud = re.fullmatch(rf"observa (?:la ventana de (.+?)|esta ventana) como ({_NOMBRE})", orden)
+        alias = {"ya termine": "deten la observacion", "deja de observar": "deten la observacion",
+                 "apruebalo": "aprueba la demostracion"}
+        if orden == "para" and cliente in self.rutinas:
+            orden = "deten la observacion"
+        orden = alias.get(orden, orden)
+        edicion = re.fullmatch(rf"guardalo como ({_NOMBRE})|mueve el paso ([0-9]{{1,2}}) al ([0-9]{{1,2}})|quita el ultimo paso", orden)
+        if edicion:
+            orden = "revisa la observacion"
+        semantica = orden.startswith("observa controles de ")
+        texto = "observa la ventana de " + orden.removeprefix("observa controles de ") if semantica else orden
+        solicitud = re.fullmatch(rf"observa (?:la ventana de (.+?)|esta ventana) como ({_NOMBRE})", texto)
         operacion = re.fullmatch(
             r"(?:autoriza observacion|deten la observacion|revisa la observacion|"
             r"quita el paso (\d{1,2}) de la observacion|interpreta la observacion|"
@@ -101,9 +135,12 @@ class Observador:
             with self.cerrojo:
                 if cliente in self.rutinas:
                     return "Revisa, aprueba o cancela la observación anterior primero."
-                self.solicitudes[cliente] = (monotonic() + 60, solicitud[2], candidatas[0])
+                self.solicitudes[cliente] = (monotonic() + 60, solicitud[2], candidatas[0], semantica)
                 if len(self.solicitudes) > 32:
                     self.solicitudes.pop(next(iter(self.solicitudes)))
+            if semantica:
+                return (f"Ventana elegida: «{candidatas[0]['titulo']}». Durante 90 s observaré cambios de "
+                        "casillas accesibles y estados de ventana. Responde «Autoriza observación».")
             return (f"Ventana elegida: «{candidatas[0]['titulo']}». Durante 90 s solo observaré su foco, "
                     "minimización y maximización. Responde «Autoriza observación» o «Cancela la observación».")
         if orden == "autoriza observacion":
@@ -113,9 +150,14 @@ class Observador:
                     return "Selecciona una ventana antes de autorizar la observación."
                 if any(not r.listo for r in self.rutinas.values()) or len(self.rutinas) >= 32:
                     return "Hay una observación en curso o demasiados borradores."
-                _, nombre, ventana = datos
+                _, nombre, ventana, semantica = datos
                 estado = ventanas_x11.estado_observable(ventana)
-                rutina = Observacion(nombre, ventana, estado, monotonic() + 90)
+                controles = controles_accesibles.estado(ventana) if semantica else None
+                if semantica and not controles:
+                    return "La ventana no ofrece casillas accesibles utilizables."
+                rutina = Observacion(nombre, ventana, estado, monotonic() + 90, controles)
+                if semantica:
+                    rutina.indicador = controles_accesibles.indicador()
                 self.rutinas[cliente] = rutina
                 Thread(target=self._observar, args=(rutina,), daemon=True).start()
             return "Observación iniciada. Manipula la ventana elegida y di «Detén la observación»."
@@ -140,13 +182,31 @@ class Observador:
                 memoria.guardar_largo_plazo(clave, list(rutina.pasos), categoria=self.categoria)
                 self.rutinas.pop(cliente)
                 return f"Guardé «{rutina.nombre}» con {len(rutina.pasos)} pasos aprobados."
+            if edicion:
+                if edicion[1]:
+                    rutina.nombre = edicion[1].strip()
+                elif edicion[2]:
+                    a, b = int(edicion[2]), int(edicion[3])
+                    if not 1 <= a <= len(rutina.pasos) or not 1 <= b <= len(rutina.pasos):
+                        return "Uno de los números de paso no existe."
+                    rutina.pasos.insert(b - 1, rutina.pasos.pop(a - 1))
+                elif rutina.pasos:
+                    rutina.pasos.pop()
             if operacion[1]:
                 numero = int(operacion[1])
                 if not 1 <= numero <= len(rutina.pasos):
                     return "Ese paso no existe."
                 del rutina.pasos[numero - 1]
             rutina.revisado = True
-            lista = "\n".join(f"{i}. {p['accion']}" for i, p in enumerate(rutina.pasos, 1))
+            lineas = []
+            for i, paso in enumerate(rutina.pasos, 1):
+                descripcion = paso["accion"]
+                if descripcion == "casilla":
+                    _, clave, antes, despues = controles_accesibles.selector(paso["objetivo"])
+                    descripcion += f" {clave[:8]} · {'marcada' if antes else 'desmarcada'} → "
+                    descripcion += "marcada" if despues else "desmarcada"
+                lineas.append(f"{i}. {descripcion}")
+            lista = "\n".join(lineas)
             motivo = rutina.motivo
         if not lista:
             return "Todavía no hay cambios de ventana que pueda guardar." + (f" {motivo}" if motivo else "")

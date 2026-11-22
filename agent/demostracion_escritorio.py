@@ -8,8 +8,9 @@ from agent.observacion_escritorio import Observador
 
 
 CATEGORIA = "demostracion_escritorio"
-ACCIONES = frozenset({"abrir", "enfoca", "maximiza", "minimiza", "restaura", "izquierda", "derecha"})
+ACCIONES = frozenset({"abrir", "enfoca", "maximiza", "minimiza", "restaura", "izquierda", "derecha", "casilla"})
 _EJERCICIOS = {
+    "casilla": ("Quieres cambiar una opción accesible y verificar su estado.", "activar casilla accesible"),
     "abrir": ("Quieres iniciar una aplicación instalada.", "abrir aplicación"),
     "enfoca": ("La ventana ya está abierta y quieres ponerla al frente.", "enfocar ventana"),
     "maximiza": ("Quieres ampliar una ventana para ocupar el área disponible.", "maximizar ventana"),
@@ -106,6 +107,10 @@ class Demostraciones:
                 ejercicios.append("¿Qué permiso comprueba el agente antes de repetir una acción del procedimiento? "
                                   "Referencia: READ.")
                 return "Ejercicios para revisión. Los objetivos originales se omiten.\n" + "\n".join(ejercicios)
+            if any(p["accion"] == "casilla" for p in pasos):
+                self.escritorio._autorizar_escritura()
+                self.escritorio._guardar_pendiente(cliente, repetir_casillas=pasos, nombre_demostracion=nombre)
+                return f"Rutina «{nombre}»: {len(pasos)} pasos. Responde «Confirma la repetición» o «Cancelar»."
             return self.escritorio.repetir_demostracion(pasos, cliente)
         self.escritorio._autorizar_escritura()
         activa = self.activas.get(cliente)
