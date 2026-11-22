@@ -1,4 +1,5 @@
 """Ventana local para autorizar y pausar el seguimiento de manos."""
+from contextlib import nullcontext
 import importlib.util
 import os
 from math import cos, sin
@@ -9,7 +10,7 @@ import subprocess
 from threading import Event, Thread
 from time import monotonic
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from core.figuras_tactiles import Trazo, extruir, obj
 from core.gestos_tactiles import Gestos
@@ -27,18 +28,67 @@ def camaras():
     return dispositivos
 
 
-def _requisitos():
+def tecnologias():
     sesion = os.environ.get("XDG_SESSION_TYPE", "").lower()
-    if sesion == "wayland" or (not sesion and os.environ.get("WAYLAND_DISPLAY")):
-        raise RuntimeError("El control del puntero solo está disponible en X11.")
-    if not os.environ.get("DISPLAY") or not which("xdotool"):
-        raise RuntimeError("Se necesita una sesión X11 con xdotool.")
-    if any(importlib.util.find_spec(modulo) is None for modulo in ("cv2", "mediapipe")):
-        raise RuntimeError("Faltan OpenCV y MediaPipe. Consulta la guía de Cerebro.")
+    x11 = bool(os.environ.get("DISPLAY") and which("xdotool") and sesion != "wayland"
+               and (sesion or not os.environ.get("WAYLAND_DISPLAY")))
+    opencv = importlib.util.find_spec("cv2") is not None
+    mediapipe = importlib.util.find_spec("mediapipe") is not None
     modelo = os.environ.get("CEREBRO_MODELO_MANOS")
-    if not modelo or not Path(modelo).is_file():
+    return {"x11": x11, "opencv": opencv, "mediapipe": mediapipe,
+            "modelo": modelo if modelo and Path(modelo).expanduser().is_file() else None}
+
+
+def _requisitos(marcador=False):
+    ficha = tecnologias()
+    if not ficha["x11"]:
+        raise RuntimeError("Se necesita X11 y xdotool para controlar el puntero.")
+    if not ficha["opencv"]:
+        raise RuntimeError("Falta OpenCV en el entorno de Cerebro. Consulta la instalación opcional en el README.")
+    if marcador:
+        return None
+    if not ficha["mediapipe"]:
+        raise RuntimeError("Falta MediaPipe. Selecciona Marcador verde para mover solo el puntero.")
+    if not ficha["modelo"]:
         raise RuntimeError("Configura CEREBRO_MODELO_MANOS con el archivo local hand_landmarker.task.")
-    return modelo
+    return str(Path(ficha["modelo"]).expanduser())
+
+
+def _detector(modelo):
+    import mediapipe as mp
+
+    vision = mp.tasks.vision
+    opciones = vision.HandLandmarkerOptions(
+        base_options=mp.tasks.BaseOptions(model_asset_path=modelo),
+        running_mode=vision.RunningMode.VIDEO, num_hands=2)
+    return vision.HandLandmarker.create_from_options(opciones)
+
+
+def _manos(detector, rgb, marca):
+    import mediapipe as mp
+
+    resultado = detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), marca)
+    return {c[0].category_name: [(p.x, p.y) for p in puntos]
+            for c, puntos in zip(resultado.handedness, resultado.hand_landmarks) if c}
+
+
+def _marcador_verde(cv2, rgb, margen):
+    hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
+    mascara = cv2.inRange(hsv, (40, 110, 110), (83, 255, 255))
+    contornos, _ = cv2.findContours(mascara, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contornos:
+        return []
+    figura = max(contornos, key=cv2.contourArea)
+    alto, ancho = rgb.shape[:2]
+    if not .002 <= cv2.contourArea(figura) / (alto * ancho) <= .18:
+        return []
+    momentos = cv2.moments(figura)
+    if not momentos["m00"]:
+        return []
+    x = momentos["m10"] / momentos["m00"] / ancho
+    y = momentos["m01"] / momentos["m00"] / alto
+    amplitud = 1 - 2 * margen
+    return [("mover", max(0, min(1, (x - margen) / amplitud)), max(0, min(1, (y - margen) / amplitud)))]
 
 
 def _control(eventos, ancho, alto):
@@ -91,17 +141,13 @@ def perfil_camara():
     return 640, 480, 20
 
 
-def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reiniciar, habilitar_puntero, cuadros):
-    gestos = Gestos()
+def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reiniciar, habilitar_puntero, cuadros,
+              margen=.12):
+    gestos = Gestos(margen)
     camara = None
     try:
         import cv2
-        import mediapipe as mp
-        vision = mp.tasks.vision
-        opciones = vision.HandLandmarkerOptions(
-            base_options=mp.tasks.BaseOptions(model_asset_path=modelo),
-            running_mode=vision.RunningMode.VIDEO, num_hands=2)
-        with vision.HandLandmarker.create_from_options(opciones) as detector:
+        with (_detector(modelo) if modelo else nullcontext()) as detector:
             if detener.is_set():
                 return
             camara = cv2.VideoCapture(indice, cv2.CAP_V4L2)
@@ -129,11 +175,7 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
                 ahora = monotonic()
                 marca = max(anterior + 1, round(ahora * 1000))
                 anterior = marca
-                resultado = detector.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), marca)
-                manos = {}
-                for clasificacion, puntos in zip(resultado.handedness, resultado.hand_landmarks):
-                    if clasificacion:
-                        manos[clasificacion[0].category_name] = [(p.x, p.y) for p in puntos]
+                manos = _manos(detector, rgb, marca) if detector else {}
                 if detener.is_set():
                     break
                 if dibujar.is_set():
@@ -152,6 +194,8 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
                     _publicar_imagen(cuadros, (_vista(cv2, rgb, manos), len(manos)))
                 if not habilitar_puntero.is_set():
                     _control(gestos.pausar(), ancho, alto)
+                elif detector is None:
+                    _control(_marcador_verde(cv2, rgb, margen), ancho, alto)
                 else:
                     derecha, izquierda = manos.get("Right"), manos.get("Left")
                     _control(gestos.actualizar(derecha or izquierda, ahora, izquierda if derecha else None), ancho, alto)
@@ -184,6 +228,7 @@ def abrir():
     raiz.option_add("*TCombobox*Listbox.background", PANEL)
     raiz.option_add("*TCombobox*Listbox.foreground", TEXTO)
     opciones = camaras()
+    margen = .12
     valor = tk.StringVar(value="Cámara apagada")
     eventos = SimpleQueue()
     detener = Event()
@@ -205,6 +250,20 @@ def abrir():
     tk.Label(raiz, text="Modo gestual por cámara", bg=FONDO, fg=ACENTO, font=("TkDefaultFont", 15, "bold")).pack(padx=18, pady=10)
     lista = ttk.Combobox(raiz, state="readonly", values=[f"video{i} · {nombre}" for i, nombre in opciones], width=40)
     lista.pack(padx=18, pady=(0, 8))
+    motor = ttk.Combobox(raiz, state="readonly", values=("Manos · MediaPipe", "Marcador verde · solo puntero"), width=40)
+    motor.pack(padx=18, pady=(0, 8))
+    motor.current(0)
+
+    def calibrar():
+        nonlocal margen
+        if activo:
+            valor.set("Pausa la cámara antes de calibrar.")
+            return
+        porcentaje = simpledialog.askinteger("Calibrar puntero", "Margen de la cámara en porcentaje (0–35)",
+                                              initialvalue=round(margen * 100), minvalue=0, maxvalue=35, parent=raiz)
+        if porcentaje is not None:
+            margen = porcentaje / 100
+            valor.set(f"Margen configurado: {porcentaje} %.")
     if opciones:
         lista.current(0)
     tk.Label(raiz, textvariable=valor, bg=FONDO, fg=TEXTO, width=47, wraplength=370).pack(padx=10)
@@ -325,20 +384,23 @@ def abrir():
         if indice < 0 or activo:
             return
         try:
-            modelo = _requisitos()
+            modelo = _requisitos(marcador=motor.current() == 1)
         except RuntimeError as exc:
             valor.set(str(exc))
             return
         if not messagebox.askyesno("Activar cámara", "¿Permitir la cámara seleccionada y el control del puntero?", parent=raiz):
             return
         activo = True
+        motor.configure(state="disabled")
+        boton_trazo.configure(state="normal" if modelo else "disabled")
+        dibujar.clear()
         detener = Event()
         boton.configure(state="disabled")
         lista.configure(state="disabled")
         valor.set("Iniciando cámara…")
         Thread(target=_capturar, args=(opciones[indice][0], modelo, detener, eventos,
                                       raiz.winfo_screenwidth(), raiz.winfo_screenheight(),
-                                      ver, dibujar, reiniciar, habilitar_puntero, cuadros), daemon=True).start()
+                                      ver, dibujar, reiniciar, habilitar_puntero, cuadros, margen), daemon=True).start()
 
     def cerrar():
         nonlocal cerrando
@@ -359,6 +421,7 @@ def abrir():
                 activo = False
                 boton.configure(state="normal" if opciones else "disabled")
                 lista.configure(state="readonly")
+                motor.configure(state="readonly")
                 if valor.get() in {"Pausando…", "Cámara activa"}:
                     valor.set("Cámara apagada")
                 foto = None
@@ -393,7 +456,9 @@ def abrir():
     ttk.Button(controles, text="Pausar", command=pausar).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
     boton_ver = ttk.Button(controles, text="Ver cámara", command=alternar_vista)
     boton_ver.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
-    ttk.Button(controles, text="Dibujar figura", command=iniciar_trazo).grid(row=1, column=0, padx=2, pady=2, sticky="ew")
+    boton_trazo = ttk.Button(controles, text="Dibujar figura", command=iniciar_trazo)
+    boton_trazo.grid(row=1, column=0, padx=2, pady=2, sticky="ew")
+    ttk.Button(controles, text="Calibrar", command=calibrar).grid(row=3, column=0, columnspan=3, pady=4)
     convertir = ttk.Button(controles, text="Convertir a 3D", command=modelo_3d, state="disabled")
     convertir.grid(row=1, column=1, padx=2, pady=2, sticky="ew")
     exportar = ttk.Button(controles, text="Guardar OBJ", command=guardar_obj, state="disabled")

@@ -3,7 +3,10 @@ from math import hypot
 
 
 class Gestos:
-    def __init__(self):
+    def __init__(self, margen=.12):
+        if not 0 <= margen <= .35:
+            raise ValueError("Margen de calibración fuera de rango.")
+        self.margen = margen
         self.posicion = None
         self.pinza_desde = None
         self.abierta = False
@@ -13,7 +16,7 @@ class Gestos:
 
     def pausar(self):
         eventos = [("soltar",)] if self.arrastrando else []
-        self.__init__()
+        self.__init__(self.margen)
         return eventos
 
     def actualizar(self, mano, ahora, secundaria=None):
@@ -25,7 +28,8 @@ class Gestos:
         # La distancia relativa a la palma evita gatillar por acercar la mano a la cámara.
         pinza = _distancia(mano[4], mano[8]) / palma
         x, y = mano[8]
-        x, y = _acotar((x - .12) / .76), _acotar((y - .12) / .76)
+        amplitud = 1 - 2 * self.margen
+        x, y = _acotar((x - self.margen) / amplitud), _acotar((y - self.margen) / amplitud)
         anterior = self.posicion or (x, y)
         self.posicion = (.65 * anterior[0] + .35 * x, .65 * anterior[1] + .35 * y)
         self.estables += 1

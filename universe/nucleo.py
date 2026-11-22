@@ -631,12 +631,23 @@ class Nucleo:
             ensenanza = self._consultar_competencias(intencion, cliente)
             if ensenanza is not None:
                 return ensenanza
-        if intencion in {"diagnostico del equipo", "recursos del equipo", "que hardware tengo"}:
-            from core.recursos_locales import inspeccionar, resumir
+        if intencion in {"descubre modelos locales", "detecta inteligencias instaladas", "motores locales instalados"}:
+            from core.motores_instalados import descubrir, resumir
+
+            self.exigir_permisos("READ")
+            motores = descubrir(self.profesor)
+            return {"respuesta": resumir(motores), "motores": motores}
+        if intencion in {"diagnostico del equipo", "recursos del equipo", "que hardware tengo",
+                         "analiza mi ordenador", "analiza mi ordenador y dime que puedo mejorar"}:
+            from core.recursos_locales import inspeccionar, resumir, sugerir
 
             self.exigir_permisos("READ")
             recursos = inspeccionar(self.raiz)
-            return {"respuesta": resumir(recursos), "recursos": recursos}
+            recomendaciones = sugerir(recursos)
+            salida = resumir(recursos)
+            if recomendaciones:
+                salida += "\n\n" + "\n".join(recomendaciones)
+            return {"respuesta": salida, "recursos": recursos, "recomendaciones": recomendaciones}
         if not comando and intencion in {"que puedo hacer", "que puedes hacer", "capacidades reales"}:
             from core.capacidades_escritorio import inspeccionar
             capacidades = inspeccionar(self)
