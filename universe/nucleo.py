@@ -29,6 +29,7 @@ from core.legado_identidad import leer_origen
 from core.profesor_local import GIB, ProfesorLocal, diagnostico as diagnostico_profesor
 from core.especialista_escritorio import Especialista
 from universe.ensenanza import Ensenanza
+from universe.especialidades import Coordinacion
 from universe.herramientas import DescargaGit
 from core.repaso_espaciado import cargar
 from memory.advanced_memory import AdvancedMemoryManager
@@ -58,7 +59,7 @@ EVENTOS = {
 
 
 class Nucleo:
-    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None, especialista=None, aprendizaje=None, ensenanza=None, descarga_git=None):
+    def __init__(self, perfil, cuota=None, modelo=None, internet=False, solo_lectura=False, meta=None, investigar_auto=False, documentos_usuario=False, *, conversaciones_dir=None, agente=None, profesor=None, especialista=None, aprendizaje=None, ensenanza=None, descarga_git=None, coordinacion=None):
         self.perfil = perfil
         self.cuota = PERFILES[perfil] * MIB if cuota is None else cuota
         if self.cuota <= 0:
@@ -73,6 +74,7 @@ class Nucleo:
         self.raiz_alumno = self.raiz / "learning"
         self.descarga_git = descarga_git if descarga_git is not None else DescargaGit()
         self.ensenanza = ensenanza if ensenanza is not None else Ensenanza()
+        self.coordinacion = coordinacion if coordinacion is not None else Coordinacion()
         self.profesor = profesor if profesor is not None else ProfesorLocal.desde_entorno()
         self.especialista = especialista if especialista is not None else Especialista.cargar(
             self.raiz / "learning" / "especialista.npz", modelo)
@@ -110,7 +112,8 @@ class Nucleo:
                       solo_lectura=self.solo_lectura, meta=self.chat.info,
                       investigar_auto=self.investigar_auto, documentos_usuario=self.documentos_usuario,
                       conversaciones_dir=carpeta, agente=self.agente, profesor=self.profesor, especialista=self.especialista,
-                      aprendizaje=self.aprendizaje, ensenanza=self.ensenanza, descarga_git=self.descarga_git)
+                      aprendizaje=self.aprendizaje, ensenanza=self.ensenanza, descarga_git=self.descarga_git,
+                      coordinacion=self.coordinacion)
 
     def exigir_permisos(self, *permisos):
         if self.solo_lectura and "WRITE" in permisos:
@@ -334,7 +337,13 @@ class Nucleo:
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
         if not comando:
+            from universe.especialidades import consultar as consultar_especialidades
             from universe.herramientas import resolver
+
+            coordinacion = consultar_especialidades(self, pregunta, intencion)
+            if coordinacion is not None:
+                self._registrar_turno(pregunta, coordinacion["respuesta"])
+                return coordinacion
 
             resultado = self.ensenanza.consultar(self, intencion, (cliente, self.conversaciones.activa()))
             if resultado is not None:
@@ -776,6 +785,9 @@ class Nucleo:
         for i, ficha in enumerate(cargar(self.raiz / "data" / "repaso_espaciado.json")[:40]):
             nodos.append({"id": f"repaso:{i}", "tipo": "conocimiento", "titulo": ficha["pregunta"],
                           "detalle": ficha["respuesta"], "origen": "Ficha de repaso aprobada"})
+        from universe.especialidades import Experiencias
+
+        nodos.extend(Experiencias(self.estudio / "experiencias-v1.sqlite3").nodos())
         return {"nodos": nodos}
 
     def respaldo(self, datos=None):
