@@ -55,3 +55,7 @@ La suite completa dio 408 pruebas y 3 subpruebas aprobadas, sin omisiones. Los h
 ## Auditoría antes de integrar
 
 Worktree `work/cerebro-auditoria`, rama `feature/auditoria-maestro-alumno`. Correcciones de selección Git/PDF en `c7715d8` y `04eeaa9`. `main` sigue en `fc3701d` y la rama de integración original en `680bcde`. La suite completa dio 412 pruebas y 3 subpruebas aprobadas. Se reprodujeron Qwen, entrenamiento real desde Studio, consumo, inferencia desde Terminal, rollback y demostraciones GTK. Consulta `VALIDACION_CANDIDATO.md` para la matriz y `BANCO_AUDITORIA_INTENCIONES.md` para las frases reservadas. Antes de integrar, completa las verificaciones manuales críticas indicadas en el informe.
+
+## Seguimiento de cancelación, almacenamiento y voz
+
+En `feature/auditoria-maestro-alumno`, los commits `948dd2d`, `2b4218e` y `05b0337` añaden cancelación Git y presupuesto agregado supervisado, ajustan la cobertura de hora/fecha con promoción estricta frente a las reglas y prueban la cancelación por chat. Verifica la sección de seguimiento de `VALIDACION_CANDIDATO.md`. La instalación limpia, el reinicio aislado, Brave, la edición de una nota en Studio y el texto en la esfera se probaron. Falta confirmar voz real con una persona y cerrar el problema del acompañante residual, además del límite agregado instantáneo si se exige como garantía. No integrar en `main` mientras siga pendiente la prueba crítica de micrófono.
