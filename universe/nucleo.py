@@ -329,6 +329,11 @@ class Nucleo:
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
         if not comando:
+            from universe.herramientas import resolver
+
+            resultado = resolver(self, pregunta, intencion)
+            if resultado is not None:
+                return resultado
             estado_aprendizaje = self.aprendizaje.consultar(intencion, self, cliente)
             if estado_aprendizaje is not None:
                 return {"respuesta": estado_aprendizaje}
