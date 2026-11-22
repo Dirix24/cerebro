@@ -11,7 +11,7 @@ from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
 import tokenize
-from tkinter import END, BOTH, LEFT, RIGHT, X, Y, BooleanVar, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError
+from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote, urlsplit
 
@@ -117,8 +117,6 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     documento_activo = None
     marca_documento = None
     carpetas_disponibles = {}
-    modo_tactil = BooleanVar(value=False)
-    modo_edicion_tactil = False
     entrada = StringVar()
     pendientes = SimpleQueue()
     tareas_en_curso = set()
@@ -190,22 +188,6 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     cabecera = ttk.Frame(app, padding=(16, 12))
     cabecera.pack(fill=X)
 
-    def ajustar_tactil(activo):
-        nonlocal modo_edicion_tactil
-        modo_edicion_tactil = activo
-        modo_tactil.set(activo)
-        estilo.configure("TButton", padding=(12, 9) if activo else (8, 5))
-        estilo.configure("TNotebook.Tab", padding=(16, 11) if activo else (12, 6))
-        estilo.configure("TEntry", padding=7 if activo else 4)
-        for barra in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
-            estilo.configure(barra, arrowsize=17 if activo else 9)
-        lista.configure(font=("TkDefaultFont", 12 if activo else 10))
-
-    def cambiar_tactil():
-        deseado = modo_tactil.get()
-        ajustar_tactil(modo_edicion_tactil)
-        publicar(lambda: proyecto("tactil", valor=deseado), lambda dato: ajustar_tactil(dato["tactil"]))
-
     marca = logo.subsample(4, 4)
     ttk.Label(cabecera, image=marca).pack(side=LEFT, padx=(0, 8))
     ttk.Label(cabecera, text="Cerebro Studio", style="Titulo.TLabel").pack(side=LEFT, padx=(0, 15))
@@ -218,8 +200,6 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     boton(cabecera, "Acompañante", abrir_acompanante, lado=RIGHT)
     boton(cabecera, "Terminal", lanzar_terminal, lado=RIGHT)
-    ttk.Checkbutton(cabecera, text="Modo táctil visual", variable=modo_tactil,
-                    command=cambiar_tactil).pack(side=RIGHT, padx=5)
     opciones = ttk.Menubutton(cabecera, text="Opciones")
     menu_opciones = Menu(opciones, tearoff=False)
     menu_opciones.add_command(label="Modo gestual por cámara", command=lambda: estado.set(
@@ -288,7 +268,6 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             cuerpo.insert(min(posicion, len(cuerpo.panes())), panel, weight=peso)
 
     menu_opciones.add_command(label="Mostrar u ocultar archivos", command=lambda: alternar_panel(archivos, 0, 1))
-    menu_opciones.add_command(label="Mostrar u ocultar conversación", command=lambda: alternar_panel(chat, 2, 3))
 
     ttk.Label(archivos, text="EXPLORADOR", style="Seccion.TLabel").pack(anchor="w", pady=(0, 7))
     ttk.Label(archivos, textvariable=proyecto_titulo, wraplength=190).pack(anchor="w", pady=(0, 6))
@@ -639,7 +618,6 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         for ruta_favorita in datos["favoritas"]:
             carpetas_disponibles["★ " + ruta_favorita] = ruta_favorita
         favoritas.configure(values=list(carpetas_disponibles))
-        ajustar_tactil(datos["tactil"])
 
     def elegir_personal(_evento=None):
         destino = carpetas_disponibles.get(favoritas.get())

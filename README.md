@@ -425,9 +425,6 @@ Esa acción excluye HTML y los archivos ejecutables.
   si arrastrar y soltar no está disponible. Un archivo externo se lee
   tras confirmación y permanece en su ubicación. **Actualizar visor**
   vuelve a leerlo si se detecta un cambio externo.
-- **Modo táctil visual** amplía botones, pestañas y barras de desplazamiento al
-  momento y guarda la preferencia. El modo de gestos con cámara conserva
-  su control separado.
 - Prueba «Resume esto», «Analiza este documento», «Valida este archivo»
   o «Profesor, evalúame sobre este PDF» después de abrirlo. El resumen
   actual es extractivo. PROFESOR propone completar un término de un
@@ -472,8 +469,7 @@ espacio libre, GPU PCI con controlador visible, nodos de cámara y
 dependencias que el proceso puede encontrar. En MX Linux, estas
 medidas ayudan a escoger un perfil para el ASUS X550LC.
 
-**Modo táctil visual** solo cambia el tamaño de los controles. Para usar
-la cámara ve a **Opciones → Modo gestual por cámara** en Studio nativo o
+Para usar la cámara ve a **Opciones → Modo gestual por cámara** en Studio nativo o
 ejecuta `cerebro tactil`. Elige el dispositivo y confirma su uso en el
 diálogo local. El seguimiento existente usa el índice para mover el
 puntero, una pinza para seleccionar o arrastrar y una segunda mano para
@@ -518,7 +514,7 @@ zoom de PDF vuelve a renderizar la página con Poppler. La información y
 el texto extraído se consultan desde el diálogo o panel de información.
 Las imágenes mantienen sus proporciones y tienen zoom independiente.
 En Studio nativo, el menú **Opciones** permite ocultar o mostrar los
-paneles de archivos y conversación.
+panel de archivos. Puedes redimensionar la conversación.
 
 - «Explícame la página cuatro» muestra un extracto de esa página.
 - «Según el PDF, ¿qué dice de la energía solar?» recupera pasajes y
@@ -545,3 +541,31 @@ Deja Cerebro abierto para recibir el aviso a tiempo. Si estaba cerrado,
 los avisos pendientes se revisan al arrancarlo.
 
 Consulta las [pruebas y límites del visor y los recordatorios](docs/STUDIO_PAGINADO.md).
+
+### Cámara opcional e inventario local
+
+En el chat escribe **«Detecta inteligencias instaladas»**. Cerebro
+consulta únicamente el servicio Ollama en loopback y las rutas de
+adaptadores configuradas explícitamente. La presencia de un adaptador
+indica que se encontró su módulo. Puedes seguir escogiendo un modelo
+mediante las variables del motor. **«Analiza mi ordenador»** muestra
+RAM, swap, carga, procesos visibles, disco y temperaturas disponibles,
+junto con recomendaciones que requieren intervención del usuario.
+
+Para el modo gestual, comprueba el intérprete tras instalar Cerebro.
+Desde el directorio del repositorio ejecuta estas órdenes solo si
+deseas instalar los paquetes en el entorno virtual del proyecto:
+
+```bash
+.venv/bin/python --version
+.venv/bin/python -m pip install --only-binary=:all: opencv-python mediapipe
+.venv/bin/python -c 'import cv2, mediapipe; print(cv2.__version__, mediapipe.__version__)'
+```
+
+Si no hay una rueda compatible de MediaPipe, instala solo OpenCV con
+`.venv/bin/python -m pip install --only-binary=:all: opencv-python`.
+Elige **Marcador verde · solo puntero** y usa una pequeña marca
+verde saturada con fondo neutro. Esta alternativa mueve el puntero.
+Para hacer clic o cambiar de pestaña usa el ratón o el teclado. En
+modo MediaPipe puedes usar la pinza sobre los controles de Studio.
+**Calibrar** ajusta el margen antes de iniciar la cámara.
