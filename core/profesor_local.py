@@ -112,6 +112,17 @@ class ProfesorLocal:
             },
         )
 
+    def generar_consultas_locales(self, etiqueta):
+        if etiqueta not in {"hora", "fecha"}:
+            raise ValueError("Competencia de consulta desconocida.")
+        return self._consultar(
+            f"Escribe cuatro formas breves de pedir la {etiqueta} actual de este equipo. "
+            f"Usa la palabra {etiqueta}. No menciones ciudades, zonas, viajes ni citas.",
+            f"Varía el verbo. Modelos de formato: Dame la {etiqueta} / Muéstrame la {etiqueta} de ahora. "
+            "Una petición por línea.",
+            max_tokens=56, temperatura=0,
+        )
+
     def proponer_variante(self, materia):
         propuesta = self._consultar("Responde solo con un número entero entre 10 y 99, sin palabras.",
                                     f"Elige una variante para un ejercicio de {materia}.")
@@ -134,7 +145,7 @@ class ProfesorLocal:
     def _consulta_terminada(self):
         pass
 
-    def _consultar(self, instruccion, mensaje_usuario, *, contexto=(), esquema=None):
+    def _consultar(self, instruccion, mensaje_usuario, *, contexto=(), esquema=None, max_tokens=96, temperatura=None):
         if not self.configurado:
             raise RuntimeError("El profesor local no está configurado.")
         if not self.ocupado.acquire(blocking=False):
@@ -142,7 +153,7 @@ class ProfesorLocal:
         conexion = None
         try:
             puerto = self._asegurar_servidor()
-            conexion = HTTPConnection("127.0.0.1", puerto, timeout=18)
+            conexion = HTTPConnection("127.0.0.1", puerto, timeout=40)
             peticion = json.dumps({
                 "messages": [
                     {"role": "system", "content": instruccion + " Responde solo con texto."},
@@ -150,7 +161,7 @@ class ProfesorLocal:
                       for rol, contenido in zip(("user", "assistant"), par)],
                     {"role": "user", "content": mensaje_usuario},
                 ],
-                "max_tokens": 96, "temperature": 0 if esquema else 0.2, "stream": False,
+                "max_tokens": max_tokens, "temperature": (0 if esquema else 0.2) if temperatura is None else temperatura, "stream": False,
                 **({"response_format": {"type": "json_schema", "schema": esquema}} if esquema else {}),
             }).encode()
             conexion.request("POST", "/v1/chat/completions", peticion, {"Content-Type": "application/json"})
