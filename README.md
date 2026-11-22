@@ -1,6 +1,6 @@
 # 🧠 Cerebro — Asistente personal de IA local y de código abierto
 
-**Cerebro** es un asistente personal experimental para **MX Linux, XFCE y X11**, construido en Python. Une conversación, memoria, archivos, proyectos, navegación, herramientas del escritorio y aprendizaje neuronal supervisado en un núcleo local compartido.
+**Cerebro** es un asistente personal experimental construido en Python. **Por el momento, está desarrollado principalmente para Linux**, en especial **MX Linux con XFCE y X11**. El soporte para otros sistemas operativos es una posibilidad futura, **no una función disponible actualmente**. Une conversación, memoria, archivos, proyectos, navegación, herramientas del escritorio y aprendizaje neuronal supervisado en un núcleo local compartido.
 
 **Repositorio:** https://github.com/Dirix24/cerebro · **Licencia:** [MIT](LICENSE) · **Estado:** desarrollo activo / experimental
 
@@ -30,13 +30,6 @@ La idea de Cerebro es tener **un asistente propio, local y extensible** que pued
 Cerebro puede realizar tareas acotadas como buscar documentos autorizados, abrir aplicaciones, consultar fuentes públicas, inspeccionar proyectos, ejecutar verificaciones controladas y registrar demostraciones de escritorio. Cuando una acción necesita autorización, el sistema debe pedirla y verificar el resultado.
 
 **Local por diseño:** los modelos, recuerdos y proyectos pueden permanecer en el equipo. Las consultas web y las descargas sí usan internet. El maestro Qwen es opcional y requiere tener instalados por separado llama.cpp y los pesos GGUF; Cerebro no los descarga automáticamente.
-
-### Qué no significa
-
-- Tener memoria **no significa** que un modelo haya entrenado sus pesos.
-- Registrar una demostración **no significa** aprender a controlar cualquier aplicación.
-- Tener un maestro y un alumno **no significa** disponer de inteligencia general.
-- Superar pruebas automáticas **no demuestra** que todas las interfaces funcionen en todos los equipos.
 
 ## Instalación, desinstalación y comandos
 
@@ -313,14 +306,34 @@ Los informes de auditoría han registrado **entrenamiento real del maestro y alu
 
 Para detalles y evidencias: [validación del candidato](docs/VALIDACION_CANDIDATO.md), [continuidad](docs/PLAN_CONTINUIDAD_CEREBRO.md), [interfaces MX Linux](docs/INTERFACES_MX.md), [motores](CEREBRO_MOTORES.md).
 
-### Hoja de ruta
+### Futuras funciones que se espera desarrollar
 
-- Mejorar estabilidad, instalación y recuperación.
-- Terminar verificaciones manuales de voz y de interfaces.
-- Ampliar pruebas de generalización del alumno y comparaciones con reglas.
-- Mejorar Studio, navegación y contexto entre herramientas.
-- Ampliar las capacidades del escritorio sin perder permisos ni verificaciones.
-- Explorar integraciones futuras de cuentas, automatizaciones, clúster y móvil **sin anunciarlas como ya terminadas**.
+> **Planes y objetivos, no funciones ya terminadas.** Esta lista expresa la dirección deseada del proyecto; no implica fechas de entrega ni garantiza que todas las ideas lleguen a implementarse.
+
+**Primero: hacer más sólido Cerebro en Linux**
+- Facilitar la instalación, actualización, diagnóstico y recuperación de errores.
+- Completar las pruebas de voz con micrófono y altavoces reales, y mejorar la conversación en español.
+- Mejorar la estabilidad de Studio, Chat web, Terminal y esfera, incluidos sus arranques y cierres.
+- Ampliar la compatibilidad con otros escritorios y distribuciones Linux; estudiar Wayland y sus permisos específicos.
+
+**Después: ampliar la utilidad diaria**
+- Mejorar la comprensión de peticiones en lenguaje natural, el contexto entre conversaciones y la búsqueda de documentos.
+- Desarrollar un Studio más capaz para revisar proyectos, proponer cambios, navegar por archivos y ayudar a programar, siempre con confirmación.
+- Añadir más automatizaciones locales y rutinas enseñables con comprobaciones, límites y posibilidad de detenerlas.
+- Ampliar la investigación web y el uso de fuentes públicas, con enlaces verificables y control del acceso a internet.
+- Explorar integraciones opcionales con correo, calendario y otros servicios mediante autorización expresa.
+
+**Investigación en IA local**
+- Entrenar y evaluar alumnos para más tipos de tareas, con bancos independientes y comparación frente a reglas.
+- Mejorar la colaboración entre modelos locales pequeños y maestros opcionales, reduciendo el consumo de memoria y CPU.
+- Investigar aprendizaje a partir de ejemplos y correcciones aprobados por el usuario, sin ejecutar acciones nuevas sin validación.
+
+**Ideas a más largo plazo**
+- Estudiar una versión móvil o PWA y acceso remoto seguro, sin exponer directamente el servicio local.
+- Explorar colaboración entre varios equipos autorizados (por ejemplo, un pequeño clúster doméstico).
+- Evaluar compatibilidad con otros sistemas operativos **solo cuando la base Linux sea estable**.
+
+La prioridad es una versión cotidiana fiable en Linux antes de extender Cerebro a nuevas plataformas.
 
 ## Cómo colaborar y licencia
 
