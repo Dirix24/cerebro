@@ -29,6 +29,7 @@ with TemporaryDirectory() as temporal:
                                          "class Robot(unittest.TestCase):\n"
                                          "    def test_avanzar(self): self.assertEqual(avanzar(1, 2), 3)\n")
     Image.new("RGB", (12, 9), "green").save(carpeta / "grafico.png")
+    Image.new("RGB", (1400, 900), "navy").save(carpeta / "grande.png")
     (carpeta / "informe.pdf").write_bytes(pdf_fixture())
     (carpeta / "plan.md").write_text("# Plan del robot\nPasos del proyecto.\n")
     with ZipFile(carpeta / "guia.docx", "w") as guia:
@@ -83,6 +84,23 @@ with TemporaryDirectory() as temporal:
                 fila("grafico.png").click()
                 expect(page.locator("#visor-central img")).to_be_visible()
                 assert page.locator("#visor-central img").evaluate("(img) => img.naturalWidth") == 12
+                fila("grande.png").click()
+                raster = page.locator("#visor-central img")
+                expect(raster).to_have_attribute("alt", "grande.png")
+                superficie = page.locator(".visor-desplazable")
+                rect = superficie.bounding_box()
+                x, y = rect["x"] + 140, rect["y"] + 110
+                page.mouse.move(x, y)
+                page.mouse.wheel(0, -120)
+                expect(raster).to_have_attribute("style", "width: 1750px;")
+                desplazamiento = superficie.evaluate("(elemento) => elemento.scrollLeft")
+                assert abs(desplazamiento - 35) <= 3, desplazamiento
+                page.mouse.down()
+                page.mouse.move(x - 55, y - 70, steps=4)
+                page.mouse.up()
+                assert superficie.evaluate("(elemento) => elemento.scrollLeft") >= desplazamiento + 50
+                expect(btn("100 %")).to_be_visible()
+                expect(btn("Abrir en aplicación local")).to_be_visible()
                 if all(shutil.which(cmd) for cmd in ("pdftoppm", "pdftotext", "prlimit")):
                     fila("informe.pdf").click()
                     expect(page.locator("#visor-central img")).to_be_visible()
@@ -92,7 +110,9 @@ with TemporaryDirectory() as temporal:
                     expect(page.locator("#visor-central")).to_contain_text("energia solar")
                     assert page.locator("#visor-central img").evaluate("(img) => img.naturalWidth") == 980
                     imagen_anterior = page.locator("#visor-central img").get_attribute("src")
-                    btn("Ampliar").click()
+                    rect = page.locator(".visor-desplazable").bounding_box()
+                    page.mouse.move(rect["x"] + 60, rect["y"] + 60)
+                    page.mouse.wheel(0, -120)
                     expect(page.locator("#visor-central img")).not_to_have_attribute("src", imagen_anterior)
                     assert page.locator("#visor-central img").evaluate("(img) => img.naturalWidth") > 980
                     respuestas.append("solar")
@@ -165,7 +185,7 @@ with TemporaryDirectory() as temporal:
                 expect(page.locator("#detalle")).to_contain_text("robot.py")
                 assert not errores, errores
                 browser.close()
-                print("Chromium: creación, edición, renombrado, búsqueda, imagen, navegación PDF, zoom renderizado, búsqueda PDF, consulta con página, documento, CSV, HTML inerte, "
+                print("Chromium: creación, edición, renombrado, búsqueda, imagen con rueda anclada y arrastre, navegación PDF, zoom renderizado, búsqueda PDF, consulta con página, documento, CSV, HTML inerte, "
                       "diff aprobado, generación web con doble local y aprobación, solicitud de prueba, simulación y evidencias, actualización automática y reapertura.")
         finally:
             server.shutdown()

@@ -19,6 +19,7 @@ from core.escritorio_studio import archivo_soltado, intencion_archivo, intencion
 from core.visores_studio import HTML_INICIAL, html_estatico, tabla
 from universe.lanzador import ErrorAPI, api, abrir, abrir_web, carpeta, lanzar_acompanante, lanzar_tactil, lanzar_terminal
 from universe.mapa_studio import MapaStudio
+from universe.visor_imagen import VisorImagen
 
 from universe.paleta import ACENTO, ACTIVO, BORDE, EDITOR, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
 
@@ -350,6 +351,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     acciones_visor = ttk.Frame(pagina_visor)
     acciones_visor.pack(fill=X)
     visor = campo_texto(pagina_visor, codigo=True)
+    visor_raster = VisorImagen(pagina_visor, EDITOR)
     visor.tag_configure("titulo", foreground=ACENTO, font=("TkDefaultFont", 16, "bold"))
     visor.tag_configure("codigo", foreground=TEXTO, font="TkFixedFont")
     grafica = Canvas(pagina_resultados, bg=EDITOR, height=90, highlightthickness=0)
@@ -428,13 +430,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         return not editor.edit_modified() or messagebox.askyesno(
             "Cambios sin guardar", mensaje, parent=app)
 
-    def visualizar(datos):
+    def visualizar(datos, ancla=None):
         nonlocal imagen_activa, revision_vista
         revision_vista += 1
         revision = revision_vista
-        visor.unbind("<Control-MouseWheel>")
-        visor.unbind("<Control-Button-4>")
-        visor.unbind("<Control-Button-5>")
+        visor_raster.pack_forget()
+        visor.master.pack(fill=BOTH, expand=True)
         imagen_activa = None
         for hijo in acciones_visor.winfo_children():
             hijo.destroy()
@@ -447,23 +448,25 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             pagina = datos.get("pagina", 1)
             resolucion = datos.get("resolucion", 980)
 
-            def ajustar(nueva_pagina=pagina, escala=resolucion, porcentaje=zoom):
+            def ajustar(nueva_pagina=pagina, escala=resolucion, porcentaje=zoom, centro=None):
                 nonlocal revision_vista
                 if datos["visor"] == "imagen":
-                    visualizar({**datos, "zoom_imagen": max(25, min(200, porcentaje))})
+                    visualizar({**datos, "zoom_imagen": max(5, min(400, porcentaje)), "escala_previa": None}, centro)
                     return
                 referencia = documento_activo
                 revision_vista += 1
                 turno = revision_vista
                 accion = "suelto" if datos.get("suelto") else "inspeccionar"
                 publicar(lambda: proyecto(accion, nombre=nombre, pagina=nueva_pagina,
-                                           resolucion=max(320, min(2200, escala)),
+                                           resolucion=0 if escala == 0 else max(128, min(2200, escala)),
                                            esperada=referencia[0] if referencia else None),
-                         lambda vista: visualizar(vista) if documento_activo == referencia
+                         lambda vista: visualizar(vista, centro) if documento_activo == referencia
                          and turno == revision_vista else None)
 
-            def cambiar_zoom(paso):
-                ajustar(escala=round(resolucion * (1.25 if paso > 0 else .8)), porcentaje=zoom + paso * 25)
+            def cambiar_zoom(paso, evento=None):
+                factor = 1.25 if paso > 0 else .8
+                centro = visor_raster.ancla(evento.x, evento.y) if evento else None
+                ajustar(escala=round(resolucion * factor), porcentaje=zoom * factor, centro=centro)
                 return "break"
 
             def buscar():
@@ -491,18 +494,21 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 boton(acciones_visor, "Buscar", buscar)
             boton(barra_zoom, "−", lambda: cambiar_zoom(-1))
             boton(barra_zoom, "+", lambda: cambiar_zoom(1))
-            boton(barra_zoom, "100 %", lambda: ajustar(escala=980, porcentaje=100))
-            visor.bind("<Button-1>", lambda _: visor.focus_set())
-            visor.bind("<Control-MouseWheel>", lambda evento: cambiar_zoom(1 if evento.delta > 0 else -1))
-            visor.bind("<Control-Button-4>", lambda _: cambiar_zoom(1))
-            visor.bind("<Control-Button-5>", lambda _: cambiar_zoom(-1))
+            boton(barra_zoom, "100 %", lambda: ajustar(escala=0, porcentaje=100))
+            lienzo = visor_raster.lienzo
+            for secuencia, paso in (("<Button-4>", 1), ("<Button-5>", -1),
+                                    ("<Control-Button-4>", 1), ("<Control-Button-5>", -1)):
+                lienzo.bind(secuencia, lambda evento, paso=paso: cambiar_zoom(paso, evento))
+            for secuencia in ("<MouseWheel>", "<Control-MouseWheel>"):
+                lienzo.bind(secuencia, lambda evento: cambiar_zoom(1 if evento.delta > 0 else -1, evento))
             try:
                 from PIL import Image, ImageTk
                 with Image.open(BytesIO(b64decode(datos["base64"], validate=True))) as fuente:
                     if fuente.width * fuente.height > 12_000_000:
                         raise ValueError("La imagen supera el tamaño de vista previa.")
                     if datos["visor"] == "imagen":
-                        escala = min(1.0, 850 / max(fuente.size)) * zoom / 100
+                        ancho_original, alto_original = fuente.size
+                        escala = min(zoom / 100, (12_000_000 / (ancho_original * alto_original)) ** .5)
                         medidas = tuple(max(1, round(dimension * escala)) for dimension in fuente.size)
                         fuente = fuente.resize(medidas, Image.Resampling.LANCZOS)
                     imagen_activa = ImageTk.PhotoImage(fuente, master=app)
@@ -511,18 +517,42 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             except (OSError, ValueError, TclError, Image.DecompressionBombError) as error:
                 mensaje += "\n" + str(error)
             if imagen_activa is not None:
-                mostrar(visor, "")
-                visor.configure(state="normal")
-                visor.image_create("1.0", image=imagen_activa)
-                visor.configure(state="disabled")
-                if datos["visor"] == "pdf":
-                    ancho, alto = imagen_activa.width(), imagen_activa.height()
-                    boton(barra_zoom, "Ajustar ancho", lambda: ajustar(
-                        escala=round(resolucion * max(1, visor.winfo_width() - 35) / ancho)))
-                    boton(barra_zoom, "Ajustar página", lambda: ajustar(escala=round(resolucion * min(
-                        max(1, visor.winfo_width() - 35) / ancho, max(1, visor.winfo_height() - 35) / alto))))
-                boton(acciones_visor, "Información", lambda: messagebox.showinfo(
-                    nombre, mensaje + ("\n\n" + contenido[:1800] if contenido else ""), parent=app))
+                visor.master.pack_forget()
+                visor_raster.pack(fill=BOTH, expand=True)
+                visor_raster.mostrar(imagen_activa, ancla)
+                ancho, alto = imagen_activa.width(), imagen_activa.height()
+
+                def encajar(solo_ancho=False):
+                    lienzo.update_idletasks()
+                    ancho_panel, alto_panel = lienzo.winfo_width(), lienzo.winfo_height()
+                    if datos["visor"] == "pdf":
+                        factor = ancho_panel / ancho if solo_ancho else min(ancho_panel / ancho, alto_panel / alto)
+                        ajustar(escala=round(resolucion * factor))
+                    else:
+                        factor = ancho_panel / ancho_original if solo_ancho else min(
+                            ancho_panel / ancho_original, alto_panel / alto_original)
+                        ajustar(porcentaje=100 * factor)
+
+                boton(barra_zoom, "Ajustar ancho", lambda: encajar(True))
+                boton(barra_zoom, "Ajustar página" if datos["visor"] == "pdf" else "Ajustar ventana", encajar)
+                def alternar_ajuste(_evento):
+                    if escala_anterior := datos.get("escala_previa"):
+                        ajustar(porcentaje=escala_anterior)
+                    elif datos["visor"] == "imagen":
+                        factor = min(lienzo.winfo_width() / ancho_original, lienzo.winfo_height() / alto_original)
+                        visualizar({**datos, "zoom_imagen": max(5, min(400, factor * 100)), "escala_previa": zoom})
+                    else:
+                        encajar()
+                    return "break"
+                lienzo.bind("<Double-Button-1>", alternar_ajuste)
+                info = ttk.Label(barra_zoom, text=mensaje + ("\n" + contenido[:400] if contenido else ""),
+                                 wraplength=430, justify="left")
+                def alternar_info():
+                    if info.winfo_manager():
+                        info.pack_forget()
+                    else:
+                        info.pack(side="bottom", fill=X)
+                boton(acciones_visor, "Información", alternar_info)
                 return_visual = True
             else:
                 return_visual = False
@@ -530,12 +560,13 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return_visual = False
         if not return_visual:
             mostrar(visor, mensaje)
-        if datos.get("app_externa") and proyecto_activo:
+        if datos.get("app_externa") and (proyecto_activo or datos.get("suelto")):
             esperado = proyecto_activo
+            accion_original = "abrir_suelto_externo" if datos.get("suelto") else "abrir_externo"
 
             def externa():
                 if messagebox.askyesno("Abrir en otra aplicación", f"¿Abrir «{nombre}» en la aplicación predeterminada?", parent=app):
-                    publicar(lambda: proyecto("abrir_externo", nombre=nombre, confirmar=True, esperada=esperado),
+                    publicar(lambda: proyecto(accion_original, nombre=nombre, confirmar=True, esperada=esperado),
                              lambda dato: estado.set(dato["salida"]))
 
             boton(acciones_visor, "Abrir en aplicación local", externa)
@@ -1371,7 +1402,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     boton(acciones_proyecto, "Abrir en Thunar", mostrar_gestor)
     boton(acciones_proyecto, "Abrir web", abrir_pagina_web)
     if dnd:
-        for superficie in (editor, visor, pagina_resultados):
+        for superficie in (editor, visor, visor_raster.lienzo, pagina_resultados):
             superficie.drop_target_register(dnd[0])
             superficie.dnd_bind("<<Drop>>", soltar)
         lista.drag_source_register(1, dnd[0])

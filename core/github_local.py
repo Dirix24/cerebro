@@ -104,3 +104,43 @@ def leer_publico(repositorio, archivo=None, *, abrir=None):
     if not isinstance(fuente, str) or not fuente.startswith("https://github.com/" + repo + "/"):
         fuente = "https://github.com/" + repo
     return {"repo": repo, "fuente": fuente, "texto": texto}
+
+
+def _referencia(valor):
+    from urllib.parse import quote
+
+    if (not isinstance(valor, str) or not re.fullmatch(r"[A-Za-z0-9_./-]{1,120}", valor)
+            or ".." in valor or any(not parte or parte.startswith(".") for parte in valor.split("/"))):
+        raise ValueError("Referencia Git inválida.")
+    return quote(valor, safe="")
+
+
+def comparar_publico(repositorio, base, destino, *, abrir=None):
+    datos = _datos_publicos(repositorio, "/compare/" + _referencia(base) + "..." + _referencia(destino), abrir=abrir)
+    if not isinstance(datos, dict) or datos.get("status") not in {"identical", "ahead", "behind", "diverged"}:
+        raise ValueError("GitHub devolvió una comparación inválida.")
+    return {"repositorio": identificar_repositorio(repositorio), "base": base, "destino": destino,
+            "estado": datos["status"], "adelante": datos.get("ahead_by", 0), "atras": datos.get("behind_by", 0)}
+
+
+def repositorios_cuenta():
+    """Consulta la credencial gestionada por gh, sin leerla ni exportarla."""
+    import os
+    from shutil import which
+    import subprocess
+
+    ejecutable = which("gh")
+    if not ejecutable:
+        raise RuntimeError("Instala GitHub CLI y conecta tu cuenta mediante gh auth login.")
+    entorno = {**os.environ, "GH_PROMPT_DISABLED": "1"}
+    try:
+        salida = subprocess.run([ejecutable, "api", "--hostname", "github.com",
+                                  "/user/repos?per_page=20&sort=updated", "--jq", "[.[].full_name]"],
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                 timeout=10, check=True, env=entorno)
+        datos = json.loads(salida.stdout)
+        if not isinstance(datos, list):
+            raise ValueError("Listado inválido")
+        return [identificar_repositorio(nombre) for nombre in datos[:20] if isinstance(nombre, str)]
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise RuntimeError("No pude consultar tu cuenta de GitHub. Comprueba gh auth status.") from None
