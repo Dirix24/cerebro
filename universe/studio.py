@@ -492,6 +492,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             boton(barra_zoom, "−", lambda: cambiar_zoom(-1))
             boton(barra_zoom, "+", lambda: cambiar_zoom(1))
             boton(barra_zoom, "100 %", lambda: ajustar(escala=980, porcentaje=100))
+            visor.bind("<Button-1>", lambda _: visor.focus_set())
             visor.bind("<Control-MouseWheel>", lambda evento: cambiar_zoom(1 if evento.delta > 0 else -1))
             visor.bind("<Control-Button-4>", lambda _: cambiar_zoom(1))
             visor.bind("<Control-Button-5>", lambda _: cambiar_zoom(-1))
@@ -983,9 +984,41 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         mostrar(validaciones, "Ejecutando unittest…\n", anexar=True)
         publicar(lambda: proyecto("pruebas", confirmar=True, esperada=esperado), lambda dato: tareas_en_curso.add(dato["id"]))
 
+    confirmar_generacion = ttk.Button(pagina_resultados, text="Guardar propuesta revisada")
+
     def presentar_resultado(dato):
+        confirmar_generacion.pack_forget()
         from universe.especialidades import sintetizar
 
+        if generacion := dato.get("generacion"):
+            esperado = proyecto_activo
+            grafica.pack_forget()
+            mostrar(detalles, generacion["diff"])
+            vistas_editor.select(pagina_resultados)
+            def guardar_propuesta():
+                if proyecto_activo != esperado:
+                    estado.set("La propuesta corresponde a otra carpeta.")
+                    return
+                carpeta_nueva = simpledialog.askstring("Guardar propuesta", "Nombre de la carpeta nueva",
+                                                        initialvalue="proyecto-generado", parent=app)
+                if not carpeta_nueva:
+                    return
+
+                def publicado(resultado):
+                    confirmar_generacion.pack_forget()
+                    if proyecto_activo != esperado:
+                        return
+                    actualizar_archivos()
+                    preferido = next((n for n in resultado["archivos"] if n.endswith(".html")), resultado["archivos"][0])
+                    if es_seguro_salir("¿Abrir el archivo generado?"):
+                        cargar_nombre(preferido)
+                    estado.set("Archivos creados. Las pruebas se ejecutan por separado.")
+
+                publicar(lambda: proyecto("publicar_generado", nombre=carpeta_nueva, id=generacion["id"],
+                                           confirmar=True, esperada=esperado), publicado)
+            confirmar_generacion.configure(command=guardar_propuesta)
+            confirmar_generacion.pack(side="top", before=detalles.master, anchor="w")
+            return
         if dato.get("vista") == "robot":
             simulado = dato["robot"]
             grafica.pack_forget()

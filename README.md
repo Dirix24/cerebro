@@ -569,3 +569,41 @@ verde saturada con fondo neutro. Esta alternativa mueve el puntero.
 Para hacer clic o cambiar de pestaña usa el ratón o el teclado. En
 modo MediaPipe puedes usar la pinza sobre los controles de Studio.
 **Calibrar** ajusta el margen antes de iniciar la cámara.
+
+### Proyectos revisables, documentos y visión local
+
+Para programar en Studio abre y autoriza una carpeta, configura el
+modelo local de Ollama o llama.cpp y pide **«Haz una calculadora»** o
+**«Diseña una web»**. Revisa las diferencias en Resultados y pulsa
+**Guardar propuesta revisada**. Cerebro publica los archivos juntos en
+una carpeta nueva. Si ya existe, pide otro nombre. Los archivos
+generados se abren sin ejecutar su contenido. Para ejecutar las pruebas
+Python, abre la carpeta generada como proyecto y usa **Pruebas** con
+Bubblewrap habilitado.
+
+En un archivo abierto prueba **«Según el documento, ¿qué dice de la
+energía solar?»** o **«Explica este PDF»**. Cerebro cita los fragmentos
+recuperados y, con un modelo local de texto configurado, añade una
+interpretación separada. La explicación depende de los fragmentos
+seleccionados. Los PDF escaneados todavía pueden requerir OCR externo.
+
+Para **«Analiza esta imagen»**, configura `CEREBRO_OLLAMA_VISION` con
+el nombre de un modelo visual que ya tengas en Ollama y reinicia
+Cerebro. La imagen autorizada se envía a Ollama en el propio equipo.
+Para mantener el servicio en modo local, inicia Ollama con
+`OLLAMA_NO_CLOUD=1`. El análisis de imágenes y el de texto comparten
+el límite de una consulta a la vez.
+
+En el Acompañante, **«Mira esta ventana»** pide permiso para consultar
+una vez el título y la clase de la ventana activa al recoger la esfera.
+El resultado se muestra en la ventana del Acompañante. El análisis de
+capturas de pantalla queda pendiente.
+
+El diálogo del modo gestual incluye **Diagnóstico** para ver el nodo
+de cámara, los permisos y cada dependencia. Las instrucciones de
+instalación opcional anteriores se aplican al entorno virtual de
+Cerebro. Puedes comprobar el rendimiento con **«Analiza mi rendimiento»**
+y contar las aplicaciones visibles en el menú con **«Cuántos programas
+tengo instalados»**.
+
+Consulta [la validación de Cerebro Next](docs/CEREBRO_NEXT.md).

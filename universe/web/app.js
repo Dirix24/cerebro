@@ -256,6 +256,7 @@ async function conversar(texto) {
       if (!cambiosPendientes()) await abrirArchivo(creado.archivo);
       return true;
     }
+    const carpetaPropuesta = proyectoActivo;
     const documento = !esChat && documentoVisible?.carpeta === proyectoActivo ? documentoVisible : null;
     const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz,
       conversacion: chatActivo, documento});
@@ -280,7 +281,24 @@ async function conversar(texto) {
     agregarMensaje("Tú", texto);
     agregarMensaje("Cerebro", salida.respuesta);
     if (!esChat) {
-      presentarResultados(salida);
+      if (salida.generacion && carpetaPropuesta === proyectoActivo) {
+        const propuesta = salida.generacion;
+        const area = $("resultado-central");
+        area.replaceChildren(elementoTexto("h2", "Propuesta de archivos"), elementoTexto("pre", propuesta.diff),
+          boton("Guardar propuesta revisada", async () => {
+            if (carpetaPropuesta !== proyectoActivo) throw new Error("La carpeta del proyecto cambió.");
+            const nombre = prompt("Nombre de la carpeta nueva", "proyecto-generado");
+            if (!nombre?.trim()) return;
+            const publicado = await solicitarProyecto("publicar_generado",
+              {nombre, id: propuesta.id, confirmar: true}, carpetaPropuesta);
+            await actualizarArchivos();
+            if (!cambiosPendientes()) await abrirArchivo(publicado.archivos.find(n => n.endsWith(".html")) || publicado.archivos[0]);
+            aviso("Archivos creados. Las pruebas se ejecutan por separado.");
+          }));
+        central("resultado-central");
+      } else {
+        presentarResultados(salida);
+      }
       if (salida.vista === "universe") await mostrar("universe");
       if (salida.vista === "robot") await mostrar("body");
     }

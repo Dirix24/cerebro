@@ -35,7 +35,11 @@ def tecnologias():
     opencv = importlib.util.find_spec("cv2") is not None
     mediapipe = importlib.util.find_spec("mediapipe") is not None
     modelo = os.environ.get("CEREBRO_MODELO_MANOS")
-    return {"x11": x11, "opencv": opencv, "mediapipe": mediapipe,
+    dispositivos = [{"nodo": f"/dev/video{indice}", "nombre": nombre,
+                     "permisos": os.access(f"/dev/video{indice}", os.R_OK | os.W_OK)}
+                    for indice, nombre in camaras()]
+    return {"x11": x11, "xdotool": bool(which("xdotool")), "opencv": opencv, "mediapipe": mediapipe,
+            "dispositivos": dispositivos,
             "modelo": modelo if modelo and Path(modelo).expanduser().is_file() else None}
 
 
@@ -451,6 +455,18 @@ def abrir():
                 vista.set(f"Manos detectadas: {manos} · Azul: derecha · Verde: izquierda")
         raiz.after(60, actualizar)
 
+    def diagnosticar():
+        ficha = tecnologias()
+        lineas = [f"{nombre}: {'detectado' if ficha[clave] else 'no detectado'}" for clave, nombre in (
+            ("x11", "Sesión X11 compatible"), ("xdotool", "xdotool"), ("opencv", "OpenCV"),
+            ("mediapipe", "MediaPipe"), ("modelo", "Modelo de manos"))]
+        lineas.extend(f"{d['nodo']} · {d['nombre']} · permisos {'disponibles' if d['permisos'] else 'insuficientes'}"
+                       for d in ficha["dispositivos"])
+        if not ficha["dispositivos"]:
+            lineas.append("No se detectaron dispositivos V4L2.")
+        lineas.append("La apertura se comprueba al activar la cámara.")
+        messagebox.showinfo("Diagnóstico de cámara", "\n".join(lineas), parent=raiz)
+
     boton = ttk.Button(controles, text="Activar cámara", command=iniciar, state="normal" if opciones else "disabled")
     boton.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
     ttk.Button(controles, text="Pausar", command=pausar).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
@@ -458,12 +474,13 @@ def abrir():
     boton_ver.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
     boton_trazo = ttk.Button(controles, text="Dibujar figura", command=iniciar_trazo)
     boton_trazo.grid(row=1, column=0, padx=2, pady=2, sticky="ew")
-    ttk.Button(controles, text="Calibrar", command=calibrar).grid(row=3, column=0, columnspan=3, pady=4)
+    ttk.Button(controles, text="Calibrar", command=calibrar).grid(row=3, column=0, columnspan=2, pady=4)
     convertir = ttk.Button(controles, text="Convertir a 3D", command=modelo_3d, state="disabled")
     convertir.grid(row=1, column=1, padx=2, pady=2, sticky="ew")
     exportar = ttk.Button(controles, text="Guardar OBJ", command=guardar_obj, state="disabled")
     exportar.grid(row=1, column=2, padx=2, pady=2, sticky="ew")
     ttk.Button(controles, text="Usar puntero", command=puntero).grid(row=2, column=0, columnspan=3, pady=(4, 0))
+    ttk.Button(controles, text="Diagnóstico", command=diagnosticar).grid(row=3, column=2, pady=4)
     if not opciones:
         valor.set("No se detectó una cámara compatible.")
     raiz.bind("<Escape>", pausar)

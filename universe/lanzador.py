@@ -597,9 +597,36 @@ def escritorio(sesion):
         boton_nuevo.configure(state=estado)
         boton_chats.configure(state=estado)
 
+    def identificar_ventana():
+        from core.ventanas_x11 import activa
+
+        try:
+            dato = activa()
+            if dato and dato["titulo"] != "Cerebro · Acompañante":
+                salida = f"Ventana activa en X11: {dato['titulo'][:180]} · {dato['clase'][:100]}."
+            else:
+                salida = "X11 no informó de otra ventana activa. Abre la ventana deseada y vuelve a probar."
+        except (OSError, RuntimeError) as error:
+            salida = str(error)
+        eventos.put(("ventana identificada", salida))
+
     def enviar(_evento=None):
         texto = entrada.get().strip()
         if texto and not ocupado and chat_activo is not None:
+            from core.documentos_usuario import _normalizar
+
+            orden = _normalizar(texto).strip(" .!?¿¡")
+            orden = re.sub(r"^cerebro[, ]+", "", orden)
+            if orden in {"mira esta ventana", "identifica esta ventana", "que ventana tengo abierta"}:
+                if not messagebox.askyesno("Identificar ventana", "¿Consultar una vez el título y la clase "
+                                           "de la próxima ventana activa? No se captura la pantalla.", parent=ventana):
+                    return
+                entrada.delete(0, "end")
+                cambiar_estado("Procesando")
+                aviso.set("Consultando metadatos de X11…")
+                ventana.iconify()
+                ventana.after(500, lambda: Thread(target=identificar_ventana, daemon=True).start())
+                return
             entrada.delete(0, "end")
             aviso.set("")
             agregar_turno("Tú", texto)
@@ -708,6 +735,11 @@ def escritorio(sesion):
                 cambiar_estado("Disponible")
                 if voz_activada:
                     hablar_respuesta(ultima_respuesta)
+            elif tipo == "ventana identificada":
+                ventana.deiconify()
+                agregar_turno("Cerebro", valor)
+                aviso.set("Consulta de ventana finalizada.")
+                cambiar_estado("Disponible")
             elif tipo in {"conversación", "conversación remota"}:
                 version = valor["activa"], valor["revision"]
                 if tipo == "conversación remota" and (ocupado or version == (chat_activo, revision_visible)):
