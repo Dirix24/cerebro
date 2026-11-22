@@ -15,13 +15,24 @@ def test_entrena_pesos_reales_y_nucleo_usa_promocion(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memory.json"))
     n = Nucleo("local")
     try:
+        empate = entrenar(ProfesorDePrueba(), n.raiz_alumno)
+        assert not empate["promovido"]
+        assert cargar_activo(n.raiz_alumno) == (None, None)
+
+        # Conserva la prueba de carga y rollback simulando un banco donde
+        # la referencia determinista sí es superable.
+        from core import alumno_supervisado
+        evaluar_real = alumno_supervisado.evaluar
+        def referencia_superable(pesos):
+            return {**evaluar_real(pesos), "aciertos_regla_sola": 8}
+        monkeypatch.setattr(alumno_supervisado, "evaluar", referencia_superable)
         informe = entrenar(ProfesorDePrueba(), n.raiz_alumno)
         assert informe["pesos_iniciales_sha256"] != informe["pesos_finales_sha256"]
         assert len(informe["generados"]) == 2
         assert len(informe["rechazados"]) == 4
         assert informe["promovido"]
         pesos, activo = cargar_activo(n.raiz_alumno)
-        assert evaluar(pesos) == informe["despues"]
+        assert referencia_superable(pesos) == informe["despues"]
         assert responder(pesos, "¿A qué hora abre el museo?") is None
         for modo in ("terminal", "chat", "studio", "escritorio"):
             salida = n.conversar("¿Cuál es la fecha de hoy?", modo=modo)
@@ -69,3 +80,15 @@ def test_confirmacion_y_cancelacion_compartidas(tmp_path, monkeypatch):
         n.ejecutor.shutdown()
     assert "cancelado" in n.conversar("Estado del alumno")["respuesta"]
     assert cargar_activo(n.raiz_alumno) == (None, None)
+
+
+def test_hora_fecha_dictado_y_abstencion():
+    from core.alumno_supervisado import verificar
+
+    assert verificar("Por favor, dime qué hora es") == "hora"
+    assert verificar("Dme la ora local") == "hora"
+    assert verificar("Qué fechaa es") == "fecha"
+    assert verificar("Necesito la fecha de ahora") == "fecha"
+    for frase in ("No me digas qué hora es", "Dme la ora local en París",
+                  '«Qué fechaa es»', "Necesito la fecha de ahora y abre el PDF"):
+        assert verificar(frase) == "abstener"

@@ -53,3 +53,40 @@ def test_permisos_impiden_descarga(internet):
 def test_descarga_de_pdf_no_reclama_herramienta_git(url):
     mensaje = f"Descarga el PDF {url}"
     assert resolver(object(), mensaje, mensaje.lower()) is None
+
+
+def test_limite_total_considera_repositorios_anteriores(tmp_path):
+    deposito = tmp_path / "repositorios"
+    anterior = deposito / "anterior"
+    anterior.mkdir(parents=True)
+    datos = anterior / "datos"
+    datos.write_bytes(b"x" * 4096)
+    with pytest.raises(RuntimeError, match="límite total"):
+        descargar("https://github.com/a/b", tmp_path, limite=1024)
+    assert datos.read_bytes() == b"x" * 4096
+    assert not (deposito / "a--b").exists()
+
+
+def test_git_termina_grupo_real_al_cancelar(tmp_path):
+    import os
+
+    from core.repositorio_descargado import _git
+
+    script = tmp_path / "git"
+    script.write_text("#!/bin/sh\nsleep 30 &\necho $! > hijo\nwait\n")
+    script.chmod(0o700)
+    hijo = tmp_path / "hijo"
+
+    def comprobar():
+        if hijo.exists() and hijo.read_text().strip():
+            raise InterruptedError("cancelada")
+
+    with pytest.raises(InterruptedError, match="cancelada"):
+        _git((), {**os.environ, "PATH": str(tmp_path) + os.pathsep + os.defpath,
+                  "PWD": str(tmp_path)}, comprobar, 1024 * 1024, 2, directorio=tmp_path)
+    estado = Path("/proc") / hijo.read_text().strip() / "stat"
+    if estado.exists():
+        try:
+            assert estado.read_text().rsplit(")", 1)[1].split()[0] == "Z"
+        except FileNotFoundError:
+            pass

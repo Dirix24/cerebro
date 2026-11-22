@@ -2,7 +2,7 @@
 from threading import Lock
 from time import monotonic
 
-from core.alumno_supervisado import cargar_activo, entrenar, responder
+from core.alumno_supervisado import cargar_activo, entrenar, responder, responder_etiqueta, verificar
 
 
 class Ensenanza:
@@ -77,7 +77,11 @@ class Ensenanza:
         pesos, informe = cargar_activo(nucleo.raiz_alumno)
         resultado = responder(pesos, pregunta)
         if resultado is None:
-            return None
+            respaldo = responder_etiqueta(verificar(pregunta))
+            if respaldo is None:
+                return None
+            respuesta, competencia = respaldo
+            return {"respuesta": respuesta, "origen": "regla_hora_fecha", "competencia": competencia}
         respuesta, competencia = resultado
         return {"respuesta": respuesta, "origen": "alumno_supervisado",
                 "competencia": competencia, "checkpoint": informe["id"]}

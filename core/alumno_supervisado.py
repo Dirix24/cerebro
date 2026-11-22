@@ -38,7 +38,7 @@ RESERVA = (
 # a la fecha/hora local y rechaza combinaciones, citas y ubicaciones externas.
 CONSULTA = re.compile(
     r"(?:cerebro )?(?:(?:me )?(?:puedes |podrias )?(?:decir|dar|indicar|mostrar|consultar)(?:me)? |"
-    r"(?:dime|dame|muestra(?:me)?|indica(?:me)?|necesito saber|quisiera consultar|cual es|que|tienes|me dices) )?"
+    r"(?:dime|dame|muestra(?:me)?|indica(?:me)?|necesito saber|quisiera consultar|cual es|que|tienes|me dices|necesito) )?"
     r"(?:la )?(hora|fecha)(?: actual| exacta| local| de ahora| del sistema| de hoy| de este equipo)?"
     r"(?: es hoy| es| estamos ahora| en este equipo)?(?: por favor)?"
 )
@@ -50,8 +50,16 @@ def normalizar(texto):
                                .encode("ascii", "ignore").decode()))
 
 
+_DICTADO = {"dme la ora local": "dime la hora local", "que fechaa es": "que fecha es"}
+
+
 def verificar(texto):
-    frase = normalizar(texto)
+    if any(c in texto for c in ('"', '«', '»', '“', '”')):
+        return "abstener"
+    frase = normalizar(texto).removeprefix("cerebro ").removeprefix("por favor ")
+    frase = _DICTADO.get(frase, frase)
+    if frase == "dime que hora es":
+        return "hora"
     if frase == "en que fecha estamos ahora":
         return "fecha"
     coincidencia = CONSULTA.fullmatch(frase)
@@ -154,7 +162,8 @@ def _entrenar(profesor, raiz, carpeta, avanzar):
     sin_qwen = evaluar(_ajustar(SEMILLAS, inicial))
     avanzar("evaluando candidato")
     antes, despues = evaluar(previo), evaluar(pesos)
-    promovido = (despues["aciertos"] > antes["aciertos"] and despues["falsos_positivos"] == 0
+    promovido = (despues["aciertos"] > despues["aciertos_regla_sola"]
+                 and despues["aciertos"] > antes["aciertos"] and despues["falsos_positivos"] == 0
                  and all(despues["competencias"][e] >= antes["competencias"][e] for e in ETIQUETAS)
                  and all(despues["competencias"][e] >= 3 for e in ETIQUETAS[:2]))
     identidad = uuid4().hex
@@ -163,7 +172,8 @@ def _entrenar(profesor, raiz, carpeta, avanzar):
     archivo = destino / "pesos.npy"
     np.save(archivo, pesos, allow_pickle=False)
     informe = {"id": identidad, "anterior": informe_previo["id"] if informe_previo else None,
-               "politica": 1, "banco_sha256": sha256(repr(RESERVA).encode()).hexdigest(),
+               "politica": 2, "motivo": (None if promovido else
+                   "El candidato no supera las reglas, el modelo activo o los criterios de seguridad."), "banco_sha256": sha256(repr(RESERVA).encode()).hexdigest(),
                "antes": antes, "despues": despues, "control_sin_qwen": sin_qwen, "promovido": promovido,
                "generados": generados, "rechazados": rechazados, "ejemplos": len(filas),
                "pasos": 450, "segundos": round(perf_counter() - inicio, 3),
@@ -225,6 +235,10 @@ def retroceder(raiz):
 
 def responder(pesos, texto):
     etiqueta = predecir(pesos, texto)
+    return responder_etiqueta(etiqueta)
+
+
+def responder_etiqueta(etiqueta):
     instante = datetime.now().astimezone()
     if etiqueta == "hora":
         return f"Hora local: {instante:%H:%M}.", etiqueta
