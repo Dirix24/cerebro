@@ -3,7 +3,7 @@ from collections import OrderedDict
 import os
 from pathlib import Path
 import re
-from threading import Event, Lock
+from threading import Condition, Lock, Thread
 from time import monotonic, sleep
 
 from agent.control_ventanas import buscar, etiquetas, interpretar
@@ -38,10 +38,40 @@ def _accion_energia(orden):
     return next((accion for accion, patron in _ENERGIA.items() if re.fullmatch(patron, orden)), None)
 
 
+class Reproduccion:
+    def __init__(self, nombre, total):
+        self.nombre, self.total = nombre, total
+        self.verificados = 0
+        self.estado = "en curso"
+        self.resultado = ""
+        self.condicion = Condition()
+
+    def esperar_paso(self):
+        with self.condicion:
+            if self.estado == "en pausa":
+                if not self.condicion.wait_for(lambda: self.estado != "en pausa", timeout=60):
+                    self.estado = "cancelando"
+            return self.estado == "en curso"
+
+    def controlar(self, orden):
+        with self.condicion:
+            if orden in {"para", "cancela la repeticion"} and self.estado in {"en curso", "en pausa"}:
+                self.estado = "cancelando"
+                self.condicion.notify_all()
+            elif orden in {"espera", "pausa la repeticion"} and self.estado == "en curso":
+                self.estado = "en pausa"
+            elif orden in {"continua", "continua la repeticion"} and self.estado == "en pausa":
+                self.estado = "en curso"
+                self.condicion.notify_all()
+            return f"«{self.nombre}»: {self.estado}. {self.verificados}/{self.total} pasos verificados." + (
+                "\n" + self.resultado if self.resultado else "")
+
+
+
 class Escritorio:
     def __init__(self, nucleo):
         self.nucleo = nucleo
-        self.reproducciones = {}
+        self.reproducciones = OrderedDict()
         self.cerrojo_reproducciones = Lock()
         self.pendientes = OrderedDict()
         self.enlaces = OrderedDict()
@@ -50,6 +80,9 @@ class Escritorio:
         self.demostraciones = Demostraciones(self)
 
     def limpiar(self):
+        with self.cerrojo_reproducciones:
+            for reproduccion in self.reproducciones.values():
+                reproduccion.controlar("para")
         self.pendientes.clear()
         self.enlaces.clear()
         self.ultimas_aplicaciones.clear()
@@ -144,11 +177,11 @@ class Escritorio:
             return f'{hecho} «{titulo}».'
         return f'Solicité {infinitivo} «{titulo}», pero el gestor no confirmó el cambio.'
 
-    def repetir_demostracion(self, pasos, cliente, detener=None, nombre=None):
+    def repetir_demostracion(self, pasos, cliente, reproduccion=None):
         resultados = []
         verificados = 0
         for indice, paso in enumerate(pasos, 1):
-            if detener is not None and detener.is_set():
+            if reproduccion is not None and not reproduccion.esperar_paso():
                 resultados.append("Repetición cancelada entre pasos.")
                 break
             self._autorizar()
@@ -181,11 +214,30 @@ class Escritorio:
                 resultados.append("Detuve la demostración. Revisa la aplicación antes de volver a enseñarme este paso.")
                 break
             verificados += 1
-        if nombre and self.nucleo.agente.tiene_permisos("WRITE"):
-            self.nucleo.memoria.cargar_memoria()
-            self.nucleo.memoria.guardar_largo_plazo("ejecucion_demostracion:" + nombre,
-                {"verificados": verificados, "total": len(pasos)}, categoria="ejecucion_demostracion")
+            if reproduccion is not None:
+                with reproduccion.condicion:
+                    reproduccion.verificados = verificados
         return "\n".join(resultados)
+
+    def _ejecutar_reproduccion(self, pasos, cliente, reproduccion):
+        try:
+            resultado = self.repetir_demostracion(pasos, cliente, reproduccion)
+            with self.nucleo.cerrojo:
+                if self.nucleo.agente.tiene_permisos("READ", "WRITE") and not self.nucleo.solo_lectura:
+                    self.nucleo.memoria.cargar_memoria()
+                    self.nucleo.memoria.guardar_largo_plazo("ejecucion_demostracion:" + reproduccion.nombre,
+                        {"verificados": reproduccion.verificados, "total": reproduccion.total},
+                        categoria="ejecucion_demostracion")
+        except (OSError, RuntimeError, ValueError) as exc:
+            resultado = f"La repetición se detuvo: {exc}"
+        with reproduccion.condicion:
+            if reproduccion.verificados == reproduccion.total:
+                reproduccion.estado = "verificada"
+            elif reproduccion.estado == "cancelando":
+                reproduccion.estado = "cancelada"
+            else:
+                reproduccion.estado = "detenida"
+            reproduccion.resultado = resultado
 
     def _impedimentos_energia(self, accion):
         motivos = energia_linux.impedimentos(accion)
@@ -601,12 +653,14 @@ class Escritorio:
     def consultar(self, pregunta, cliente):
         texto = re.sub(r"^cerebro(?:[,\s]+)", "", pregunta.strip(" ¡!¿?."), flags=re.I)
         normal = documentos_usuario._normalizar(texto)
-        if normal in {"para", "cancela la repeticion"}:
+        if normal in {"para", "cancela la repeticion", "espera", "pausa la repeticion",
+                      "continua", "continua la repeticion", "estado de la repeticion"}:
             with self.cerrojo_reproducciones:
-                evento = self.reproducciones.get(cliente)
-                if evento:
-                    evento.set()
-                    return "Solicité detener la repetición al terminar el paso en curso."
+                reproduccion = self.reproducciones.get((cliente, self.nucleo.conversaciones.activa()))
+            if reproduccion and (normal == "estado de la repeticion"
+                                 or reproduccion.estado in {"en curso", "en pausa", "cancelando"}):
+                self._autorizar()
+                return reproduccion.controlar(normal)
         propuesta = coordinador_hibrido.PREGUNTA_PLAN.fullmatch(texto)
         if propuesta:
             return self._proponer_plan(propuesta[1], cliente)
@@ -723,17 +777,18 @@ class Escritorio:
             self._autorizar()
             self._autorizar_escritura()
             with self.cerrojo_reproducciones:
-                if self.reproducciones:
+                if any(r.estado in {"en curso", "en pausa", "cancelando"} for r in self.reproducciones.values()):
                     return "Ya hay una repetición accesible en curso."
-                evento = Event()
-                self.reproducciones[cliente] = evento
-            self.pendientes.pop(cliente, None)
-            try:
-                return self.repetir_demostracion(datos["repetir_casillas"], cliente, evento,
-                                                  datos["nombre_demostracion"])
-            finally:
-                with self.cerrojo_reproducciones:
-                    self.reproducciones.pop(cliente, None)
+                self.pendientes.pop(cliente, None)
+                pasos = datos["repetir_casillas"]
+                reproduccion = Reproduccion(datos["nombre_demostracion"], len(pasos))
+                clave_reproduccion = (cliente, self.nucleo.conversaciones.activa())
+                self.reproducciones[clave_reproduccion] = reproduccion
+                self.reproducciones.move_to_end(clave_reproduccion)
+                if len(self.reproducciones) > 32:
+                    self.reproducciones.popitem(last=False)
+            Thread(target=self._ejecutar_reproduccion, args=(pasos, cliente, reproduccion), daemon=True).start()
+            return "Repetición iniciada. Puedes decir «Estado de la repetición», «Espera», «Continúa» o «Para»."
         if "plan_profesor" in datos and confirmacion == "confirmar plan de escritorio":
             self._autorizar()
             plan = datos["plan_profesor"]
