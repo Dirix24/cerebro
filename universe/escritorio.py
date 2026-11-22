@@ -269,6 +269,7 @@ class Escritorio:
                 reproduccion.registrar(paso_evidencia, estado, respuesta)
             resultados.append(respuesta if paso_evidencia != indice else f"{indice}. {respuesta}")
             if avance != ["verificado"]:
+                resultados.append("Detuve la demostración.")
                 if avance:
                     resultados.append("Comprueba el efecto en la aplicación y recupera el estado inicial antes de repetir.")
                 else:
