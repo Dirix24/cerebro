@@ -260,3 +260,23 @@ class ProfesorBajoDemanda(ProfesorLocal):
     def cerrar(self):
         with self.ocupado:
             self._detener()
+
+
+def ejercicio_dependencias(plan):
+    """Formula un ejercicio verificable a partir de un plan registrado."""
+    for paso in plan:
+        dependencias = paso.get("depende_de", [])
+        if len(dependencias) == 1:
+            return {"tipo": "ejercicio", "pregunta": f"¿Qué tarea debe completarse antes de «{paso['titulo']}»?",
+                    "respuesta_esperada": dependencias[0], "criterio": "Identificador de dependencia directa.",
+                    "referencia": paso["id"]}
+    return None
+
+
+def evaluar_dependencia(ejercicio, respuesta):
+    esperado = ejercicio["respuesta_esperada"]
+    correcto = respuesta.strip().casefold() == esperado.casefold()
+    return {"tipo": "evaluacion", "correcta": correcto, "esperada": esperado,
+            "referencia": ejercicio["referencia"],
+            "detalle": "La dependencia coincide con el plan." if correcto else
+            f"En el plan, esta tarea depende directamente de «{esperado}»."}

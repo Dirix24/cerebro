@@ -469,16 +469,19 @@ let firmaNodos = "";
 function filtrar() {
   const consulta = $("buscar-nodo").value.trim().toLocaleLowerCase("es");
   const tipo = $("filtro").value;
-  const visibles = nodos.filter(nodo => (!tipo || nodo.tipo === tipo) &&
+  const region = $("region-nodo").value;
+  const visibles = nodos.filter(nodo => (!tipo || nodo.tipo === tipo) && (!region || nodo.grupo === region) &&
     [nodo.titulo, nodo.detalle, nodo.origen].join(" ").toLocaleLowerCase("es").includes(consulta));
-  const firma = JSON.stringify(visibles);
+  const firma = JSON.stringify([region, visibles]);
   if (firma === firmaNodos) return;
   firmaNodos = firma;
   lista($("nodos"), visibles, nodo => boton(nodo.titulo, () => inspeccionar(nodo)));
   if (!visibles.length) $("nodos").textContent = "No hay nodos que coincidan.";
-  grafico.nodos(visibles);
+  const conexiones = new Set(region ? visibles.flatMap(nodo => nodo.vinculos || []) : []);
+  grafico.nodos(region ? nodos.filter(nodo => visibles.includes(nodo) || conexiones.has(nodo.id)) : visibles);
 }
 $("filtro").addEventListener("change", filtrar);
+$("region-nodo").addEventListener("change", filtrar);
 $("buscar-nodo").addEventListener("input", filtrar);
 $("activar-grafo").addEventListener("change", () => {
   $("cerebro-3d").hidden = !$("activar-grafo").checked;

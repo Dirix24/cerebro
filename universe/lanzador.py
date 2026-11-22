@@ -250,7 +250,8 @@ def terminal(sesion):
 
     def pedir_chat(ruta, datos=None):
         sufijo = "" if compartido else "?ambito=terminal"
-        return api(sesion, ruta + sufijo, datos)
+        return api(sesion, ruta + sufijo, datos, tiempo=78 if ruta == "chat"
+                   and os.environ.get("CEREBRO_CAZEL_PROPUESTAS") == "1" else 25)
 
     def mostrar_historial(limite):
         turnos = pedir_chat("historial")["turnos"][-limite:]
@@ -377,7 +378,23 @@ def terminal(sesion):
                     if not accesos[comando]():
                         print("No se pudo abrir la interfaz desde esta sesión.", file=sys.stderr)
                     continue
-                respuesta = pedir_chat("chat", {"mensaje": entrada, "modo": "terminal", "cliente": identificador})
+                from core.documentos_usuario import _normalizar
+                from universe.especialidades import _trabajos
+
+                coordinando = bool(_trabajos(_normalizar(entrada), False)[0])
+                if coordinando:
+                    print("Coordinando especialistas… Ctrl+C para cancelar.")
+                try:
+                    respuesta = pedir_chat("chat", {"mensaje": entrada, "modo": "terminal",
+                                                   "cliente": identificador})
+                except KeyboardInterrupt:
+                    if not coordinando:
+                        raise
+                    with contextlib.suppress(OSError, RuntimeError):
+                        pedir_chat("chat", {"mensaje": "Cancela la coordinación", "modo": "terminal",
+                                           "cliente": identificador})
+                    print("\nCancelación solicitada.")
+                    continue
                 ultima_respuesta = respuesta["respuesta"]
                 mostrar_turno("Cerebro", ultima_respuesta)
                 if respuesta.get("abrir") == "studio":

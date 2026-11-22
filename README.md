@@ -352,3 +352,30 @@ No hace falta contribuir con una función enorme: corregir un fallo pequeño o m
 El código y la documentación de Cerebro se ofrecen bajo la **[licencia MIT](LICENSE)**. Se permite utilizar, copiar, estudiar, modificar, distribuir y vender software derivado, conservando los avisos de copyright y licencia exigidos. Las dependencias, modelos de terceros y otros recursos pueden tener licencias diferentes.
 
 **Cerebro es una idea humana desarrollada con ayuda de IA y abierta a que la comunidad la mejore.** 🧠💙
+
+## Coordinación local de CEREBRO, DARAS, CAZEL y PROFESOR
+
+Con los tres repositorios en ramas que incluyen el contrato v1:
+
+```sh
+export CEREBRO_DARAS_RAIZ=/ruta/a/Daras-IA
+export CEREBRO_CAZEL_RAIZ=/ruta/a/CAZEL_IA
+export CEREBRO_CAZEL_PROYECTO=/ruta/al/proyecto/autorizado
+cerebro terminal
+```
+
+Dile «Investiga cómo construir un robot, planifica el proyecto, revisa el código
+y comprueba lo aprendido». DARAS consulta su biblioteca local, CAZEL analiza
+el proyecto y PROFESOR formula un ejercicio verificable sobre el plan. La
+Terminal y el universo muestran la misma experiencia. Con internet permitido
+en la sesión, añade «en internet» a la petición de investigación para usar las
+fuentes públicas de DARAS.
+
+`CEREBRO_CAZEL_PROPUESTAS=1` habilita propuestas en peticiones de desarrollo
+cuando CAZEL tiene un modelo local activo. CEREBRO muestra la sesión de CAZEL
+Studio donde se revisan los cambios. Si usas una carpeta de ajustes y sesiones
+alternativa, configura `CEREBRO_CAZEL_DATOS` con esa ruta.
+`CEREBRO_CAZEL_PRUEBAS=1` autoriza pruebas aisladas cuando se piden
+expresamente. Ctrl+C cancela la coordinación desde Terminal.
+
+Consulta [el contrato, sus pruebas y sus límites](docs/COORDINACION_V1.md).

@@ -9,8 +9,8 @@ Evolución de hiperparámetros: un algoritmo evolutivo REAL (no simulado).
   3. Sobreviven los mejores (élite); el resto de la nueva generación son
      hijos: cruce de dos padres + mutación aleatoria.
   4. Tras varias generaciones, el mejor genoma se entrena más tiempo. Su
-     checkpoint sustituye a best.npz SOLO si mejora al que ya existía
-     (comparación justa: ambos evaluados hoy sobre la misma validación).
+     checkpoint queda aislado. --promover permite instalarlo si mejora al
+     checkpoint actual en la misma validación.
 
 Todo está limitado por un presupuesto de parámetros para no salirse de lo
 que tu máquina aguanta.
@@ -103,7 +103,10 @@ def main():
     ap.add_argument("--max-parametros", type=int, default=600_000)
     ap.add_argument("--corpus", default=None)
     ap.add_argument("--semilla", type=int, default=0)
+    ap.add_argument("--promover", action="store_true", help="Autoriza sustituir el checkpoint activo si mejora.")
     args = ap.parse_args()
+    if min(args.poblacion, args.generaciones, args.pasos_candidato, args.pasos_final, args.max_parametros) <= 0:
+        ap.error("Población, generaciones, pasos y presupuesto deben ser positivos.")
 
     rng = random.Random(args.semilla)
     docs_train, docs_val, origen = cargar_datos(args.corpus, config.FRACCION_VALIDACION)
@@ -129,6 +132,8 @@ def main():
             desc = " ".join(f"{k}={v:.4g}" if isinstance(v, float) else f"{k}={v}" for k, v in g.items())
             print(f"  candidato {i}: {bpb:.3f} bpb ({time.time() - t0:.0f}s) | {desc}")
         puntuados.sort(key=lambda p: p[0])
+        if not math.isfinite(puntuados[0][0]):
+            ap.error("Ningún candidato cabe en el presupuesto o obtuvo una pérdida finita.")
         if puntuados[0][0] < mejor[0]:
             mejor = puntuados[0]
         elite = [g for _, g in puntuados[:n_elite]]
@@ -157,6 +162,9 @@ def main():
     trainer.guardar_mejor(ruta_evo)
     print(f"[OK] Candidato evolucionado guardado en {os.path.relpath(ruta_evo)} "
           f"({resumen['mejor_bpb']:.3f} bpb)")
+
+    if not args.promover:
+        return
 
     previo = bpb_del_mejor_existente(docs_val)
     if previo is None or resumen["mejor_bpb"] < previo:
