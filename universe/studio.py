@@ -15,9 +15,9 @@ from tkinter import END, BOTH, LEFT, RIGHT, X, Y, BooleanVar, Canvas, Listbox, M
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote, urlsplit
 
-from core.escritorio_studio import archivo_soltado
+from core.escritorio_studio import archivo_soltado, intencion_archivo, intencion_carpeta
 from core.visores_studio import HTML_INICIAL, html_estatico, tabla
-from universe.lanzador import ErrorAPI, api, abrir, abrir_web, carpeta, lanzar_acompanante, lanzar_terminal
+from universe.lanzador import ErrorAPI, api, abrir, abrir_web, carpeta, lanzar_acompanante, lanzar_tactil, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
 from universe.paleta import ACENTO, ACTIVO, BORDE, EDITOR, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
@@ -218,8 +218,15 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     boton(cabecera, "Acompañante", abrir_acompanante, lado=RIGHT)
     boton(cabecera, "Terminal", lanzar_terminal, lado=RIGHT)
-    ttk.Checkbutton(cabecera, text="Modo táctil", variable=modo_tactil,
+    ttk.Checkbutton(cabecera, text="Modo táctil visual", variable=modo_tactil,
                     command=cambiar_tactil).pack(side=RIGHT, padx=5)
+    opciones = ttk.Menubutton(cabecera, text="Opciones")
+    menu_opciones = Menu(opciones, tearoff=False)
+    menu_opciones.add_command(label="Modo gestual por cámara", command=lambda: estado.set(
+        "Activa la cámara desde la ventana de gestos." if lanzar_tactil()
+        else "No se pudo abrir el control gestual en este escritorio."))
+    opciones.configure(menu=menu_opciones)
+    opciones.pack(side=RIGHT, padx=5)
     paginas = ttk.Notebook(app)
     paginas.pack(fill=BOTH, expand=True, padx=14, pady=4)
     cuerpo = ttk.Panedwindow(paginas, orient="horizontal")
@@ -490,7 +497,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                              lambda dato: estado.set(dato["salida"]))
 
             boton(acciones_visor, "Abrir en aplicación local", externa)
-        if (datos.get("suelto") or extension in {".html", ".md", ".csv", ".tsv", ".pdf"}) and "texto" in datos:
+        if (datos.get("suelto") or extension in {".html", ".md", ".csv", ".tsv", ".pdf", ".docx", ".odt"}) and "texto" in datos:
             visor.configure(state="normal")
             visor.insert(END, "\n\n")
             if extension == ".html":
@@ -527,7 +534,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 estado.set("El editor cambió mientras se abría el archivo.")
                 return
             activar_documento(abierto_en, datos) if abierto_en else desactivar_documento()
-            if abierto_en and datos.get("visor") != "texto":
+            if abierto_en and (datos.get("visor") != "texto" or datos.get("solo_lectura")):
+                archivo_proyecto = original_proyecto = None
+                ruta.set(nombre)
+                mostrar(editor, "")
+                editor.edit_modified(False)
                 visualizar(datos)
             else:
                 archivo_proyecto, original_proyecto = nombre, datos["texto"]
@@ -1002,6 +1013,17 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     def enviar(texto=None):
         texto = (entrada.get() if texto is None else texto).strip()
         if not texto or chat_activo is None:
+            return
+        destino_personal = intencion_carpeta(texto, carpetas_disponibles)
+        if destino_personal:
+            entrada.set("")
+            abrir_proyecto(destino_personal)
+            return
+        accion_contextual = intencion_archivo(texto)
+        if accion_contextual and documento_activo:
+            entrada.set("")
+            mostrar_mensaje("Tú", texto)
+            herramienta_archivo(accion_contextual)
             return
         if re.fullmatch(r"(?:cerebro[, ]+)?crea (?:una )?p[aá]gina web[.!]?", texto, re.I):
             if not proyecto_activo:

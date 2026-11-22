@@ -483,7 +483,7 @@ class Nucleo:
             except OSError:
                 publicar("error", "fallo")
 
-    def conversar(self, pregunta, modo=None, cliente=None):
+    def conversar(self, pregunta, modo=None, cliente=None, documento=None):
         if not isinstance(pregunta, str) or not pregunta.strip() or len(pregunta) > 24000:
             raise ValueError("Escribe un mensaje de hasta 24 000 caracteres.")
         pregunta = pregunta.strip()
@@ -501,12 +501,32 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if modo == "studio" and isinstance(documento, dict) and cliente:
+            from core.escritorio_studio import intencion_archivo
+
+            herramienta = intencion_archivo(pregunta)
+            if herramienta:
+                resultado = self.operar_proyecto({
+                    "accion": "herramienta", "cliente": cliente, "nombre": documento.get("nombre"),
+                    "carpeta_esperada": documento.get("carpeta"), "herramienta": herramienta,
+                })
+                respuesta = resultado.get("salida") or resultado["ejercicio"]["pregunta"]
+                resultado["salida"] = respuesta
+                self._registrar_turno(pregunta, respuesta)
+                return {"respuesta": respuesta, "documento": resultado}
         if modo == "studio" and re.fullmatch(r"(?:muestrame|ensename|quiero ver) (?:el )?robot(?: simulado)?", intencion):
             simulado = self.body()
             respuesta = "Abrí la vista del simulador local."
             self._registrar_turno(pregunta, respuesta)
             return {"respuesta": respuesta, "vista": "robot", "robot": simulado}
         if not comando:
+            from core.matematicas_local import consultar as consultar_matematicas
+
+            calculo = consultar_matematicas(intencion)
+            if calculo is not None:
+                self._registrar_turno(pregunta, calculo)
+                return {"respuesta": calculo, "origen": "matematicas_local"}
+
             from universe.especialidades import consultar as consultar_especialidades
             from universe.herramientas import resolver
 
@@ -541,6 +561,12 @@ class Nucleo:
             ensenanza = self._consultar_competencias(intencion, cliente)
             if ensenanza is not None:
                 return ensenanza
+        if intencion in {"diagnostico del equipo", "recursos del equipo", "que hardware tengo"}:
+            from core.recursos_locales import inspeccionar, resumir
+
+            self.exigir_permisos("READ")
+            recursos = inspeccionar(self.raiz)
+            return {"respuesta": resumir(recursos), "recursos": recursos}
         if not comando and intencion in {"que puedo hacer", "que puedes hacer", "capacidades reales"}:
             from core.capacidades_escritorio import inspeccionar
             capacidades = inspeccionar(self)
@@ -597,9 +623,9 @@ class Nucleo:
                                   + informe["resumen_competencias"] + "\n" + objetivos
                                   + "\nMaterias a practicar: " + ", ".join(informe["prioridades_autonomas"])
                                   + ". Di «Prepara entrenamiento autónomo» para revisar la propuesta.")}
-        if re.fullmatch(r"(?:cerebro[, ]+)?(?:activa|abre) (?:el )?modo t[aá]ctil[.!]?", pregunta, re.I):
+        if re.fullmatch(r"(?:cerebro[, ]+)?(?:activa|abre) (?:el )?modo (?:t[aá]ctil|gestual(?: por c[aá]mara)?)[.!]?", pregunta, re.I):
             self.exigir_permisos("READ")
-            return {"respuesta": "Abre el modo táctil desde el lanzador local.", "abrir": "tactil"}
+            return {"respuesta": "Abre el modo gestual por cámara desde el lanzador local.", "abrir": "tactil"}
         compuesto = re.fullmatch(
             r"(?:cerebro[, ]+)?abre (?:el )?navegador (?:e|y) investiga (?:sobre )?(.+)", pregunta, re.I)
         if compuesto:

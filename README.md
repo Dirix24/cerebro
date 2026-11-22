@@ -235,7 +235,7 @@ Ejemplo de rutina autorizada:
 
 En los flujos de observación semántica con **AT-SPI**, Cerebro puede detectar cambios de casillas accesibles de una ventana autorizada, guardar un borrador, solicitar revisión y reproducir los pasos con comprobaciones. No equivale a grabar toda la pantalla ni a aprender libremente cualquier interfaz.
 
-El sistema también tiene un **modo táctil experimental** basado en cámara y detección de manos, sujeto a dependencias y compatibilidad. No debe presentarse como una función universal ya verificada.
+El sistema también tiene un **modo gestual experimental** basado en cámara y detección de manos, sujeto a dependencias y compatibilidad. No debe presentarse como una función universal ya verificada.
 
 ### Esfera y voz
 
@@ -425,7 +425,7 @@ Esa acción excluye HTML y los archivos ejecutables.
   si arrastrar y soltar no está disponible. Un archivo externo se lee
   tras confirmación y permanece en su ubicación. **Actualizar visor**
   vuelve a leerlo si se detecta un cambio externo.
-- **Modo táctil** amplía botones, pestañas y barras de desplazamiento al
+- **Modo táctil visual** amplía botones, pestañas y barras de desplazamiento al
   momento y guarda la preferencia. El modo de gestos con cámara conserva
   su control separado.
 - Prueba «Resume esto», «Analiza este documento», «Valida este archivo»
@@ -450,3 +450,61 @@ El registro de herramientas de documentos está en
 de archivo siguen usando el registro y los permisos del proyecto.
 Las órdenes como «Abre Thunar» o «Abre la calculadora» conservan la
 resolución por aplicaciones del escritorio, sin intérprete de shell.
+
+### Trabajo contextual y modo gestual
+
+En Studio nativo, «Abre mis descargas» selecciona la carpeta XDG real y
+solicita autorización antes de cargarla como proyecto. Tras abrir un
+documento, puedes escribir «Resúmelo», «Analízalo» o «Profesor,
+evalúame». Studio para navegador admite estas peticiones con un
+documento de un proyecto autorizado. El resumen toma frases del
+documento y el ejercicio se basa en un pasaje del mismo archivo.
+
+Los visores de DOCX y ODT extraen texto en solo lectura. Conservan el
+archivo original y omiten estilos, imágenes incrustadas y macros.
+Admiten hasta 4 MiB de archivo y 2 MiB de XML. Para el documento
+completo usa la aplicación predeterminada desde el proyecto autorizado.
+
+El chat compartido admite «Calcula 0.1 + 0.2» y «Resuelve la ecuación
+2x + 3 = 11». Devuelve fracciones exactas y verifica la raíz por
+sustitución. «Diagnóstico del equipo» muestra la RAM, CPU lógicas,
+espacio libre, GPU PCI con controlador visible, nodos de cámara y
+dependencias que el proceso puede encontrar. En MX Linux, estas
+medidas ayudan a escoger un perfil para el ASUS X550LC.
+
+**Modo táctil visual** solo cambia el tamaño de los controles. Para usar
+la cámara ve a **Opciones → Modo gestual por cámara** en Studio nativo o
+ejecuta `cerebro tactil`. Elige el dispositivo y confirma su uso en el
+diálogo local. El seguimiento existente usa el índice para mover el
+puntero, una pinza para seleccionar o arrastrar y una segunda mano para
+desplazar. Usa **Pausar** o Escape con la ventana gestual enfocada para
+apagar la cámara. Los fotogramas de este control se procesan en memoria.
+Requiere X11, `xdotool`, OpenCV, MediaPipe y
+`CEREBRO_MODELO_MANOS` con la ruta del modelo instalado localmente.
+Define `CEREBRO_CAMARA_PERFIL=ligero` antes de abrir Studio para limitar
+la inferencia a 320 × 240 y 10 cuadros por segundo. El perfil por defecto
+utiliza hasta 640 × 480 y 20 cuadros por segundo. Queda pendiente probar
+la precisión y el consumo con la webcam física del ASUS.
+
+### Modelo local opcional con Ollama
+
+El backend existente de llama.cpp se conserva. También puedes usar
+Ollama previamente instalado con un modelo local ya preparado. Para
+ejecutarlo sin servicios externos, inicia el servidor Ollama con
+`OLLAMA_NO_CLOUD=1`. Configura el nombre y, si corresponde, el puerto
+antes de iniciar Cerebro, por ejemplo:
+
+```bash
+export CEREBRO_OLLAMA_MODELO=qwen2.5:0.5b
+export CEREBRO_OLLAMA_PUERTO=11434
+cerebro iniciar
+```
+
+Establecer `CEREBRO_OLLAMA_MODELO` selecciona Ollama para el Profesor
+local y para los flujos que ya lo consultan. Cerebro llama a
+`127.0.0.1`, envía solicitudes limitadas y pide liberar el modelo tras la
+respuesta. Cerebro no instala Ollama ni descarga pesos. El modelo puede
+redactar sugerencias. Las herramientas y sus permisos se siguen
+validando en el núcleo.
+
+Consulta la [auditoría y matriz de validación de esta evolución](docs/VALIDACION_EVOLUCION_STUDIO.md).

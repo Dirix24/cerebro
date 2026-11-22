@@ -41,6 +41,7 @@ let chatOcupado = false;
 let chatActivo = null;
 let revisionVisible = null;
 let proyectoActivo = "";
+let documentoVisible = null;
 let archivoAbierto = null;
 let original = "";
 let inventarioProyecto = [];
@@ -255,7 +256,25 @@ async function conversar(texto) {
       if (!cambiosPendientes()) await abrirArchivo(creado.archivo);
       return true;
     }
-    const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz, conversacion: chatActivo});
+    const documento = !esChat && documentoVisible?.carpeta === proyectoActivo ? documentoVisible : null;
+    const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz,
+      conversacion: chatActivo, documento});
+    if (!esChat && salida.documento && documento === documentoVisible) {
+      const area = $("resultado-central");
+      area.replaceChildren(elementoTexto("h2", salida.documento.archivo),
+        elementoTexto("pre", salida.respuesta));
+      if (salida.documento.ejercicio) {
+        area.append(boton("Responder ejercicio", async () => {
+          if (documentoVisible !== documento) return;
+          const respuesta = prompt(salida.documento.ejercicio.pregunta);
+          if (!respuesta?.trim()) return;
+          const guardar = confirm("¿Guardar el resultado en el progreso?");
+          const nota = await solicitarProyecto("responder_ejercicio", {respuesta, guardar});
+          if (documentoVisible === documento) area.append(elementoTexto("p", nota.salida));
+        }));
+      }
+      central("resultado-central");
+    }
     if (salida.revision_anterior === revisionVisible) revisionVisible = salida.revision;
     $("sugerencias-chat").hidden = true;
     agregarMensaje("Tú", texto);
@@ -595,13 +614,14 @@ async function abrirArchivo(nombre) {
   const datos = esperado ? await solicitarProyecto("inspeccionar", {nombre}, esperado)
     : await api("archivo?nombre=" + encodeURIComponent(nombre));
   if (esperado !== proyectoActivo || revision !== revisionArchivo || contenidoPrevio !== $("contenido").value) return;
-  archivoAbierto = datos.visor === "texto" || !esperado ? nombre : null;
+  documentoVisible = esperado ? {nombre, carpeta: esperado} : null;
+  archivoAbierto = (datos.visor === "texto" && !datos.solo_lectura) || !esperado ? nombre : null;
   original = archivoAbierto ? datos.texto : "";
   $("contenido").value = original;
   $("contenido").readOnly = Boolean(esperado && !archivoAbierto);
   $("archivo").value = nombre;
   $("archivo-activo").textContent = nombre;
-  if (esperado && (datos.visor !== "texto" || [".html", ".md", ".csv", ".tsv"].includes(datos.extension))) {
+  if (esperado && (datos.visor !== "texto" || datos.solo_lectura || [".html", ".md", ".csv", ".tsv"].includes(datos.extension))) {
     presentarArchivo(datos);
   } else central("editor-central");
   if (esperado) await solicitarProyecto("recordar", {nombre}, esperado);
@@ -645,6 +665,7 @@ async function abrirProyecto(carpeta) {
   if (cambiosPendientes() && !confirm("¿Descartar los cambios sin guardar?")) return false;
   const datos = await solicitarProyecto("abrir", {carpeta, confirmar: true});
   proyectoActivo = datos.carpeta;
+  documentoVisible = null;
   carpetaActual = "";
   archivoAbierto = null;
   original = "";

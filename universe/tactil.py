@@ -84,6 +84,13 @@ def _vista(cv2, rgb, manos):
     return b"P6\n400 280\n255\n" + imagen.tobytes()
 
 
+def perfil_camara():
+    """Perfil acotado para equipos con CPU y memoria limitadas."""
+    if os.environ.get("CEREBRO_CAMARA_PERFIL", "").casefold() == "ligero":
+        return 320, 240, 10
+    return 640, 480, 20
+
+
 def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reiniciar, habilitar_puntero, cuadros):
     gestos = Gestos()
     camara = None
@@ -100,16 +107,24 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
             camara = cv2.VideoCapture(indice, cv2.CAP_V4L2)
             if not camara.isOpened():
                 raise RuntimeError("No pude abrir esa cámara.")
-            camara.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            camara.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            ancho_cuadro, alto_cuadro, fps = perfil_camara()
+            camara.set(cv2.CAP_PROP_FRAME_WIDTH, ancho_cuadro)
+            camara.set(cv2.CAP_PROP_FRAME_HEIGHT, alto_cuadro)
+            camara.set(cv2.CAP_PROP_FPS, fps)
             avisos.put("Cámara activa")
             anterior = -1
             trazo = None
             ultimo_estado = None
             while not detener.is_set():
+                inicio = monotonic()
                 correcto, imagen = camara.read()
                 if not correcto:
                     raise RuntimeError("No pude leer la cámara.")
+                if imagen.shape[1] > ancho_cuadro or imagen.shape[0] > alto_cuadro:
+                    escala = min(ancho_cuadro / imagen.shape[1], alto_cuadro / imagen.shape[0])
+                    imagen = cv2.resize(imagen, (max(1, round(imagen.shape[1] * escala)),
+                                                  max(1, round(imagen.shape[0] * escala))),
+                                        interpolation=cv2.INTER_AREA)
                 rgb = cv2.cvtColor(cv2.flip(imagen, 1), cv2.COLOR_BGR2RGB)
                 ahora = monotonic()
                 marca = max(anterior + 1, round(ahora * 1000))
@@ -138,8 +153,9 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
                 if not habilitar_puntero.is_set():
                     _control(gestos.pausar(), ancho, alto)
                 else:
-                    _control(gestos.actualizar(manos.get("Right"), ahora, manos.get("Left")), ancho, alto)
-                detener.wait(.045)
+                    derecha, izquierda = manos.get("Right"), manos.get("Left")
+                    _control(gestos.actualizar(derecha or izquierda, ahora, izquierda if derecha else None), ancho, alto)
+                detener.wait(max(0, 1 / fps - (monotonic() - inicio)))
     except Exception as exc:
         avisos.put(str(exc))
     finally:
@@ -155,7 +171,7 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
 
 def abrir():
     raiz = tk.Tk()
-    raiz.title("Cerebro · Modo táctil")
+    raiz.title("Cerebro · Modo gestual")
     raiz.configure(bg=FONDO)
     raiz.attributes("-topmost", True)
     raiz.resizable(False, False)
@@ -178,7 +194,7 @@ def abrir():
     habilitar_puntero.set()
     cuadros = Queue(maxsize=1)
     vista = tk.StringVar(value="")
-    indicaciones = tk.StringVar(value="Índice derecho: puntero · Pinza: clic o arrastre · Esc: pausa")
+    indicaciones = tk.StringVar(value="Índice: puntero · Pinza: clic o arrastre · Esc: pausa")
     puntos = ()
     figura = None
     trazo_listo = False
@@ -186,7 +202,7 @@ def abrir():
     foto = None
     activo = False
     cerrando = False
-    tk.Label(raiz, text="Modo táctil", bg=FONDO, fg=ACENTO, font=("TkDefaultFont", 15, "bold")).pack(padx=18, pady=10)
+    tk.Label(raiz, text="Modo gestual por cámara", bg=FONDO, fg=ACENTO, font=("TkDefaultFont", 15, "bold")).pack(padx=18, pady=10)
     lista = ttk.Combobox(raiz, state="readonly", values=[f"video{i} · {nombre}" for i, nombre in opciones], width=40)
     lista.pack(padx=18, pady=(0, 8))
     if opciones:
@@ -292,7 +308,7 @@ def abrir():
         habilitar_puntero.set()
         foto = None
         lienzo.pack_forget()
-        indicaciones.set("Índice derecho: puntero · Pinza: clic o arrastre · Esc: pausa")
+        indicaciones.set("Índice: puntero · Pinza: clic o arrastre · Esc: pausa")
 
     lienzo.bind("<B1-Motion>", girar)
     controles = tk.Frame(raiz, bg=FONDO)

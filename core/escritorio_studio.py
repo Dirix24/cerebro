@@ -172,3 +172,33 @@ HERRAMIENTAS = {
                 "extensiones": [".py", ".json", ".csv", ".tsv", ".html"]},
     "evaluar": {"permiso": "READ", "descripcion": "Ejercicio de comprensión basado en el documento."},
 }
+
+
+def intencion_archivo(texto):
+    from core.documentos_usuario import _normalizar
+
+    orden = re.sub(r"^(?:cerebro|profesor)[, ]+", "", _normalizar(texto).strip(" ¿?¡!."))
+    return {
+        "resumelo": "resumir",
+        "resumela": "resumir",
+        "resume": "resumir",
+        "explicamelo": "analizar",
+        "explicamelo por favor": "analizar",
+        "explicame esto": "analizar",
+        "analizalo": "analizar",
+        "analizala": "analizar",
+        "evalua sobre esto": "evaluar",
+        "evaluame": "evaluar",
+    }.get(orden)
+
+
+def intencion_carpeta(texto, carpetas):
+    from core.documentos_usuario import _normalizar
+
+    orden = _normalizar(texto).strip(" ¿?¡!.")
+    if orden.startswith("cerebro"):
+        orden = orden.removeprefix("cerebro").lstrip(", ")
+    peticion = re.fullmatch(r"(?:abre|abra|abreme|muestrame) (?:mis |mi |la carpeta de |la carpeta )?(.+)", orden)
+    if peticion:
+        return next((ruta for nombre, ruta in carpetas.items() if _normalizar(nombre) == peticion[1]), None)
+    return None
