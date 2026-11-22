@@ -508,3 +508,40 @@ redactar sugerencias. Las herramientas y sus permisos se siguen
 validando en el núcleo.
 
 Consulta la [auditoría y matriz de validación de esta evolución](docs/VALIDACION_EVOLUCION_STUDIO.md).
+
+### PDF paginado, preguntas sobre archivos y recordatorios
+
+En Studio abre un PDF y usa el indicador de página, las flechas y
+**Buscar**. **Ctrl + rueda** cambia el zoom. También puedes ajustar el
+ancho, encajar la página o volver al tamaño inicial con **100 %**. El
+zoom de PDF vuelve a renderizar la página con Poppler. La información y
+el texto extraído se consultan desde el diálogo o panel de información.
+Las imágenes mantienen sus proporciones y tienen zoom independiente.
+En Studio nativo, el menú **Opciones** permite ocultar o mostrar los
+paneles de archivos y conversación.
+
+- «Explícame la página cuatro» muestra un extracto de esa página.
+- «Según el PDF, ¿qué dice de la energía solar?» recupera pasajes y
+  cita las páginas donde aparecen.
+- «Resúmelo» sobre un PDF muestra extractos por página. La búsqueda y
+  el resumen revisan como máximo las primeras 50 páginas, e indican el
+  alcance. Las páginas individuales se pueden abrir más allá de ese
+  límite. Los PDF escaneados pueden requerir OCR. El visor necesita
+  `pdfinfo`, `pdftotext`, `pdftoppm` y `prlimit`. Para el zoom nativo
+  instala Pillow mediante el instalador del repositorio.
+- En Terminal, pega un fragmento Python o un bloque Markdown marcado
+  como `python`. Cerebro inspecciona la sintaxis y señala funciones,
+  clases, importaciones o dónde falla el análisis. Las pruebas
+  siguen siendo una operación separada y autorizada.
+
+Los recordatorios se guardan en el equipo con la zona horaria local.
+Por ejemplo, «Recuérdame que en cinco minutos tengo examen» devuelve
+la fecha programada y un identificador. Usa `/recordatorios` para
+consultarlos y `/cancelar-recordatorio ID` para cancelar uno. «Esta
+tarde» corresponde a las 17:00 y «el próximo lunes» a las 09:00 salvo
+que indiques otra hora. El núcleo de escritorio usa `notify-send`
+(`libnotify-bin` en MX Linux) y el servicio de notificaciones de XFCE.
+Deja Cerebro abierto para recibir el aviso a tiempo. Si estaba cerrado,
+los avisos pendientes se revisan al arrancarlo.
+
+Consulta las [pruebas y límites del visor y los recordatorios](docs/STUDIO_PAGINADO.md).

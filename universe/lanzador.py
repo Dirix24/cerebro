@@ -130,7 +130,16 @@ def nucleo():
         try:
             relevo = RelevoInterfaz()
 
+            from core.recordatorios_locales import notificar_locales
+            ultimo_aviso = 0.0
+
             def revisar_vistas():
+                nonlocal ultimo_aviso
+                ahora = monotonic()
+                if ahora - ultimo_aviso >= 5:
+                    ultimo_aviso = ahora
+                    with contextlib.suppress(OSError, ValueError, KeyError):
+                        notificar_locales()
                 with contextlib.suppress(OSError, RuntimeError):
                     relevo.revisar(motor.interfaz()["activa"])
 

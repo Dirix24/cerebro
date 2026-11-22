@@ -574,8 +574,61 @@ function presentarArchivo(datos) {
       const imagen = document.createElement("img");
       imagen.alt = datos.archivo;
       imagen.src = "data:image/" + tipo + ";base64," + datos.base64;
-      area.append(imagen);
-      if (datos.visor === "pdf" && datos.texto) area.append(elementoTexto("pre", datos.texto));
+      const controles = document.createElement("div");
+      controles.className = "acciones";
+      const superficie = document.createElement("div");
+      superficie.className = "visor-desplazable";
+      superficie.append(imagen);
+      area.append(controles, superficie);
+      const referente = documentoVisible;
+      let peticion = 0;
+      let zoom = 100;
+      const pdf = datos.visor === "pdf";
+      const solicitarVista = async (pagina, resolucion) => {
+        const turno = ++peticion;
+        const vista = await solicitarProyecto("inspeccionar", {nombre: datos.archivo, pagina,
+          resolucion: Math.max(320, Math.min(2200, resolucion))}, referente.carpeta);
+        if (turno === peticion && documentoVisible === referente) presentarArchivo(vista);
+      };
+      if (pdf && referente) {
+        const anterior = boton("Página anterior", () => solicitarVista(datos.pagina - 1, datos.resolucion));
+        const siguiente = boton("Página siguiente", () => solicitarVista(datos.pagina + 1, datos.resolucion));
+        anterior.disabled = datos.pagina <= 1;
+        siguiente.disabled = datos.pagina >= datos.paginas;
+        controles.append(anterior, elementoTexto("span", datos.pagina + " / " + datos.paginas), siguiente,
+          boton("Buscar en PDF", async () => {
+            const consulta = prompt("Texto a buscar");
+            if (!consulta?.trim()) return;
+            const resultado = await solicitarProyecto("buscar_pdf", {nombre: datos.archivo, consulta}, referente.carpeta);
+            if (documentoVisible !== referente) return;
+            aviso("Páginas con coincidencias: " + (resultado.coincidencias.map(x => x.pagina).join(", ") || "ninguna") +
+              ". Revisadas: " + resultado.revisadas + " de " + resultado.paginas + ".");
+          }),
+          boton("Ajustar ancho", () => solicitarVista(datos.pagina,
+            Math.round(datos.resolucion * (superficie.clientWidth - 12) / (imagen.naturalWidth || datos.resolucion)))),
+          boton("Ajustar página", () => solicitarVista(datos.pagina, Math.round(datos.resolucion * Math.min(
+            (superficie.clientWidth - 12) / (imagen.naturalWidth || datos.resolucion),
+            (innerHeight * .60) / (imagen.naturalHeight || datos.resolucion))))));;
+      }
+      const cambiarZoom = async (paso) => {
+        if (pdf && referente) {
+          return solicitarVista(datos.pagina, paso === 0 ? 980 : Math.round(datos.resolucion * (paso > 0 ? 1.25 : .8)));
+        }
+        zoom = paso === 0 ? 100 : Math.max(25, Math.min(250, zoom + paso * 25));
+        imagen.style.width = zoom === 100 ? "" : Math.round(Math.min(imagen.naturalWidth, superficie.clientWidth) * zoom / 100) + "px";
+      };
+      controles.append(boton("Reducir", () => cambiarZoom(-1)), boton("Ampliar", () => cambiarZoom(1)),
+        boton("100 %", () => cambiarZoom(0)));
+      superficie.addEventListener("wheel", evento => {
+        if (!evento.ctrlKey) return;
+        evento.preventDefault();
+        cambiarZoom(evento.deltaY < 0 ? 1 : -1).catch(error => aviso(error.message));
+      }, {passive: false});
+      if (pdf) {
+        const info = document.createElement("details");
+        info.append(elementoTexto("summary", "Información y texto de la página"), elementoTexto("pre", datos.texto || ""));
+        area.append(info);
+      }
     }
   } else if (datos.fragmentos) {
     const vistaHTML = document.createElement("div");

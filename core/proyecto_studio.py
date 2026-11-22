@@ -145,7 +145,7 @@ class ProyectoStudio:
             raise ValueError("El archivo no es texto UTF-8.")
         return salida
 
-    def inspeccionar(self, nombre, *, contenido=True):
+    def inspeccionar(self, nombre, *, contenido=True, pagina=1, resolucion=980):
         extension = Path(nombre if isinstance(nombre, str) else "").suffix.lower()
         with self._padre(nombre) as (fd, hoja):
             tipo, info = self._tipo(fd, hoja)
@@ -188,11 +188,28 @@ class ProyectoStudio:
                 from core.visores_studio import pdf_vista
 
                 try:
-                    return {**datos, "visor": "pdf", **pdf_vista(bruto)}
+                    return {**datos, "visor": "pdf", **pdf_vista(bruto, pagina, resolucion)}
                 except (OSError, ValueError) as error:
                     return {**datos, "aviso": str(error)}
             return {**datos, "visor": "imagen", "base64": base64.b64encode(bruto).decode("ascii")}
         return datos
+
+    def buscar_pdf(self, nombre, consulta):
+        if not isinstance(nombre, str) or Path(nombre).suffix.lower() != ".pdf":
+            raise ValueError("Selecciona un archivo PDF.")
+        from core.visores_studio import pdf_buscar
+
+        return pdf_buscar(self._bytes(nombre, MAX_VISOR), consulta)
+
+    def texto_pdf(self, nombre):
+        from core.visores_studio import pdf_paginas, pdf_texto
+
+        bruto = self._bytes(nombre, MAX_VISOR)
+        total = pdf_paginas(bruto)
+        revisadas = min(total, 50)
+        texto = pdf_texto(bruto, 1, revisadas).decode("utf-8", "replace")
+        paginas = [p.strip() for p in texto.split("\f")[:revisadas]]
+        return paginas, total
 
     def gestionar(self, accion, nombre, destino=None, *, texto=""):
         with self.cerrojo, self._padre(nombre) as (fd, hoja):

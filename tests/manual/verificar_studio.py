@@ -14,25 +14,7 @@ import config
 from universe.nucleo import Nucleo
 from universe.servidor import crear_servidor
 
-def pdf_fixture():
-    objetos = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 100] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    ]
-    texto = b"BT /F1 12 Tf 20 50 Td (Informe Cerebro) Tj ET"
-    objetos.append(f"<< /Length {len(texto)} >>\nstream\n".encode() + texto + b"\nendstream")
-    bruto = b"%PDF-1.4\n"
-    offsets = []
-    for numero, objeto in enumerate(objetos, 1):
-        offsets.append(len(bruto))
-        bruto += f"{numero} 0 obj\n".encode() + objeto + b"\nendobj\n"
-    inicio = len(bruto)
-    bruto += b"xref\n0 6\n0000000000 65535 f \n"
-    for offset in offsets:
-        bruto += f"{offset:010d} 00000 n \n".encode()
-    return bruto + f"trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n{inicio}\n%%EOF\n".encode()
+from tests.pdf_fixture import pdf_fixture
 
 
 with TemporaryDirectory() as temporal:
@@ -104,6 +86,20 @@ with TemporaryDirectory() as temporal:
                     fila("informe.pdf").click()
                     expect(page.locator("#visor-central img")).to_be_visible()
                     expect(page.locator("#visor-central")).to_contain_text("Informe Cerebro")
+                    btn("Página siguiente").click()
+                    expect(page.locator("#visor-central")).to_contain_text("2 / 2")
+                    expect(page.locator("#visor-central")).to_contain_text("energia solar")
+                    assert page.locator("#visor-central img").evaluate("(img) => img.naturalWidth") == 980
+                    imagen_anterior = page.locator("#visor-central img").get_attribute("src")
+                    btn("Ampliar").click()
+                    expect(page.locator("#visor-central img")).not_to_have_attribute("src", imagen_anterior)
+                    assert page.locator("#visor-central img").evaluate("(img) => img.naturalWidth") > 980
+                    respuestas.append("solar")
+                    btn("Buscar en PDF").click()
+                    expect(page.locator("#aviso")).to_contain_text("Páginas con coincidencias: 2")
+                    page.get_by_label("Mensaje para Cerebro").fill("Según el PDF, ¿qué dice de la energia solar?")
+                    btn("Enviar").click()
+                    expect(page.locator("#resultado-central")).to_contain_text("Página 2")
                 fila("plan.md").click()
                 expect(page.locator("#visor-central")).to_contain_text("Pasos del proyecto.")
                 fila("guia.docx").click()
@@ -157,7 +153,7 @@ with TemporaryDirectory() as temporal:
                 expect(page.locator("#detalle")).to_contain_text("robot.py")
                 assert not errores, errores
                 browser.close()
-                print("Chromium: creación, edición, renombrado, búsqueda, imagen, documento, CSV, HTML inerte, "
+                print("Chromium: creación, edición, renombrado, búsqueda, imagen, navegación PDF, zoom renderizado, búsqueda PDF, consulta con página, documento, CSV, HTML inerte, "
                       "diff aprobado, solicitud de prueba, simulación y evidencias, actualización automática y reapertura.")
         finally:
             server.shutdown()

@@ -263,6 +263,19 @@ class Conversacion:
         solicitud = interpretar(entrada)
         if solicitud:
             accion = solicitud["accion"]
+            if accion == "recordatorio_nuevo":
+                from core.recordatorios_locales import crear, interpretar as interpretar_recordatorio
+
+                if "WRITE" not in self.agente.permisos_concedidos:
+                    return "Permiso WRITE requerido.", False
+                try:
+                    recordatorio = interpretar_recordatorio(entrada)
+                    if recordatorio:
+                        registro = crear(*recordatorio)
+                        return (f"Recordatorio guardado para {registro['fecha']} · {registro['texto']}. "
+                                f"Para cancelarlo: /cancelar-recordatorio {registro['id']}"), False
+                except (OSError, ValueError) as exc:
+                    return f"Recordatorio: {exc}", False
             if solicitud["requiere_confirmacion"]:
                 respuestas = {
                     "camara": "Puedo capturar una imagen, pero necesito tu autorización explícita. "
@@ -603,6 +616,11 @@ class Conversacion:
                 return json.dumps(crear(fecha, texto), ensure_ascii=False), False
             except (OSError, ValueError) as exc:
                 return f"Recordatorio: {exc}", False
+        if cmd == "/cancelar-recordatorio":
+            from core.recordatorios_locales import cancelar
+            if "WRITE" not in self.agente.permisos_concedidos:
+                return "Permiso WRITE requerido.", False
+            return ("Recordatorio cancelado." if cancelar(resto) else "No hay un recordatorio activo con ese ID."), False
         if cmd == "/recordatorios":
             import json
             from core.recordatorios_locales import listar, pendientes
