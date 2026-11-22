@@ -127,7 +127,23 @@ def nucleo():
         with os.fdopen(fd, "w") as archivo:
             json.dump(datos, archivo)
         (ruta / "sesion.tmp").replace(ruta / "sesion.json")
-        servidor.serve_forever()
+        try:
+            servidor.serve_forever()
+        finally:
+            motor.descarga_git.cancelar_todas()
+            motor.ensenanza.cancelar()
+            hilo_aprendizaje = motor.aprendizaje.cancelar()
+            motor.escritorio.limpiar()
+            motor.ejecutor.shutdown(wait=True, cancel_futures=True)
+            cerrar_profesor = getattr(motor.profesor, "cerrar", None)
+            if cerrar_profesor:
+                cerrar_profesor()
+            if hilo_aprendizaje is not None:
+                hilo_aprendizaje.join()
+            registro = ruta / "sesion.json"
+            with contextlib.suppress(OSError, ValueError):
+                if json.loads(registro.read_text()).get("token") == token:
+                    registro.unlink()
 
 
 def abrir(sesion, interfaz):
@@ -478,6 +494,9 @@ def escritorio(sesion):
 
     def observar():
         while not detenido.is_set():
+            if not (carpeta() / "sesion.json").exists():
+                eventos.put(("servicio cerrado", None))
+                return
             try:
                 eventos.put(("vista", api(sesion, "interfaz", tiempo=2)["activa"]))
                 if not ocupado:
@@ -613,6 +632,9 @@ def escritorio(sesion):
         nonlocal ultima_respuesta, chat_activo, revision_visible, temporizador
         while not eventos.empty():
             tipo, valor = eventos.get()
+            if tipo == "servicio cerrado":
+                cerrar(secundario=True)
+                return
             if tipo == "vista":
                 if valor == "escritorio" and ventana.state() == "withdrawn":
                     ventana.deiconify()
@@ -658,7 +680,10 @@ def escritorio(sesion):
                 elegir_audio(valor)
         temporizador = ventana.after(150, actualizar)
 
-    def cerrar():
+    def cerrar(secundario=False):
+        if not secundario and not studio_activo():
+            with contextlib.suppress(OSError, RuntimeError):
+                api(sesion, "apagar", {}, tiempo=2)
         cancelar_audio.set()
         detenido.set()
         ventana.after_cancel(temporizador)
@@ -724,17 +749,62 @@ def abrir_studio_local(sesion, vista="proyecto"):
         abrir_studio(sesion, solicitud=solicitud, inicial=vista)
 
 
-def apagar():
-    registro = carpeta() / "sesion.json"
-    if registro.is_file():
+def studio_activo():
+    with (carpeta() / "studio.lock").open("a") as cerrojo:
         try:
-            api(json.loads(registro.read_text()), "apagar", {}, tiempo=2)
-        finally:
-            registro.unlink(missing_ok=True)
+            fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+    return False
+
+
+def apagar():
+    ruta = carpeta()
+    registro = ruta / "sesion.json"
+    with (ruta / "inicio.lock").open("a") as cerrojo:
+        fcntl.flock(cerrojo, fcntl.LOCK_EX)
+        if not registro.is_file():
+            return
+        sesion = json.loads(registro.read_text())
+        try:
+            api(sesion, "apagar", {}, tiempo=2)
+        except OSError:
+            if registro.exists():
+                raise RuntimeError("El núcleo no responde al apagado. Puedes iniciarlo para recuperar la sesión.")
+            return
+        limite = monotonic() + 55
+        while registro.exists() and monotonic() < limite:
+            sleep(.1)
+        if registro.exists():
+            raise RuntimeError("Cerebro sigue terminando tareas. Consulta su estado en unos segundos.")
+
+
+def estado_servicio():
+    try:
+        sesion = json.loads((carpeta() / "sesion.json").read_text())
+        api(sesion, "interfaz", tiempo=1)
+    except FileNotFoundError:
+        print("Cerebro detenido.")
+        return 0
+    except (OSError, ValueError, RuntimeError, KeyError):
+        print("Cerebro no responde o está cerrándose.")
+        return 1
+    print("Cerebro en ejecución.")
+    return 0
 
 
 def main():
     modo = sys.argv[1] if len(sys.argv) > 1 else "terminal"
+    if modo == "estado":
+        return estado_servicio()
+    if modo == "autoinicio" and len(sys.argv) == 3 and sys.argv[2] in {"activar", "desactivar"}:
+        from universe.instalar_escritorio import configurar_autoinicio
+        configurar_autoinicio(sys.argv[2] == "activar")
+        return 0
+    if modo == "iniciar":
+        modo = "studio"
+    if modo == "detener":
+        modo = "apagar"
     if modo == "tactil":
         from universe.tactil import abrir
         with (carpeta() / "tactil.lock").open("a") as cerrojo:
@@ -745,10 +815,12 @@ def main():
             abrir()
         return 0
     if modo == "_nucleo":
-        nucleo()
+        with (carpeta() / "servicio.lock").open("a") as cerrojo:
+            fcntl.flock(cerrojo, fcntl.LOCK_EX)
+            nucleo()
         return 0
     if modo not in {"terminal", "escritorio", "chat", "studio", "universe", "apagar", "_escritorio"}:
-        print("Uso: cerebro [terminal|escritorio|chat|studio|universe|tactil|apagar]")
+        print("Uso: cerebro [iniciar|detener|estado|terminal|escritorio|chat|studio|universe|tactil|autoinicio activar|autoinicio desactivar]")
         return 0 if modo in {"-h", "--help"} else 2
     try:
         if modo == "apagar":

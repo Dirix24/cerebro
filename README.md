@@ -10,7 +10,23 @@ Desde la carpeta del repositorio:
 
 ```bash
 ./instalar
+export PATH="$HOME/.local/bin:$PATH"
 ```
+
+| Acción | Comando |
+| --- | --- |
+| Iniciar con Studio como ventana principal | `cerebro iniciar` |
+| Detener y terminar tareas | `cerebro detener` |
+| Consultar estado del servicio | `cerebro estado` |
+| Activar el autoinicio al entrar en XFCE | `cerebro autoinicio activar` |
+| Desactivar el autoinicio | `cerebro autoinicio desactivar` |
+| Desinstalar desde la carpeta de instalación | `./desinstalar` |
+
+El instalador registra el acompañante para la siguiente sesión de XFCE. Puedes instalar sin ese registro con `./instalar --sin-autoinicio`. Studio es la ventana principal. Su X cierra el servicio compartido, previo aviso si hay cambios sin guardar. Cerrar la esfera con Studio abierto deja Studio en ejecución. Cuando la esfera funciona sola, su X también cierra el servicio. El Chat web se puede cerrar por separado.
+
+`./desinstalar` retira el entorno y los accesos instalados y conserva el repositorio, los proyectos, la memoria y los modelos. `./desinstalar --borrar-datos` exige escribir `BORRAR MIS DATOS` y se limita a los directorios de datos conocidos dentro del repositorio. La conversación por texto funciona sin micrófono. El dictado y la respuesta hablada quedan pendientes de verificación manual.
+
+Para repositorios públicos, usa «Clona https://github.com/octocat/Hello-World», «Estado de descarga Git» y «Cancela descarga Git». El clon se prepara en memoria temporal de Linux (`/dev/shm`) con presupuesto agregado y se copia al depósito de Studio tras verificarlo.
 
 | Interfaz | Comando | Para qué sirve |
 | --- | --- | --- |

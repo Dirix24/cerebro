@@ -31,3 +31,35 @@ La petición al método `Nucleo.conversar` descargó `octocat/Hello-World` por H
 Continúa revisando `core/proyecto_studio.py`, `universe/nucleo.py` y `universe/studio.py`. Primero añade descarga en segundo plano con cancelación y presupuesto de disco, registra el resultado por conversación y conserva el commit para resolver «ábrelo». Después prepara un árbol visible y de solo lectura para Studio a partir de archivos ordinarios y acotados del commit, sin ejecutar código del repositorio. Prueba la selección del proyecto desde Studio, permisos revocados, red fallida y cancelación. La ejecución de pruebas de un proyecto requiere la confirmación y el aislamiento existentes.
 
 Para verificar regresiones, ejecuta `python -m pytest -q -rs` desde el worktree con el entorno virtual actual y acceso a loopback y Bubblewrap. Comprueba `checkpoints/best.npz` y `checkpoints/reasoning-v3.pt` con `sha256sum -c ../evaluacion-alumno/checkpoints-originales.sha256` en este entorno. Conserva ambos originales y los criterios de promoción. Usa commits locales y actualiza esta matriz al concluir cada entrega.
+
+## Integración maestro–alumno sobre el main actual
+
+Nueva rama `feature/integracion-maestro-alumno`, worktree `work/cerebro-integracion`, base `fc3701d`, integración `06f3449`. Los commits de `feature/maestro-alumno-zip` se usaron como referencia y se adaptaron al núcleo actual. Se conservan el especialista de escritorio, el flujo ANALIZAR existente, las demostraciones y la descarga Git. El profesor existente solo gana generación acotada para el alumno de hora y fecha.
+
+En Terminal, Chat web y Studio, «Entrenar alumno» abre una autorización de dos minutos en esa conversación. «Confirma entrenar alumno» encola el trabajo. «Estado del alumno» muestra progreso, resultado y candidato activo. «Cancela entrenar alumno» detiene el ciclo en el siguiente límite seguro sin publicar un candidato cancelado. Qwen puede finalizar la consulta que está atendiendo. Configurar `CEREBRO_PROFESOR_MOTOR` y `CEREBRO_PROFESOR_MODELO` antes de iniciar el núcleo. La CLI `python entrenar_alumno_supervisado.py --retroceder` permite recuperar la versión previa. Los candidatos se guardan en `learning/alumno-supervisado`, fuera del explorador editable de Studio.
+
+| Capacidad | Estado de verificación |
+| --- | --- |
+| Profesor real, entrenamiento autorizado, promoción y consulta de hora | Probados desde la Terminal real en MX Linux |
+| Chat web | Consulta real de hora, solicitud, confirmación y cancelación comprobadas en Brave. Un candidato empatado se rechazó y la cancelación posterior dejó activo el mismo checkpoint |
+| Studio | Ventana real en XFCE con respuesta visible de «Estado del alumno» |
+| Universe | Nodo del candidato verificado por el endpoint local |
+| Esfera y micrófono | Prueba visual y humana pendiente |
+| Selección neuronal de archivos, red y estado del sistema | Pendiente |
+| v0.1 estable | Pendiente de criterios de arranque, reinicio, recuperación y uso cotidiano |
+
+El ciclo real aceptó 5 de 8 propuestas de Qwen y ajustó pesos con delta L2 10,40. Banco original de 16: 8 abstenciones correctas antes de entrenar, 14 aciertos después del control con semillas manuales, 16 tras incorporar las variantes Qwen con validador, 11 y 5 falsos positivos sin validador, 16 con reglas solas. En el banco diagnóstico adicional, sin duplicados con los ejemplos ni con la primera evaluación, las reglas y el sistema combinado acertaron 8/12. Ambos se abstuvieron ante cuatro consultas válidas, entre ellas «Por favor dime que hora es» y «Dme la ora local». Mantener ese resultado visible. No hay ventaja neuronal sobre las reglas en este dominio.
+
+La suite completa dio 408 pruebas y 3 subpruebas aprobadas, sin omisiones. Los hashes originales de ambos checkpoints coincidieron. El siguiente trabajo es crear bancos separados por familias de solicitudes para búsqueda de archivos, apertura, búsqueda web y estado del sistema. Medir propuesta de etiquetas en modo observación primero. Reutilizar el registro de herramientas, sus validadores y permisos antes de habilitar cualquier acción.
+
+## Auditoría antes de integrar
+
+Worktree `work/cerebro-auditoria`, rama `feature/auditoria-maestro-alumno`. Correcciones de selección Git/PDF en `c7715d8` y `04eeaa9`. `main` sigue en `fc3701d` y la rama de integración original en `680bcde`. La suite completa dio 412 pruebas y 3 subpruebas aprobadas. Se reprodujeron Qwen, entrenamiento real desde Studio, consumo, inferencia desde Terminal, rollback y demostraciones GTK. Consulta `VALIDACION_CANDIDATO.md` para la matriz y `BANCO_AUDITORIA_INTENCIONES.md` para las frases reservadas. Antes de integrar, completa las verificaciones manuales críticas indicadas en el informe.
+
+## Seguimiento de cancelación, almacenamiento y voz
+
+En `feature/auditoria-maestro-alumno`, los commits `948dd2d`, `2b4218e` y `05b0337` añaden cancelación Git y presupuesto agregado supervisado, ajustan la cobertura de hora/fecha con promoción estricta frente a las reglas y prueban la cancelación por chat. Verifica la sección de seguimiento de `VALIDACION_CANDIDATO.md`. La instalación limpia, el reinicio aislado, Brave, la edición de una nota en Studio y el texto en la esfera se probaron. Falta confirmar voz real con una persona y cerrar el problema del acompañante residual, además del límite agregado instantáneo si se exige como garantía. No integrar en `main` mientras siga pendiente la prueba crítica de micrófono.
+
+## Entrega de instalación y cierre
+
+`ca8be85` coordina el cierre de Studio, núcleo y acompañante, registra el autoinicio XDG de XFCE, añade los comandos del README y prepara clones Git en tmpfs antes de copiar al depósito. `9d6e0d3` prueba arranque, chat y reinicio sin audio ni pantalla. La voz sigue pendiente de verificación manual. La aplicación y los datos se gestionan por separado; la desinstalación conserva por defecto el código, proyectos, memoria y modelos.

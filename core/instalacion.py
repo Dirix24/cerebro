@@ -8,7 +8,7 @@ import sys
 import venv
 
 ENTORNOS = (".venv", ".cerebro-env")
-DATOS = ("data", "checkpoints", "learning")
+DATOS = ("data", "checkpoints", "learning", "memory", "universe-datos")
 
 
 def instalar(raiz, avanzado=False, ejecutar=None):

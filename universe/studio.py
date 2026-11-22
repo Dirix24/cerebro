@@ -698,6 +698,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         generacion += 1
         with presencia, suppress(OSError, RuntimeError):
             pedir("interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
+        with suppress(OSError, RuntimeError):
+            api(sesion, "apagar", {}, tiempo=2)
         app.after_cancel(temporizador_cola)
         app.after_cancel(temporizador_pulso)
         if resaltado_pendiente is not None:
