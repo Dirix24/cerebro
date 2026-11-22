@@ -25,7 +25,8 @@ def resolver(nucleo, pregunta, intencion):
     enlaces = [url.rstrip(".,!?") for url in re.findall(r"https?://[^\s<>]+", pregunta, flags=re.I)]
     explicito = bool(re.match(r"clona\b", intencion) or re.search(r"\brepositorios?\b", intencion))
     if not explicito:
-        if len(enlaces) != 1 or not enlaces[0].startswith("https://"):
+        if (len(enlaces) != 1 or not enlaces[0].startswith("https://")
+                or enlaces[0].casefold().endswith(".pdf") or re.search(r"\bpdf\b", intencion)):
             return None
         try:
             identificar_repositorio(enlaces[0])

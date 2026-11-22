@@ -46,6 +46,7 @@ def test_permisos_impiden_descarga(internet):
 
 @pytest.mark.parametrize("url", [
     "https://ejemplo.org/gastos.pdf",
+    "https://github.com/a/gastos.pdf",
     "https://github.com/a/b/blob/main/gastos.pdf",
     "https://github.com/a/b/releases/download/v1/gastos.pdf",
 ])
