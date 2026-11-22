@@ -83,8 +83,22 @@ def escribir(ruta, contenido, marca, modo=0o644):
 def main():
     ap = ArgumentParser(description=__doc__)
     ap.add_argument("--sin-autoinicio", action="store_true", help="no registrar el acompañante al iniciar sesión")
+    ap.add_argument("--gestos", choices=("manos", "marcador"),
+                    help="autoriza instalar las ruedas opcionales en el entorno virtual")
+    ap.add_argument("--modelo-manos", metavar="RUTA", help="registra un modelo .task ya descargado")
+    ap.add_argument("--sin-diagnostico", action="store_true", help="omite el diagnóstico final")
     args = ap.parse_args()
     instalar(automatico=not args.sin_autoinicio)
+    from universe.diagnostico_instalacion import configurar_modelo_manos, diagnosticar, instalar_gestos
+    if args.modelo_manos:
+        try:
+            configurar_modelo_manos(args.modelo_manos)
+        except (OSError, ValueError) as error:
+            print(f"No se registró el modelo de manos: {error}")
+    if args.gestos and not instalar_gestos(args.gestos):
+        print("La instalación básica sigue disponible. El modo gestual elegido requiere revisión.")
+    if not args.sin_diagnostico:
+        diagnosticar(Path(__file__).resolve().parent.parent)
 
 
 if __name__ == "__main__":

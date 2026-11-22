@@ -168,6 +168,14 @@ class Nucleo:
                          default=("escritorio", ahora, ahora))
             return {"activa": activa[0]}
 
+    def _modelo_codigo(self):
+        modelo = os.environ.get("CEREBRO_OLLAMA_CODIGO")
+        if not modelo:
+            return self.profesor
+        motor = ProfesorLocal(int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434")), ollama=modelo)
+        motor.ocupado = getattr(self.profesor, "ocupado", motor.ocupado)
+        return motor
+
     def operar_proyecto(self, datos):
         from core.proyecto_studio import ProyectoStudio
 
@@ -206,12 +214,16 @@ class Nucleo:
             if cliente not in self.archivos_sueltos_studio and len(self.archivos_sueltos_studio) >= 32:
                 self.archivos_sueltos_studio.pop(next(iter(self.archivos_sueltos_studio)))
             self.archivos_sueltos_studio[cliente] = suelto, ruta.name
-            return {**vista, "suelto": True, "app_externa": False}
-        if accion in {"suelto", "estado_suelto", "herramienta_suelto", "buscar_pdf_suelto"}:
+            return {**vista, "suelto": True}
+        if accion in {"suelto", "estado_suelto", "herramienta_suelto", "buscar_pdf_suelto", "abrir_suelto_externo"}:
             referencia = self.archivos_sueltos_studio.get(cliente)
             if referencia is None:
                 raise ValueError("Abre y autoriza un archivo primero.")
             suelto, nombre_suelto = referencia
+            if accion == "abrir_suelto_externo":
+                if datos.get("nombre") != nombre_suelto:
+                    raise ValueError("El archivo activo cambió.")
+                return self._abrir_original(suelto, nombre_suelto, datos)
             if accion == "buscar_pdf_suelto":
                 return suelto.buscar_pdf(nombre_suelto, datos.get("consulta"))
             vista = suelto.inspeccionar(nombre_suelto, contenido=accion != "estado_suelto",
@@ -221,7 +233,7 @@ class Nucleo:
             if accion == "herramienta_suelto" and vista.get("extension") == ".pdf":
                 return self._herramienta_pdf(suelto, nombre_suelto, vista, cliente, datos, analizar_texto)
             if accion in {"suelto", "estado_suelto"}:
-                return {**vista, "suelto": True, "app_externa": False}
+                return {**vista, "suelto": True}
             return self._herramienta_documento(cliente, vista, datos, analizar_texto)
         if accion == "responder_ejercicio":
             ejercicio = self.ejercicios_studio.get(cliente)
@@ -302,15 +314,7 @@ class Nucleo:
             return proyecto.inspeccionar(nombre, contenido=accion == "inspeccionar",
                                          pagina=datos.get("pagina", 1), resolucion=datos.get("resolucion", 980))
         if accion == "abrir_externo":
-            if not self.documentos_usuario or datos.get("confirmar") is not True:
-                raise PermissionError("Autoriza la aplicación local para abrir este documento.")
-            if not proyecto.inspeccionar(nombre, contenido=False)["app_externa"]:
-                raise ValueError("Este tipo no se admite para abrir en otra aplicación.")
-            from core.aplicaciones_linux import abrir_documento
-            resultado = abrir_documento(proyecto.raiz / nombre)
-            if not resultado.get("aceptado"):
-                raise ValueError("La aplicación predeterminada no aceptó el documento.")
-            return {"salida": resultado["aplicacion"] + " aceptó la solicitud de apertura."}
+            return self._abrir_original(proyecto, nombre, datos)
         if accion == "fragmento":
             from textwrap import dedent
 
@@ -338,9 +342,10 @@ class Nucleo:
         if accion == "generar":
             from core.generacion_proyecto import diferencias, validar
 
-            if not self.profesor.configurado:
+            motor = self._modelo_codigo()
+            if not motor.configurado:
                 raise ValueError("Configura un modelo local de código con Ollama o llama.cpp.")
-            archivos = validar(self.profesor.proponer_proyecto(datos.get("objetivo")))
+            archivos = validar(motor.proponer_proyecto(datos.get("objetivo")))
             identificador = os.urandom(12).hex()
             if len(self.generaciones_studio) >= 16:
                 self.generaciones_studio.popitem(last=False)
@@ -408,6 +413,17 @@ class Nucleo:
             self.ejecutor.submit(self._probar_proyecto, tarea, proyecto, cliente)
             return {"id": tarea["id"]}
         raise ValueError("Acción de proyecto desconocida.")
+
+    def _abrir_original(self, proyecto, nombre, datos):
+        if not self.documentos_usuario or datos.get("confirmar") is not True:
+            raise PermissionError("Autoriza la aplicación local para abrir este documento.")
+        if not proyecto.inspeccionar(nombre, contenido=False)["app_externa"]:
+            raise ValueError("Este tipo no se admite para abrir en otra aplicación.")
+        from core.aplicaciones_linux import abrir_documento
+        resultado = abrir_documento(proyecto.raiz / nombre)
+        if not resultado.get("aceptado"):
+            raise ValueError("La aplicación predeterminada no aceptó el documento.")
+        return {"salida": resultado["aplicacion"] + " aceptó la solicitud de apertura."}
 
     def _preguntar_documento(self, proyecto, nombre, vista, consulta):
         from core.escritorio_studio import recuperar_fragmentos
@@ -618,13 +634,10 @@ class Nucleo:
                 r"(?:haz|crea|disena|programa|genera) (?:una? |el |la )?"
                 r"(?:calculadora|web|pagina web|programa|proyecto|script)(?: .*)?", intencion)
             if orden_generar and intencion not in {"crea una pagina web", "crea pagina web"}:
-                configurado = self.profesor.configurado
                 proyecto = self.proyectos_studio.get(cliente)
                 generacion = None
                 if not proyecto:
                     respuesta = "Abre y autoriza una carpeta en Studio para preparar el proyecto."
-                elif not configurado:
-                    respuesta = "Configura un modelo local de código con Ollama o llama.cpp para generar el proyecto."
                 else:
                     try:
                         generacion = self.operar_proyecto({"accion": "generar", "cliente": cliente,
@@ -708,6 +721,32 @@ class Nucleo:
             ensenanza = self._consultar_competencias(intencion, cliente)
             if ensenanza is not None:
                 return ensenanza
+        if intencion in {"muestrame mis repositorios", "muestrame mis repositorios de github", "lista mis repositorios de github"}:
+            from core.github_local import repositorios_cuenta
+
+            self.exigir_permisos("READ")
+            if not self.internet:
+                raise PermissionError("Activa Internet para consultar tu cuenta de GitHub.")
+            try:
+                repositorios = repositorios_cuenta()
+            except RuntimeError as error:
+                return {"respuesta": str(error)}
+            return {"respuesta": "Repositorios accesibles (hasta 20):\n" + "\n".join(repositorios)
+                    if repositorios else "GitHub no devolvió repositorios accesibles.", "repositorios": repositorios}
+        comparacion = re.fullmatch(r"(?:compara|comparar) github ([^ ]+) ([^ ]+) (?:con )?([^ ]+)", pregunta, re.I)
+        if comparacion:
+            from core.github_local import comparar_publico
+
+            self.exigir_permisos("READ")
+            if not self.internet:
+                raise PermissionError("Activa Internet para comparar ramas en GitHub.")
+            try:
+                datos = comparar_publico(*comparacion.groups())
+            except (OSError, ValueError) as error:
+                return {"respuesta": f"No pude comparar las referencias de GitHub: {error}"}
+            return {"respuesta": f"{datos['repositorio']} · {datos['destino']} frente a {datos['base']}: "
+                    f"{datos['adelante']} commits por delante y {datos['atras']} por detrás.",
+                    "comparacion": datos}
         if intencion in {"cuantos programas tengo instalados", "cuantas aplicaciones tengo instaladas"}:
             from core.aplicaciones_linux import listar
 

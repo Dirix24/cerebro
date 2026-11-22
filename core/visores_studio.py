@@ -129,9 +129,15 @@ def pdf_vista(bruto, pagina=1, resolucion=980):
     total = pdf_paginas(bruto)
     if type(pagina) is not int or not 1 <= pagina <= total:
         raise ValueError(f"Selecciona una página entre 1 y {total}.")
-    if type(resolucion) is not int or not 320 <= resolucion <= 2200:
-        raise ValueError("La resolución del visor debe estar entre 320 y 2200 píxeles.")
+    if type(resolucion) is not int or not (resolucion == 0 or 128 <= resolucion <= 2200):
+        raise ValueError("La resolución debe estar entre 128 y 2200 píxeles, o ser 0 para tamaño real.")
     intervalo = ["-f", str(pagina), "-l", str(pagina)]
+    if resolucion == 0:
+        ficha = _poppler("pdfinfo", [*intervalo, "-"], bruto)
+        medidas = re.search(rb"^Page(?: +[0-9]+)? size:\s*([0-9.]+) x ([0-9.]+) pts", ficha, re.M)
+        if not medidas:
+            raise ValueError("No pude determinar el tamaño original de la página.")
+        resolucion = max(128, min(2200, round(max(float(medidas[1]), float(medidas[2])) * 96 / 72)))
     texto = pdf_texto(bruto, pagina, pagina)
     vista = {"texto": texto[:256 * 1024].decode("utf-8", "replace").strip(),
              "pagina": pagina, "paginas": total, "resolucion": resolucion}

@@ -607,3 +607,38 @@ y contar las aplicaciones visibles en el menú con **«Cuántos programas
 tengo instalados»**.
 
 Consulta [la validación de Cerebro Next](docs/CEREBRO_NEXT.md).
+
+### Visor con rueda y diagnóstico de instalación
+
+En el visor de una imagen o un PDF, gira la rueda para ampliar o
+reducir alrededor del puntero. Arrastra con el botón izquierdo para
+mover el contenido ampliado. El doble clic encaja la imagen y otro
+doble clic recupera su escala anterior. En PDF, el doble clic encaja
+la página. Los botones de ajuste y de tamaño real quedan fuera de la
+zona desplazable. **100 %** muestra los píxeles originales de una
+imagen, sujetos al límite de memoria, y equivale a 96 ppp en PDF
+dentro de los límites del renderizado. **Información** despliega los
+metadatos. **Abrir en aplicación local** solicita confirmación antes
+de entregar el original a la aplicación predeterminada de XDG.
+
+`./instalar --sin-autoinicio` crea el entorno virtual de Cerebro,
+instala la base y comprueba importaciones, herramientas PDF/X11,
+permisos de cámara y motores locales. Para autorizar la instalación
+opcional de los paquetes de gestos en ese mismo entorno:
+
+```bash
+./instalar --sin-autoinicio --gestos manos --modelo-manos /ruta/hand_landmarker.task
+```
+
+Usa `--gestos marcador` si MediaPipe no tiene una rueda compatible.
+El modo marcador no necesita el archivo de manos. Los modelos se
+seleccionan de archivos existentes. Si quieres un modelo de código
+distinto del de conversación, define `CEREBRO_OLLAMA_CODIGO` con el
+nombre ya instalado y reinicia Cerebro.
+
+Con Internet habilitado, **«Muéstrame mis repositorios de GitHub»**
+consulta hasta 20 repositorios con la sesión ya configurada en
+`gh auth login`. Para una comparación pública, escribe
+**«Compara GitHub Dirix24/cerebro main con otra-rama»** y sustituye
+`otra-rama` por una referencia existente. Esta ruta compara referencias
+remotas. Consulta [la auditoría, las pruebas y los límites](docs/NEXT_VISOR_INSTALACION.md).

@@ -14,6 +14,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from core.figuras_tactiles import Trazo, extruir, obj
 from core.gestos_tactiles import Gestos
+from universe.diagnostico_instalacion import modelo_manos
 from universe.paleta import ACENTO, BORDE, FONDO, PANEL, SELECCION, TEXTO
 
 
@@ -34,7 +35,7 @@ def tecnologias():
                and (sesion or not os.environ.get("WAYLAND_DISPLAY")))
     opencv = importlib.util.find_spec("cv2") is not None
     mediapipe = importlib.util.find_spec("mediapipe") is not None
-    modelo = os.environ.get("CEREBRO_MODELO_MANOS")
+    modelo = modelo_manos()
     dispositivos = [{"nodo": f"/dev/video{indice}", "nombre": nombre,
                      "permisos": os.access(f"/dev/video{indice}", os.R_OK | os.W_OK)}
                     for indice, nombre in camaras()]

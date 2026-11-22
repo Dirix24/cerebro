@@ -150,7 +150,7 @@ class ProyectoStudio:
         with self._padre(nombre) as (fd, hoja):
             tipo, info = self._tipo(fd, hoja)
         datos = {"archivo": nombre, "tipo": tipo, "extension": extension, "bytes": info.st_size,
-                 "app_externa": tipo == "archivo" and extension in DOCUMENTOS_EXTERNOS,
+                 "app_externa": tipo == "archivo" and extension in DOCUMENTOS_EXTERNOS | IMAGENES,
                  "marca": [info.st_ino, info.st_mtime_ns, info.st_size]}
         if tipo != "archivo" or not contenido:
             return datos

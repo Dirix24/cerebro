@@ -581,10 +581,10 @@ function solicitarProyecto(accion, datos = {}, esperado = proyectoActivo) {
 function prefijoProyecto() { return carpetaActual ? carpetaActual + "/" : ""; }
 function cambiosPendientes() { return $("contenido").value !== original.replace(/\r\n?/g, "\n"); }
 
-function presentarArchivo(datos) {
+function presentarArchivo(datos, ancla = null) {
   const area = $("visor-central");
-  area.replaceChildren(elementoTexto("h2", datos.archivo),
-                       elementoTexto("p", datos.aviso || datos.bytes + " bytes"));
+  area.replaceChildren(elementoTexto("h2", datos.archivo));
+  if (datos.aviso) area.append(elementoTexto("p", datos.aviso));
   if (["imagen", "pdf"].includes(datos.visor) && datos.base64) {
     const formatos = {".png": "png", ".gif": "gif", ".jpg": "jpeg", ".jpeg": "jpeg", ".webp": "webp", ".pdf": "png"};
     const tipo = formatos[datos.extension];
@@ -600,13 +600,21 @@ function presentarArchivo(datos) {
       area.append(controles, superficie);
       const referente = documentoVisible;
       let peticion = 0;
-      let zoom = 100;
+      let zoom = 1;
+      let escalaPrevia = null;
       const pdf = datos.visor === "pdf";
-      const solicitarVista = async (pagina, resolucion) => {
+      imagen.draggable = false;
+      const anclar = (centro) => {
+        if (!centro) return;
+        superficie.scrollLeft = centro.u * imagen.offsetWidth - centro.x;
+        superficie.scrollTop = centro.v * imagen.offsetHeight - centro.y;
+      };
+      if (ancla) imagen.addEventListener("load", () => anclar(ancla), {once: true});
+      const solicitarVista = async (pagina, resolucion, centro = null) => {
         const turno = ++peticion;
         const vista = await solicitarProyecto("inspeccionar", {nombre: datos.archivo, pagina,
-          resolucion: Math.max(320, Math.min(2200, resolucion))}, referente.carpeta);
-        if (turno === peticion && documentoVisible === referente) presentarArchivo(vista);
+          resolucion: resolucion === 0 ? 0 : Math.max(128, Math.min(2200, resolucion))}, referente.carpeta);
+        if (turno === peticion && documentoVisible === referente) presentarArchivo(vista, centro);
       };
       if (pdf && referente) {
         const anterior = boton("Página anterior", () => solicitarVista(datos.pagina - 1, datos.resolucion));
@@ -626,27 +634,68 @@ function presentarArchivo(datos) {
             Math.round(datos.resolucion * (superficie.clientWidth - 12) / (imagen.naturalWidth || datos.resolucion)))),
           boton("Ajustar página", () => solicitarVista(datos.pagina, Math.round(datos.resolucion * Math.min(
             (superficie.clientWidth - 12) / (imagen.naturalWidth || datos.resolucion),
-            (innerHeight * .60) / (imagen.naturalHeight || datos.resolucion))))));;
+            (innerHeight * .60) / (imagen.naturalHeight || datos.resolucion))))));
       }
-      const cambiarZoom = async (paso) => {
-        if (pdf && referente) {
-          return solicitarVista(datos.pagina, paso === 0 ? 980 : Math.round(datos.resolucion * (paso > 0 ? 1.25 : .8)));
-        }
-        zoom = paso === 0 ? 100 : Math.max(25, Math.min(250, zoom + paso * 25));
-        imagen.style.width = zoom === 100 ? "" : Math.round(Math.min(imagen.naturalWidth, superficie.clientWidth) * zoom / 100) + "px";
+      const escalarImagen = (factor) => {
+        zoom = Math.max(.05, Math.min(4, factor));
+        imagen.style.width = Math.round(imagen.naturalWidth * zoom) + "px";
       };
+      const ajustarImagen = (soloAncho) => escalarImagen(Math.min(
+        superficie.clientWidth / imagen.naturalWidth,
+        soloAncho ? Infinity : innerHeight * .60 / imagen.naturalHeight));
+      const cambiarZoom = async (paso, evento = null) => {
+        const factor = paso > 0 ? 1.25 : .8;
+        const rect = superficie.getBoundingClientRect();
+        const x = evento ? evento.clientX - rect.left : superficie.clientWidth / 2;
+        const y = evento ? evento.clientY - rect.top : superficie.clientHeight / 2;
+        const centro = {u: (superficie.scrollLeft + x) / (imagen.offsetWidth || 1),
+          v: (superficie.scrollTop + y) / (imagen.offsetHeight || 1), x, y};
+        if (pdf && referente) {
+          return solicitarVista(datos.pagina, paso === 0 ? 0 : Math.round(datos.resolucion * factor), centro);
+        }
+        escalaPrevia = null;
+        escalarImagen(paso === 0 ? 1 : zoom * factor);
+        anclar(centro);
+      };
+      if (!pdf) {
+        controles.append(boton("Ajustar ancho", () => ajustarImagen(true)),
+          boton("Ajustar ventana", () => ajustarImagen(false)));
+      }
       controles.append(boton("Reducir", () => cambiarZoom(-1)), boton("Ampliar", () => cambiarZoom(1)),
         boton("100 %", () => cambiarZoom(0)));
       superficie.addEventListener("wheel", evento => {
-        if (!evento.ctrlKey) return;
+        if (!evento.deltaY) return;
         evento.preventDefault();
-        cambiarZoom(evento.deltaY < 0 ? 1 : -1).catch(error => aviso(error.message));
+        cambiarZoom(evento.deltaY < 0 ? 1 : -1, evento).catch(error => aviso(error.message));
       }, {passive: false});
-      if (pdf) {
-        const info = document.createElement("details");
-        info.append(elementoTexto("summary", "Información y texto de la página"), elementoTexto("pre", datos.texto || ""));
-        area.append(info);
-      }
+      let arrastre;
+      imagen.addEventListener("pointerdown", evento => {
+        if (evento.button !== 0) return;
+        arrastre = [evento.clientX, evento.clientY, superficie.scrollLeft, superficie.scrollTop];
+        imagen.setPointerCapture(evento.pointerId);
+      });
+      imagen.addEventListener("pointermove", evento => {
+        if (!arrastre) return;
+        superficie.scrollLeft = arrastre[2] - evento.clientX + arrastre[0];
+        superficie.scrollTop = arrastre[3] - evento.clientY + arrastre[1];
+      });
+      imagen.addEventListener("lostpointercapture", () => { arrastre = null; });
+      imagen.addEventListener("dblclick", () => {
+        if (pdf) {
+          const escala = Math.min(superficie.clientWidth / imagen.naturalWidth, innerHeight * .60 / imagen.naturalHeight);
+          solicitarVista(datos.pagina, Math.round(datos.resolucion * escala)).catch(error => aviso(error.message));
+        } else if (escalaPrevia === null) {
+          escalaPrevia = zoom;
+          ajustarImagen(false);
+        } else {
+          escalarImagen(escalaPrevia);
+          escalaPrevia = null;
+        }
+      });
+      const info = document.createElement("details");
+      info.append(elementoTexto("summary", "Información del archivo"),
+        elementoTexto("pre", datos.bytes + " bytes" + (datos.texto ? "\n\n" + datos.texto : "")));
+      area.append(info);
     }
   } else if (datos.fragmentos) {
     const vistaHTML = document.createElement("div");
