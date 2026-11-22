@@ -280,3 +280,15 @@ def evaluar_dependencia(ejercicio, respuesta):
             "referencia": ejercicio["referencia"],
             "detalle": "La dependencia coincide con el plan." if correcto else
             f"En el plan, esta tarea depende directamente de «{esperado}»."}
+
+
+def ejercicio_documento(lineas):
+    """Crea un ejercicio de completar un concepto presente en un pasaje."""
+    pasaje = next((linea for linea in lineas if len(linea.split()) >= 4), lineas[0])[:280]
+    palabras = list(re.finditer(r"\b[\wÁÉÍÓÚáéíóúñÑ]{4,}\b", pasaje))
+    if not palabras:
+        raise ValueError("No encontré un concepto de texto suficientemente largo para evaluar.")
+    palabra = max(palabras, key=lambda item: len(item[0]))
+    pregunta = pasaje[:palabra.start()] + "____" + pasaje[palabra.end():]
+    return {"pregunta": "Completa el término omitido del pasaje.\n" + pregunta,
+            "respuesta_esperada": palabra[0], "referencia": pasaje}

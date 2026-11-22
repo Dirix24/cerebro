@@ -456,6 +456,37 @@ for (const control of document.querySelectorAll("[data-central]")) {
   control.addEventListener("click", () => central(control.dataset.central));
 }
 
+const historialWeb = [];
+let indiceWeb = -1;
+
+function mostrarWeb() {
+  if (indiceWeb < 0) return;
+  const url = historialWeb[indiceWeb];
+  $("direccion-web").value = url;
+  $("marco-web").src = url;
+  $("web-atras").disabled = indiceWeb === 0;
+  $("web-adelante").disabled = indiceWeb === historialWeb.length - 1;
+}
+
+$("navegar-web").addEventListener("submit", evento => {
+  evento.preventDefault();
+  ejecutar(evento.submitter, async () => {
+    const estado = await api("estado");
+    if (!estado.internet) throw new Error("Activa Internet en el núcleo antes de abrir direcciones externas.");
+    const url = new URL($("direccion-web").value);
+    if (url.protocol !== "https:" || url.username || url.password) {
+      throw new Error("Introduce una URL HTTPS sin credenciales.");
+    }
+    historialWeb.splice(indiceWeb + 1, historialWeb.length, url.href);
+    if (historialWeb.length > 30) historialWeb.shift();
+    indiceWeb = historialWeb.length - 1;
+    mostrarWeb();
+  });
+});
+$("web-atras").addEventListener("click", () => { if (indiceWeb > 0) { indiceWeb--; mostrarWeb(); } });
+$("web-adelante").addEventListener("click", () => { if (indiceWeb < historialWeb.length - 1) { indiceWeb++; mostrarWeb(); } });
+$("web-recargar").addEventListener("click", mostrarWeb);
+
 function elementoTexto(etiqueta, texto) {
   const nodo = document.createElement(etiqueta);
   nodo.textContent = texto;

@@ -77,7 +77,7 @@ Instalar sin activar el inicio automático:
 | Desinstalar conservando datos | `./desinstalar` |
 | Desinstalar y solicitar borrado de datos conocidos | `./desinstalar --borrar-datos` |
 
-El **autoinicio** se registra para la siguiente entrada en tu sesión de XFCE, no antes de iniciar sesión. Studio actúa como ventana principal; su **X** solicita apagar el servicio compartido, avisando si hay cambios sin guardar. Cerrar una ventana secundaria no siempre significa cerrar todo Cerebro.
+El **autoinicio** se registra para la siguiente entrada en tu sesión de XFCE, no antes de iniciar sesión. Studio actúa como ventana principal. Su **X** avisa si hay ediciones sin guardar y deja el núcleo activo. Si no queda otra interfaz activa, vuelve el acompañante. Para apagar el núcleo y sus tareas usa `cerebro detener`.
 
 **La desinstalación normal conserva** repositorio, proyectos, recuerdos, modelos y datos. La variante `--borrar-datos` exige escribir la frase de confirmación `BORRAR MIS DATOS` y solo afecta a las ubicaciones reconocidas por el desinstalador. Haz copias de seguridad antes de usarla.
 
@@ -411,3 +411,42 @@ PYTHONPATH=. python3 tests/manual/verificar_studio.py
 Para documentos de oficina sin visor interno, **Abrir en aplicación local**
 solicita confirmación y usa la aplicación predeterminada del escritorio.
 Esa acción excluye HTML y los archivos ejecutables.
+
+
+### Studio como escritorio de trabajo en MX Linux
+
+- El selector del explorador detecta carpetas XDG existentes y admite
+  favoritas. Cada carpeta se autoriza antes de explorarla. **Abrir en
+  Thunar** abre la subcarpeta visible y usa el gestor predeterminado si
+  Thunar no está disponible.
+- Arrastra un archivo local desde Thunar o la lista de Studio al editor,
+  visor o panel de resultados. `./instalar` instala `tkinterdnd2` en
+  Linux. **Archivos → Abrir archivo en visor** ofrece la misma lectura
+  si arrastrar y soltar no está disponible. Un archivo externo se lee
+  tras confirmación y permanece en su ubicación. **Actualizar visor**
+  vuelve a leerlo si se detecta un cambio externo.
+- **Modo táctil** amplía botones, pestañas y barras de desplazamiento al
+  momento y guarda la preferencia. El modo de gestos con cámara conserva
+  su control separado.
+- Prueba «Resume esto», «Analiza este documento», «Valida este archivo»
+  o «Profesor, evalúame sobre este PDF» después de abrirlo. El resumen
+  actual es extractivo. PROFESOR propone completar un término de un
+  pasaje concreto y guarda el resultado solo si lo autorizas. Las
+  imágenes muestran el visor y metadatos; el reconocimiento visual
+  necesita un modelo compatible.
+- **Validaciones** comprueba Python, JSON, CSV/TSV o que el visor pueda
+  extraer contenido de HTML. Las pruebas del proyecto conservan su
+  aislamiento. Los arreglos sintácticos de **Cambios** se pueden
+  rechazar o revertir en la sesión, siempre que el archivo no haya
+  cambiado en disco desde la aplicación.
+- **Web** en Studio para navegador acepta direcciones HTTPS con
+  Internet habilitado. La vista bloquea scripts, formularios y acceso
+  a las APIs internas. Algunos sitios bloquean la inclusión en marcos.
+  El historial recoge las direcciones introducidas en Studio. En la
+  aplicación Tk, **Abrir web** usa el navegador predeterminado.
+
+El registro de herramientas de documentos está en
+[`core/escritorio_studio.py`](core/escritorio_studio.py). Las operaciones
+de archivo siguen usando el registro y los permisos del proyecto.
+Las órdenes como «Abre Thunar» o «Abre la calculadora» conservan la
+resolución por aplicaciones del escritorio, sin intérprete de shell.

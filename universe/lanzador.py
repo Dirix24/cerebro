@@ -128,6 +128,13 @@ def nucleo():
             json.dump(datos, archivo)
         (ruta / "sesion.tmp").replace(ruta / "sesion.json")
         try:
+            relevo = RelevoInterfaz()
+
+            def revisar_vistas():
+                with contextlib.suppress(OSError, RuntimeError):
+                    relevo.revisar(motor.interfaz()["activa"])
+
+            servidor.service_actions = revisar_vistas
             servidor.serve_forever()
         finally:
             motor.descarga_git.cancelar_todas()
@@ -184,10 +191,35 @@ def _lanzar_proceso(comando):
     return True
 
 
+class RelevoInterfaz:
+    """Reabre el acompañante cuando expira la última interfaz activa."""
+
+    def __init__(self):
+        self.vio_interfaz = False
+        self.ultimo_intento = float("-inf")
+
+    def revisar(self, activa):
+        if activa != "escritorio":
+            self.vio_interfaz = True
+        elif self.vio_interfaz and monotonic() - self.ultimo_intento >= 2:
+            self.ultimo_intento = monotonic()
+            if not acompanante_activo():
+                lanzar_acompanante()
+
+
+def acompanante_activo():
+    with (carpeta() / "avatar.lock").open("a") as cerrojo:
+        try:
+            fcntl.flock(cerrojo, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+    return False
+
+
 def lanzar_acompanante():
     if not _hay_escritorio():
         return False
-    return _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "_escritorio"])
+    return acompanante_activo() or _lanzar_proceso([sys.executable, "-m", "universe.lanzador", "_escritorio"])
 
 
 def lanzar_estudio():
@@ -420,6 +452,8 @@ def escritorio(sesion):
     except tk.TclError as exc:
         raise RuntimeError("Se necesita una sesión gráfica con Tk para abrir el acompañante.") from exc
     ventana.title("Cerebro · Acompañante")
+    logo = tk.PhotoImage(master=ventana, file=Path(__file__).with_name("web") / "cerebro-logo.png")
+    ventana.iconphoto(True, logo)
     from universe.paleta import ACENTO, BORDE, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
 
     fondo, panel, texto = FONDO, PANEL, TEXTO
@@ -700,7 +734,8 @@ def escritorio(sesion):
     def cerrar(secundario=False):
         if not secundario and not studio_activo():
             with contextlib.suppress(OSError, RuntimeError):
-                api(sesion, "apagar", {}, tiempo=2)
+                if api(sesion, "interfaz", tiempo=2)["activa"] == "escritorio":
+                    api(sesion, "apagar", {}, tiempo=2)
         cancelar_audio.set()
         detenido.set()
         ventana.after_cancel(temporizador)

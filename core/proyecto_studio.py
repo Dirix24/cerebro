@@ -39,14 +39,15 @@ def _renombrar_sin_reemplazar(fd_origen, nombre, fd_destino, destino):
 
 
 class ProyectoStudio:
-    def __init__(self, carpeta):
+    def __init__(self, carpeta, *, lectura_individual=False):
         if not isinstance(carpeta, str) or not Path(carpeta).is_absolute():
             raise ValueError("Selecciona una carpeta absoluta de proyecto.")
         self.raiz = Path(carpeta).resolve(strict=True)
-        if (not self.raiz.is_dir() or self.raiz == Path.home().resolve()
+        if (not self.raiz.is_dir() or (not lectura_individual and self.raiz == Path.home().resolve())
                 or self.raiz == Path(self.raiz.anchor)):
             raise ValueError("Selecciona una carpeta concreta de proyecto.")
         self.propuestas = {}
+        self.aplicadas = {}
         self.cerrojo = RLock()
         estado = self.raiz.stat()
         self.identidad = estado.st_dev, estado.st_ino
@@ -149,7 +150,8 @@ class ProyectoStudio:
         with self._padre(nombre) as (fd, hoja):
             tipo, info = self._tipo(fd, hoja)
         datos = {"archivo": nombre, "tipo": tipo, "extension": extension, "bytes": info.st_size,
-                 "app_externa": tipo == "archivo" and extension in DOCUMENTOS_EXTERNOS}
+                 "app_externa": tipo == "archivo" and extension in DOCUMENTOS_EXTERNOS,
+                 "marca": [info.st_ino, info.st_mtime_ns, info.st_size]}
         if tipo != "archivo" or not contenido:
             return datos
         if extension in FORMATOS:
@@ -353,13 +355,24 @@ class ProyectoStudio:
                 "hallazgos": hallazgos, "propuestas": propuestas,
                 "limitado": inventario["limitado"]}
 
+    def cambiar_propuesta(self, accion, identificador):
+        with self.cerrojo:
+            cambios = self.aplicadas if accion == "revertir" else self.propuestas
+            if not isinstance(identificador, str) or identificador not in cambios:
+                raise ValueError("El cambio ya no está disponible en esta sesión.")
+            nombre, original, candidato = cambios[identificador]
+            if accion == "aplicar":
+                self.guardar(nombre, candidato, original)
+                if len(self.aplicadas) >= 20:
+                    self.aplicadas.pop(next(iter(self.aplicadas)))
+                self.aplicadas[identificador] = nombre, original, candidato
+            elif accion == "revertir":
+                self.guardar(nombre, original, candidato)
+            del cambios[identificador]
+            return {"archivo": nombre}
+
     def aplicar(self, identificador):
-        if not isinstance(identificador, str) or identificador not in self.propuestas:
-            raise ValueError("Vuelve a generar la propuesta antes de aplicarla.")
-        nombre, original, candidato = self.propuestas[identificador]
-        self.guardar(nombre, candidato, original)
-        del self.propuestas[identificador]
-        return {"archivo": nombre}
+        return self.cambiar_propuesta("aplicar", identificador)
 
 
 def comprobar_python(texto, nombre):

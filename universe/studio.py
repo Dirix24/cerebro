@@ -11,12 +11,13 @@ from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
 import tokenize
-from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError
+from tkinter import END, BOTH, LEFT, RIGHT, X, Y, BooleanVar, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError
 from tkinter import filedialog, messagebox, simpledialog, ttk
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
+from core.escritorio_studio import archivo_soltado
 from core.visores_studio import HTML_INICIAL, html_estatico, tabla
-from universe.lanzador import ErrorAPI, api, abrir, carpeta, lanzar_acompanante, lanzar_terminal
+from universe.lanzador import ErrorAPI, api, abrir, abrir_web, carpeta, lanzar_acompanante, lanzar_terminal
 from universe.mapa_studio import MapaStudio
 
 from universe.paleta import ACENTO, ACTIVO, BORDE, EDITOR, FONDO, PANEL, SECUNDARIO, SELECCION, TEXTO
@@ -53,7 +54,16 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         app = Tk()
     except TclError as exc:
         raise RuntimeError("No pude abrir Studio. Necesitas una sesión gráfica y python3-tk.") from exc
+    dnd = None
+    try:
+        from tkinterdnd2 import DND_FILES, COPY, TkinterDnD
+        TkinterDnD._require(app)
+        dnd = (DND_FILES, COPY)
+    except (ImportError, RuntimeError, TclError):
+        pass
     app.title("Cerebro Studio")
+    logo = PhotoImage(master=app, file=Path(__file__).with_name("web") / "cerebro-logo.png")
+    app.iconphoto(True, logo)
     app.geometry("1120x720")
     app.minsize(720, 490)
     app.configure(bg=FONDO)
@@ -104,6 +114,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     subcarpeta = ""
     imagen_activa = None
     solicitud_archivo = 0
+    documento_activo = None
+    marca_documento = None
+    carpetas_disponibles = {}
+    modo_tactil = BooleanVar(value=False)
+    modo_edicion_tactil = False
     entrada = StringVar()
     pendientes = SimpleQueue()
     tareas_en_curso = set()
@@ -174,14 +189,37 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     cabecera = ttk.Frame(app, padding=(16, 12))
     cabecera.pack(fill=X)
+
+    def ajustar_tactil(activo):
+        nonlocal modo_edicion_tactil
+        modo_edicion_tactil = activo
+        modo_tactil.set(activo)
+        estilo.configure("TButton", padding=(12, 9) if activo else (8, 5))
+        estilo.configure("TNotebook.Tab", padding=(16, 11) if activo else (12, 6))
+        estilo.configure("TEntry", padding=7 if activo else 4)
+        for barra in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
+            estilo.configure(barra, arrowsize=17 if activo else 9)
+        lista.configure(font=("TkDefaultFont", 12 if activo else 10))
+
+    def cambiar_tactil():
+        deseado = modo_tactil.get()
+        ajustar_tactil(modo_edicion_tactil)
+        publicar(lambda: proyecto("tactil", valor=deseado), lambda dato: ajustar_tactil(dato["tactil"]))
+
+    marca = logo.subsample(4, 4)
+    ttk.Label(cabecera, image=marca).pack(side=LEFT, padx=(0, 8))
     ttk.Label(cabecera, text="Cerebro Studio", style="Titulo.TLabel").pack(side=LEFT, padx=(0, 15))
     boton(cabecera, "Chat web", lambda: abrir(sesion, "chat"), lado=RIGHT)
     def abrir_acompanante():
-        if not lanzar_acompanante():
+        if lanzar_acompanante():
+            app.iconify()
+        else:
             estado.set("El entorno gráfico no pudo abrir el acompañante.")
 
     boton(cabecera, "Acompañante", abrir_acompanante, lado=RIGHT)
     boton(cabecera, "Terminal", lanzar_terminal, lado=RIGHT)
+    ttk.Checkbutton(cabecera, text="Modo táctil", variable=modo_tactil,
+                    command=cambiar_tactil).pack(side=RIGHT, padx=5)
     paginas = ttk.Notebook(app)
     paginas.pack(fill=BOTH, expand=True, padx=14, pady=4)
     cuerpo = ttk.Panedwindow(paginas, orient="horizontal")
@@ -238,6 +276,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
     ttk.Label(archivos, text="EXPLORADOR", style="Seccion.TLabel").pack(anchor="w", pady=(0, 7))
     ttk.Label(archivos, textvariable=proyecto_titulo, wraplength=190).pack(anchor="w", pady=(0, 6))
+    favoritas = ttk.Combobox(archivos, state="readonly")
+    favoritas.pack(fill=X, pady=(0, 6))
     ttk.Label(archivos, text="Filtrar archivos · Ctrl+P").pack(anchor="w", pady=(0, 4))
     buscador = ttk.Entry(archivos, textvariable=filtro_archivos)
     buscador.pack(fill=X, pady=(0, 4))
@@ -450,7 +490,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                              lambda dato: estado.set(dato["salida"]))
 
             boton(acciones_visor, "Abrir en aplicación local", externa)
-        if extension in {".html", ".md", ".csv", ".tsv", ".pdf"} and "texto" in datos:
+        if (datos.get("suelto") or extension in {".html", ".md", ".csv", ".tsv", ".pdf"}) and "texto" in datos:
             visor.configure(state="normal")
             visor.insert(END, "\n\n")
             if extension == ".html":
@@ -486,6 +526,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             if editor.edit_modified() and editor.get("1.0", "end-1c") != copia_editor:
                 estado.set("El editor cambió mientras se abría el archivo.")
                 return
+            activar_documento(abierto_en, datos) if abierto_en else desactivar_documento()
             if abierto_en and datos.get("visor") != "texto":
                 visualizar(datos)
             else:
@@ -517,6 +558,142 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         if es_seguro_salir("¿Abrir otro archivo?"):
             cargar_nombre(nombre)
+
+    def actualizar_preferencias(datos):
+        carpetas_disponibles.clear()
+        for item in datos["carpetas"]:
+            carpetas_disponibles[item["nombre"]] = item["ruta"]
+        for ruta_favorita in datos["favoritas"]:
+            carpetas_disponibles["★ " + ruta_favorita] = ruta_favorita
+        favoritas.configure(values=list(carpetas_disponibles))
+        ajustar_tactil(datos["tactil"])
+
+    def elegir_personal(_evento=None):
+        destino = carpetas_disponibles.get(favoritas.get())
+        if destino:
+            abrir_proyecto(destino)
+
+    def marcar_favorita():
+        esperado = proyecto_activo
+        if esperado:
+            publicar(lambda: proyecto("favorita", esperada=esperado),
+                     lambda _: publicar(lambda: proyecto("escritorio"), actualizar_preferencias))
+        else:
+            estado.set("Abre una carpeta antes de añadirla a favoritas.")
+
+    def mostrar_gestor():
+        if proyecto_activo:
+            esperado, nombre = proyecto_activo, subcarpeta
+            publicar(lambda: proyecto("gestor", nombre=nombre, esperada=esperado, confirmar=True),
+                     lambda dato: estado.set(dato["salida"]))
+        else:
+            estado.set("Abre primero la carpeta que quieres mostrar en Thunar.")
+
+    def activar_documento(esperado, datos):
+        nonlocal documento_activo, marca_documento
+        tipo = datos.get("visor")
+        documento_activo = (esperado, datos["archivo"], tipo)
+        marca_documento = datos.get("marca")
+        texto = tipo in {"texto", "pdf"} and bool(datos.get("texto"))
+        for indice, disponible in enumerate((texto or tipo == "imagen", texto,
+                                               datos.get("extension") in {".py", ".json", ".html", ".csv", ".tsv"},
+                                               texto)):
+            herramientas_archivo.entryconfigure(indice, state="normal" if disponible else "disabled")
+
+    def desactivar_documento():
+        nonlocal documento_activo, marca_documento
+        documento_activo = marca_documento = None
+        for indice in range(4):
+            herramientas_archivo.entryconfigure(indice, state="disabled")
+
+    def actualizar_suelto():
+        if documento_activo is not None and not documento_activo[0]:
+            publicar(lambda: proyecto("suelto"), mostrar_suelto)
+        else:
+            estado.set("Selecciona de nuevo el archivo en el explorador para actualizarlo.")
+
+    def mostrar_suelto(datos):
+        activar_documento("", datos)
+        visualizar(datos)
+
+    def abrir_o_soltar(valor):
+        try:
+            origen = archivo_soltado(valor)
+        except ValueError as error:
+            estado.set(str(error))
+            return
+        if proyecto_activo and origen.is_relative_to(proyecto_activo):
+            if es_seguro_salir("¿Abrir otro archivo?"):
+                cargar_nombre(origen.relative_to(proyecto_activo).as_posix())
+            return
+        if messagebox.askyesno("Autorizar archivo", f"¿Leer «{origen.name}» sin copiarlo al proyecto?", parent=app):
+            publicar(lambda: proyecto("abrir_suelto", ruta=str(origen), confirmar=True), mostrar_suelto)
+
+    def elegir_archivo_suelto():
+        ruta_local = filedialog.askopenfilename(title="Abrir archivo en el visor", parent=app)
+        if ruta_local:
+            abrir_o_soltar(ruta_local)
+
+    def soltar(evento):
+        archivos_sol = app.tk.splitlist(evento.data)
+        if len(archivos_sol) != 1:
+            estado.set("Arrastra un solo archivo para abrirlo.")
+        else:
+            abrir_o_soltar(archivos_sol[0])
+        return dnd[1]
+
+    def iniciar_arrastre(_evento):
+        seleccion = lista.curselection()
+        if not seleccion or not proyecto_activo:
+            return ("refuse_drop", dnd[0], "")
+        nombre = lista.get(seleccion[0])
+        if nombre.endswith("/"):
+            return ("refuse_drop", dnd[0], "")
+        return (dnd[1], dnd[0], (str(Path(proyecto_activo) / nombre),))
+
+    def herramienta_archivo(herramienta):
+        if documento_activo is None:
+            estado.set("Abre un archivo primero.")
+            return
+        esperado, nombre, visor_tipo = documento_activo
+        if visor_tipo not in {"texto", "pdf"} and not (visor_tipo == "imagen" and herramienta == "analizar"):
+            estado.set("El análisis y la evaluación requieren un documento con texto.")
+            return
+
+        def resultado(dato):
+            if documento_activo != (esperado, nombre, visor_tipo):
+                return
+            grafica.pack_forget()
+            vistas_editor.select(pagina_resultados)
+            if "ejercicio" not in dato:
+                mostrar(detalles, nombre + "\n\n" + dato["salida"])
+                return
+            pregunta = dato["ejercicio"]["pregunta"]
+            mostrar(detalles, pregunta)
+            respuesta = simpledialog.askstring("Evaluar alumno", pregunta, parent=app)
+            if respuesta:
+                guardar_nota = messagebox.askyesno("Guardar progreso", "¿Guardar el resultado de este ejercicio?", parent=app)
+                publicar(lambda: proyecto("responder_ejercicio", respuesta=respuesta, guardar=guardar_nota),
+                         lambda nota: mostrar(detalles, pregunta + "\n\n" + nota["salida"]))
+
+        accion = "herramienta" if esperado else "herramienta_suelto"
+        publicar(lambda: proyecto(accion, nombre=nombre, herramienta=herramienta, esperada=esperado), resultado)
+
+    def abrir_pagina_web():
+        valor = simpledialog.askstring("Abrir página web", "Dirección https://", parent=app)
+        if not valor:
+            return
+        try:
+            enlace = urlsplit(valor.strip())
+        except ValueError:
+            enlace = None
+        if not enlace or enlace.scheme not in {"http", "https"} or not enlace.hostname or enlace.username or enlace.password:
+            estado.set("Introduce una dirección HTTP o HTTPS válida.")
+            return
+        if abrir_web(valor.strip()):
+            estado.set("La dirección se solicitó al navegador predeterminado.")
+        else:
+            estado.set("No pude abrir el navegador predeterminado.")
 
     def gestionar_archivo(accion, *, nombre=None, contenido=""):
         if not proyecto_activo:
@@ -594,6 +771,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 editor.edit_modified(False)
             estado.set("Archivo guardado: " + nombre)
             actualizar_archivos()
+            if abierto_en:
+                def ajustar_marca(datos):
+                    nonlocal marca_documento
+                    if documento_activo and documento_activo[:2] == (abierto_en, nombre):
+                        marca_documento = datos.get("marca")
+                publicar(lambda: proyecto("estado_archivo", nombre=nombre, esperada=abierto_en), ajustar_marca)
         publicar(lambda: proyecto("guardar", nombre=nombre, texto=contenido, original=original, confirmar=True, esperada=abierto_en)
                  if abierto_en else pedir("archivo", {"nombre": nombre, "texto": contenido}), guardado)
 
@@ -625,6 +808,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
 
         def abierto(datos):
             nonlocal proyecto_activo, archivo_proyecto, original_proyecto, subcarpeta
+            desactivar_documento()
             proyecto_activo = datos["carpeta"]
             proyecto_titulo.set(Path(proyecto_activo).name)
             subcarpeta = ""
@@ -706,6 +890,33 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             estado.set("Cambio aplicado. Vuelve a abrir el archivo para editarlo y ejecuta las pruebas.")
 
         publicar(lambda: proyecto("aplicar", id=propuesta["id"], confirmar=True, esperada=esperado), aplicado)
+
+    def revisar_decision(accion):
+        indice = elegir_cambio.current()
+        item = (cambios_aplicados[-1] if cambios_aplicados else None) if accion == "revertir" else (
+            propuestas[indice] if indice >= 0 else None)
+        if not item:
+            estado.set("No hay un cambio para esa acción.")
+            return
+        if accion == "revertir" and editor.edit_modified():
+            estado.set("Guarda las ediciones abiertas antes de revertir.")
+            return
+        if not messagebox.askyesno("Decidir cambio", f"¿{accion.capitalize()} el cambio de «{item['archivo']}»?", parent=app):
+            return
+        esperado = proyecto_activo
+
+        def terminado(resultado):
+            if esperado != proyecto_activo:
+                return
+            if accion == "revertir":
+                cambios_aplicados.remove(item)
+                if archivo_proyecto == resultado["archivo"]:
+                    cargar_nombre(archivo_proyecto)
+            else:
+                cargar_propuestas([dato for dato in propuestas if dato["id"] != item["id"]])
+            estado.set("Cambio revertido." if accion == "revertir" else "Propuesta rechazada.")
+
+        publicar(lambda: proyecto(accion, id=item["id"], confirmar=True, esperada=esperado), terminado)
 
     def probar_proyecto():
         if not proyecto_activo:
@@ -804,6 +1015,18 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 gestionar_archivo("crear", nombre=destino, contenido=HTML_INICIAL)
             elif destino:
                 estado.set("La página requiere la extensión .html.")
+            return
+        normalizada = texto.casefold().strip(" .!?¿¡")
+        peticion_archivo = re.fullmatch(
+            r"(?:(?:cerebro|profesor)[, ]+)?(resume|analiza|explica|busca errores en|valida|eval[uú]ame sobre) "
+            r"(?:esto|este documento|este archivo|este programa|este pdf|esta imagen|la selecci[oó]n)", normalizada)
+        if peticion_archivo:
+            accion_archivo = {"resume": "resumir", "valida": "validar"}.get(peticion_archivo[1], "analizar")
+            if peticion_archivo[1].startswith("eval"):
+                accion_archivo = "evaluar"
+            entrada.set("")
+            mostrar_mensaje("Tú", texto)
+            herramienta_archivo(accion_archivo)
             return
         entrada.set("")
         mostrar_mensaje("Tú", texto)
@@ -928,8 +1151,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         def enviar_presencia():
             with presencia:
                 if turno == generacion:
-                    pedir("interfaz", {"id": identificador, "modo": "studio",
-                                             "visible": se_ve, "enfocar": enfocar}, tiempo=2)
+                    vista = pedir("interfaz", {"id": identificador, "modo": "studio",
+                                         "visible": se_ve, "enfocar": enfocar}, tiempo=2)
+                if not se_ve and vista["activa"] == "escritorio":
+                    lanzar_acompanante()
 
         publicar(enviar_presencia)
 
@@ -938,8 +1163,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         if evento.widget is app:
             visible = mostrar
             informar(mostrar)
-            if not mostrar:
-                lanzar_acompanante()
+
 
     def pulso():
         nonlocal temporizador_pulso
@@ -971,6 +1195,22 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             publicar(consultar_chat, sincronizado)
         if visible and proyecto_activo:
             actualizar_archivos()
+        if visible and documento_activo is not None:
+            referencia = documento_activo
+            esperado, nombre, _ = referencia
+
+            def observar_archivo():
+                try:
+                    return proyecto("estado_archivo" if esperado else "estado_suelto",
+                                    nombre=nombre, esperada=esperado)
+                except ErrorAPI:
+                    return {}
+
+            def observado(datos):
+                if referencia == documento_activo and datos.get("marca") != marca_documento:
+                    estado.set("El archivo cambió en disco. Vuelve a abrirlo o usa Actualizar visor.")
+
+            publicar(observar_archivo, observado)
         if tareas_en_curso:
             def mostrar_tareas(datos):
                 for tarea in datos:
@@ -999,9 +1239,9 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         generacion += 1
         with presencia, suppress(OSError, RuntimeError):
-            pedir("interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
-        with suppress(OSError, RuntimeError):
-            api(sesion, "apagar", {}, tiempo=2)
+            vista = pedir("interfaz", {"id": identificador, "modo": "studio", "visible": False}, tiempo=1)
+            if vista["activa"] == "escritorio":
+                lanzar_acompanante()
         app.after_cancel(temporizador_cola)
         app.after_cancel(temporizador_pulso)
         if resaltado_pendiente is not None:
@@ -1018,13 +1258,33 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                                       command=lambda accion=accion_archivo: gestionar_archivo(accion))
     menu_archivos.configure(menu=acciones_archivos)
     menu_archivos.pack(side=LEFT, pady=3)
+    favoritas.bind("<<ComboboxSelected>>", elegir_personal)
+    herramientas_archivo = Menu(menu_archivos, tearoff=False)
+    for nombre, clave in (("Analizar archivo", "analizar"), ("Resumen breve", "resumir"),
+                          ("Validar archivo", "validar"), ("Evaluar alumno", "evaluar")):
+        herramientas_archivo.add_command(label=nombre, state="disabled", command=lambda tipo=clave: herramienta_archivo(tipo))
+    acciones_archivos.add_separator()
+    acciones_archivos.add_command(label="Abrir archivo en visor", command=elegir_archivo_suelto)
+    acciones_archivos.add_command(label="Actualizar visor", command=actualizar_suelto)
+    acciones_archivos.add_command(label="Añadir o quitar favorita", command=marcar_favorita)
+    acciones_archivos.add_cascade(label="Archivo seleccionado", menu=herramientas_archivo)
     boton(acciones_proyecto, "Abrir proyecto", abrir_proyecto)
+    boton(acciones_proyecto, "Abrir en Thunar", mostrar_gestor)
+    boton(acciones_proyecto, "Abrir web", abrir_pagina_web)
+    if dnd:
+        for superficie in (editor, visor, pagina_resultados):
+            superficie.drop_target_register(dnd[0])
+            superficie.dnd_bind("<<Drop>>", soltar)
+        lista.drag_source_register(1, dnd[0])
+        lista.dnd_bind("<<DragInitCmd>>", iniciar_arrastre)
     boton(acciones_proyecto, "Analizar", analizar_proyecto)
     boton(acciones_proyecto, "Pruebas", probar_proyecto)
     boton(acciones_cambio, "Aplicar propuesta", aplicar_cambio, "Principal.TButton")
+    boton(acciones_cambio, "Rechazar", lambda: revisar_decision("rechazar"))
+    boton(acciones_cambio, "Revertir último", lambda: revisar_decision("revertir"))
     elegir_cambio.bind("<<ComboboxSelected>>", mostrar_diff)
     boton(barra_editor, "Guardar · Ctrl+S", guardar, "Principal.TButton")
-    boton(barra_editor, "Validar Python", revisar)
+    boton(barra_editor, "Validar archivo", revisar)
     boton(barra_editor, "Vista previa", previsualizar_editor)
     boton(barra_editor, "Consultar selección", usar_seleccion)
     boton(barra_chat, "Enviar", enviar, "Principal.TButton")
@@ -1071,6 +1331,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         if datos.get("carpeta") and proyecto_activo is None and inicial != "universe":
             abrir_proyecto(datos["carpeta"], datos.get("archivo"))
 
+    publicar(lambda: proyecto("escritorio"), actualizar_preferencias)
     publicar(lambda: proyecto("recordado"), recordar_al_abrir)
     publicar(lambda: pedir("conversaciones"), mostrar_chat)
     publicar(lambda: pedir("estado"), lambda _: estado.set("Núcleo conectado"))

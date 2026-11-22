@@ -1,2 +1,5 @@
 numpy>=1.24
 # Opcional: psutil (mide RAM/CPU con más precisión en el benchmark)
+
+# Arrastrar archivos desde el gestor en Studio nativo (Linux).
+tkinterdnd2>=0.4.3; sys_platform == "linux"

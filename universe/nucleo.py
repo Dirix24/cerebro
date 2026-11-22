@@ -91,6 +91,8 @@ class Nucleo:
         self.interfaces = {}
         self.archivo_en_contexto = None
         self.proyectos_studio = {}
+        self.archivos_sueltos_studio = {}
+        self.ejercicios_studio = {}
         self.ejercicios_recientes = OrderedDict()
         self.dialogos_profesor = OrderedDict()
         self.conversaciones = Conversaciones(conversaciones_dir or self.raiz / "data")
@@ -165,13 +167,69 @@ class Nucleo:
             return {"activa": activa[0]}
 
     def operar_proyecto(self, datos):
-        from core.proyecto_studio import ProyectoStudio, comprobar_python
+        from core.proyecto_studio import ProyectoStudio
 
         cliente = datos.get("cliente")
         if not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente):
             raise ValueError("Identificador de Studio inválido.")
         self.exigir_permisos("READ")
         accion = datos.get("accion")
+        from core.escritorio_studio import (HERRAMIENTAS, abrir_carpeta, analizar_texto, archivo_soltado,
+                                            cargar_preferencias, carpetas_personales, guardar_preferencias,
+                                            validar_archivo)
+        preferencias = self.estudio / "studio-escritorio.json"
+        if accion == "escritorio":
+            guardadas = cargar_preferencias(preferencias)
+            return {"carpetas": carpetas_personales(), "favoritas": guardadas.get("favoritas", []),
+                    "tactil": guardadas.get("tactil") is True, "herramientas": HERRAMIENTAS}
+        if accion == "tactil":
+            self.exigir_permisos("WRITE")
+            if type(datos.get("valor")) is not bool:
+                raise ValueError("Indica si el modo táctil debe activarse.")
+            with self.cerrojo:
+                guardadas = cargar_preferencias(preferencias)
+                guardadas["tactil"] = datos["valor"]
+                guardar_preferencias(preferencias, guardadas)
+            return {"tactil": datos["valor"]}
+        if accion == "abrir_suelto":
+            if datos.get("confirmar") is not True:
+                raise PermissionError("Autoriza el archivo elegido.")
+            ruta = archivo_soltado(datos.get("ruta"))
+            if ruta.parent.resolve(strict=True) != ruta.parent:
+                raise PermissionError("Selecciona un archivo dentro de una carpeta real.")
+            suelto = ProyectoStudio(str(ruta.parent), lectura_individual=True)
+            vista = suelto.inspeccionar(ruta.name)
+            if vista["tipo"] != "archivo":
+                raise ValueError("Selecciona un archivo, no una carpeta.")
+            if cliente not in self.archivos_sueltos_studio and len(self.archivos_sueltos_studio) >= 32:
+                self.archivos_sueltos_studio.pop(next(iter(self.archivos_sueltos_studio)))
+            self.archivos_sueltos_studio[cliente] = suelto, ruta.name
+            return {**vista, "suelto": True, "app_externa": False}
+        if accion in {"suelto", "estado_suelto", "herramienta_suelto"}:
+            referencia = self.archivos_sueltos_studio.get(cliente)
+            if referencia is None:
+                raise ValueError("Abre y autoriza un archivo primero.")
+            suelto, nombre_suelto = referencia
+            vista = suelto.inspeccionar(nombre_suelto, contenido=accion != "estado_suelto")
+            if accion in {"suelto", "estado_suelto"}:
+                return {**vista, "suelto": True, "app_externa": False}
+            return self._herramienta_documento(cliente, vista, datos, analizar_texto)
+        if accion == "responder_ejercicio":
+            ejercicio = self.ejercicios_studio.get(cliente)
+            respuesta = datos.get("respuesta")
+            if ejercicio is None or not isinstance(respuesta, str) or not 1 <= len(respuesta) <= 300:
+                raise ValueError("Abre un ejercicio y escribe una respuesta de hasta 300 caracteres.")
+            correcta = respuesta.strip().casefold() == ejercicio["respuesta_esperada"].casefold()
+            if datos.get("guardar") is True:
+                self.exigir_permisos("WRITE")
+                with self.cerrojo:
+                    guardadas = cargar_preferencias(preferencias)
+                    historial = guardadas.get("evaluaciones", [])[-49:]
+                    guardadas["evaluaciones"] = [*historial, {"archivo": ejercicio["archivo"], "correcta": correcta}]
+                    guardar_preferencias(preferencias, guardadas)
+            return {"correcta": correcta, "salida": ("Correcto." if correcta else
+                        f"El término omitido era «{ejercicio['respuesta_esperada']}».")
+                    + "\nPasaje: " + ejercicio["referencia"]}
         if accion == "recordado":
             ruta = self.estudio / "studio-proyecto.json"
             if not ruta.is_file() or ruta.is_symlink() or ruta.stat().st_size > 8192:
@@ -199,10 +257,29 @@ class Nucleo:
         nombre = datos.get("nombre")
         if accion == "listar":
             return proyecto.listar()
+        if accion == "favorita":
+            self.exigir_permisos("WRITE")
+            destino = str(proyecto.raiz)
+            with proyecto._directorio(), self.cerrojo:
+                guardadas = cargar_preferencias(preferencias)
+                favoritas = guardadas.get("favoritas", [])
+                favoritas = [p for p in favoritas if p != destino] if destino in favoritas else [*favoritas[-19:], destino]
+                guardadas["favoritas"] = favoritas
+                guardar_preferencias(preferencias, guardadas)
+            return {"favoritas": favoritas}
+        if accion == "gestor":
+            if datos.get("confirmar") is not True:
+                raise PermissionError("Autoriza abrir la carpeta en el gestor local.")
+            partes = proyecto._partes(nombre) if nombre else []
+            with proyecto._directorio(partes):
+                programa = abrir_carpeta(proyecto.raiz.joinpath(*partes))
+            return {"salida": "Se solicitó abrir la carpeta con " + programa + "."}
+        if accion == "herramienta":
+            return self._herramienta_documento(cliente, proyecto.inspeccionar(nombre), datos, analizar_texto)
         if accion == "leer":
             return {"texto": proyecto.leer(nombre)}
-        if accion == "inspeccionar":
-            return proyecto.inspeccionar(nombre)
+        if accion in {"inspeccionar", "estado_archivo"}:
+            return proyecto.inspeccionar(nombre, contenido=accion == "inspeccionar")
         if accion == "abrir_externo":
             if not self.documentos_usuario or datos.get("confirmar") is not True:
                 raise PermissionError("Autoriza la aplicación local para abrir este documento.")
@@ -268,17 +345,16 @@ class Nucleo:
         if accion == "analizar":
             return proyecto.analizar()
         if accion == "validar":
-            comprobar_python(proyecto.leer(nombre), nombre)
-            return {"salida": "Sintaxis Python válida."}
-        if accion in {"guardar", "aplicar", "pruebas"}:
+            return {"salida": validar_archivo(proyecto.leer(nombre), nombre)}
+        if accion in {"guardar", "aplicar", "rechazar", "revertir", "pruebas"}:
             self.exigir_permisos("WRITE")
             if datos.get("confirmar") is not True:
                 raise PermissionError("Confirma la operación en el proyecto.")
             if accion == "guardar":
                 proyecto.guardar(nombre, datos.get("texto"), datos.get("original"))
                 return {"archivo": nombre}
-            if accion == "aplicar":
-                return proyecto.aplicar(datos.get("id"))
+            if accion in {"aplicar", "rechazar", "revertir"}:
+                return proyecto.cambiar_propuesta(accion, datos.get("id"))
             if sum(t["estado"] in {"en cola", "en ejecución"} for t in self.tareas) >= 4:
                 raise ValueError("Ya hay cuatro tareas en curso.")
             tarea = {"id": os.urandom(6).hex(), "accion": "pruebas", "estado": "en cola", "salida": ""}
@@ -286,6 +362,22 @@ class Nucleo:
             self.ejecutor.submit(self._probar_proyecto, tarea, proyecto, cliente)
             return {"id": tarea["id"]}
         raise ValueError("Acción de proyecto desconocida.")
+
+    def _herramienta_documento(self, cliente, vista, datos, analizar):
+        herramienta = datos.get("herramienta")
+        if herramienta == "analizar" and vista.get("visor") == "imagen":
+            return {"archivo": vista["archivo"], "salida": f"Imagen {vista['extension']} de {vista['bytes']} bytes. "
+                    "La vista local muestra el archivo. El reconocimiento del contenido requiere un modelo visual."}
+        if herramienta not in ("analizar", "resumir", "evaluar", "validar") or not vista.get("texto"):
+            raise ValueError("La herramienta requiere un formato con texto compatible.")
+        resultado = analizar(vista["archivo"], vista["texto"], herramienta)
+        if "ejercicio" in resultado:
+            ejercicio = resultado["ejercicio"]
+            if cliente not in self.ejercicios_studio and len(self.ejercicios_studio) >= 32:
+                self.ejercicios_studio.pop(next(iter(self.ejercicios_studio)))
+            self.ejercicios_studio[cliente] = {"archivo": vista["archivo"], **ejercicio}
+            resultado["ejercicio"] = {"pregunta": ejercicio["pregunta"]}
+        return resultado
 
     def _probar_proyecto(self, tarea, proyecto, cliente):
         from core.proyecto_studio import ejecutar_pruebas
