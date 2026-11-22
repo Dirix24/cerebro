@@ -27,6 +27,7 @@ def instalar(automatico=True):
     for modo, nombre in modos.items():
         entrada = ("[Desktop Entry]\nType=Application\nX-Cerebro-Launcher=true\n"
                    f"Name={nombre}\nExec={desktop_exec(binario)} {modo}\n"
+                   f"Icon={raiz / 'universe' / 'web' / 'cerebro-logo.png'}\n"
                    f"Terminal={'true' if modo == 'terminal' else 'false'}\n"
                    "Categories=Utility;\nStartupNotify=false\n")
         escribir(base / "applications" / f"cerebro-{modo}.desktop", entrada, "X-Cerebro-Launcher=true")

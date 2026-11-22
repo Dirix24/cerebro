@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 from universe.nucleo import MIB, PERFILES, Nucleo
 
 WEB = Path(__file__).with_name("web")
-ESTATICOS = {"/": ("index.html", "text/html"), "/chat": ("index.html", "text/html"),
+ESTATICOS = {"/cerebro-logo.png": ("cerebro-logo.png", "image/png"), "/": ("index.html", "text/html"), "/chat": ("index.html", "text/html"),
              "/studio": ("index.html", "text/html"), "/proyecto": ("index.html", "text/html"), "/universe": ("index.html", "text/html"), "/app.css": ("app.css", "text/css"),
              "/app.js": ("app.js", "text/javascript"), "/escena.js": ("escena.js", "text/javascript")}
 
@@ -40,7 +40,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy",
-                             "default-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+                             "default-src 'self'; img-src 'self' data:; frame-src https:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
             self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
             self.end_headers()
             self.wfile.write(cuerpo)

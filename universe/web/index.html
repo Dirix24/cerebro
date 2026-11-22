@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Cerebro Universe</title>
+  <link rel="icon" href="/cerebro-logo.png">
   <link rel="stylesheet" href="/app.css">
   <script type="module" src="/app.js"></script>
 </head>
@@ -74,6 +75,7 @@
             <button data-central="visor-central" aria-pressed="false">Visor</button>
             <button data-central="resultado-central" aria-pressed="false">Resultados</button>
             <button data-central="pruebas-central" aria-pressed="false">Validaciones</button>
+            <button data-central="web-central" aria-pressed="false">Web</button>
           </nav>
           <section class="panel editor" id="editor-central">
             <h2>Editor <output id="archivo-activo">Sin archivo abierto</output></h2>
@@ -83,6 +85,16 @@
           </section>
           <section class="panel" id="visor-central" hidden aria-label="Vista previa"></section>
           <section class="panel" id="resultado-central" hidden aria-label="Resultados de Cerebro"></section>
+          <section class="panel" id="web-central" hidden>
+            <form id="navegar-web" class="fila">
+              <label for="direccion-web">URL HTTPS</label><input id="direccion-web" type="url" required>
+              <button>Abrir</button>
+            </form>
+            <div class="acciones"><button id="web-atras">Atrás</button><button id="web-adelante">Adelante</button>
+              <button id="web-recargar">Recargar</button></div>
+            <p class="nota">Vista aislada. Algunas páginas impiden la previsualización. El historial recoge las URL introducidas.</p>
+            <iframe id="marco-web" title="Página web aislada" sandbox="" referrerpolicy="no-referrer"></iframe>
+          </section>
           <section class="panel tareas" id="pruebas-central" hidden>
             <h2>Validaciones <span class="nota">Salida del núcleo</span></h2>
             <div class="acciones"><button data-tarea="estado">Estado del núcleo</button><button id="analizar-proyecto" hidden>Analizar proyecto</button><button id="pruebas-proyecto" hidden>Pruebas del proyecto</button><button id="limpiar-tareas">Limpiar historial</button></div>
