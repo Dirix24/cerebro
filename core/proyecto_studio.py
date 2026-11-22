@@ -1,18 +1,41 @@
 """Acceso acotado a una carpeta seleccionada y propuestas verificables de Python."""
 import ast
+import base64
+from contextlib import contextmanager
+import ctypes
 import difflib
 from io import StringIO
 import os
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 import re
 import secrets
+import shutil
 import stat
 import tokenize
-from tempfile import NamedTemporaryFile
+from threading import RLock
 
 FORMATOS = {".py", ".txt", ".md", ".json", ".toml", ".yaml", ".yml", ".cfg", ".ini", ".css", ".js", ".html"}
 OMITIR = {"__pycache__", "node_modules", "build", "dist", "venv"}
+FORMATOS |= {".csv", ".tsv", ".xml", ".sql", ".sh", ".rs", ".java", ".c", ".h", ".cpp", ".ts"}
+IMAGENES = {".png", ".gif", ".jpg", ".jpeg", ".webp"}
 MAX_ARCHIVO = 512 * 1024
+MAX_VISOR = 4 * 1024 * 1024
+DOCUMENTOS_EXTERNOS = {".docx", ".odt", ".rtf", ".xlsx", ".ods", ".pptx", ".odp", ".pdf"}
+_TRASH = ".cerebro-papelera"
+
+
+def _renombrar_sin_reemplazar(fd_origen, nombre, fd_destino, destino):
+    """MX Linux: cambio de nombre atómico que falla si el destino existe."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    funcion = getattr(libc, "renameat2", None)
+    if funcion is None:
+        raise RuntimeError("Este equipo no admite mover archivos sin riesgo de reemplazo.")
+    funcion.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    funcion.restype = ctypes.c_int
+    if funcion(fd_origen, os.fsencode(nombre), fd_destino, os.fsencode(destino), 1):
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), destino)
+
 
 
 class ProyectoStudio:
@@ -24,71 +47,279 @@ class ProyectoStudio:
                 or self.raiz == Path(self.raiz.anchor)):
             raise ValueError("Selecciona una carpeta concreta de proyecto.")
         self.propuestas = {}
+        self.cerrojo = RLock()
+        estado = self.raiz.stat()
+        self.identidad = estado.st_dev, estado.st_ino
+
+    def _partes(self, nombre):
+        if not isinstance(nombre, str) or not nombre or len(nombre) > 240 or "\0" in nombre or "\\" in nombre:
+            raise ValueError("Ruta de proyecto inválida.")
+        partes = nombre.split("/")
+        if any(not p or p.startswith(".") or p in OMITIR or any(ord(c) < 32 for c in p) for p in partes):
+            raise ValueError("Selecciona una ruta relativa visible dentro del proyecto.")
+        return partes
+
+    @contextmanager
+    def _directorio(self, partes=()):
+        opciones = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        fd = os.open(self.raiz, opciones)
+        try:
+            estado = os.fstat(fd)
+            if (estado.st_dev, estado.st_ino) != self.identidad:
+                raise PermissionError("La carpeta autorizada fue reemplazada.")
+            for parte in partes:
+                nuevo = os.open(parte, opciones, dir_fd=fd)
+                os.close(fd)
+                fd = nuevo
+            yield fd
+        finally:
+            os.close(fd)
+
+    @contextmanager
+    def _padre(self, nombre):
+        partes = self._partes(nombre)
+        with self._directorio(partes[:-1]) as fd:
+            yield fd, partes[-1]
+
+    @staticmethod
+    def _tipo(fd, nombre):
+        info = os.stat(nombre, dir_fd=fd, follow_symlinks=False)
+        if stat.S_ISDIR(info.st_mode):
+            return "carpeta", info
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise PermissionError("Los enlaces y archivos especiales quedan fuera del proyecto.")
+        return "archivo", info
 
     def ruta(self, nombre):
-        if not isinstance(nombre, str) or not nombre or len(nombre) > 240:
-            raise ValueError("Ruta de proyecto inválida.")
-        partes = PurePosixPath(nombre).parts
-        if (not partes or nombre.startswith("/") or any(p.startswith(".") or p in OMITIR for p in partes)
-                or Path(nombre).suffix.lower() not in FORMATOS):
+        if Path(nombre if isinstance(nombre, str) else "").suffix.lower() not in FORMATOS:
             raise ValueError("Selecciona un archivo de texto dentro del proyecto.")
-        ruta = self.raiz
-        for parte in partes:
-            ruta = ruta / parte
-            if ruta.is_symlink():
-                raise PermissionError("Los enlaces simbólicos quedan fuera del proyecto.")
-        if not ruta.resolve().is_relative_to(self.raiz):
-            raise PermissionError("Ruta fuera de la carpeta autorizada.")
-        return ruta
+        with self._padre(nombre) as (fd, hoja):
+            if self._tipo(fd, hoja)[0] != "archivo":
+                raise ValueError("Selecciona un archivo de texto dentro del proyecto.")
+        return self.raiz.joinpath(*self._partes(nombre))
 
     def listar(self):
-        archivos = []
+        archivos, entradas = [], []
         vistos = 0
-        for base, directorios, nombres in os.walk(self.raiz):
+        for base, directorios, nombres, fd in os.fwalk(self.raiz, follow_symlinks=False):
+            if not entradas and Path(base) == self.raiz:
+                estado = os.fstat(fd)
+                if (estado.st_dev, estado.st_ino) != self.identidad:
+                    raise PermissionError("La carpeta autorizada fue reemplazada.")
             directorios[:] = sorted(d for d in directorios if not d.startswith(".") and d not in OMITIR
                                     and not (Path(base) / d).is_symlink())
-            vistos += 1 + len(nombres)
-            for nombre in sorted(nombres):
-                ruta = Path(base) / nombre
-                if (not nombre.startswith(".") and ruta.suffix.lower() in FORMATOS
-                        and not ruta.is_symlink() and ruta.is_file()):
-                    relativos = ruta.relative_to(self.raiz).as_posix()
-                    if len(relativos) <= 240:
-                        archivos.append(relativos)
-                if len(archivos) >= 500:
-                    return {"archivos": archivos, "limitado": True}
+            vistos += 1 + len(nombres) + len(directorios)
+            for nombre in [*directorios, *sorted(nombres)]:
+                relativo = (Path(base) / nombre).relative_to(self.raiz).as_posix()
+                try:
+                    self._partes(relativo)
+                    tipo, _ = self._tipo(fd, nombre)
+                except (ValueError, OSError):
+                    continue
+                entradas.append({"ruta": relativo, "tipo": tipo})
+                if tipo == "archivo" and Path(nombre).suffix.lower() in FORMATOS:
+                    archivos.append(relativo)
+                if len(entradas) >= 500:
+                    return {"archivos": archivos, "entradas": entradas, "limitado": True}
             if vistos >= 10000:
-                return {"archivos": archivos, "limitado": True}
-        return {"archivos": archivos, "limitado": False}
+                return {"archivos": archivos, "entradas": entradas, "limitado": True}
+        return {"archivos": archivos, "entradas": entradas, "limitado": False}
+
+    def _bytes(self, nombre, limite):
+        with self._padre(nombre) as (fd, hoja):
+            entrada = os.open(hoja, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+            with os.fdopen(entrada, "rb") as lector:
+                info = os.fstat(lector.fileno())
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                    raise PermissionError("Los enlaces y archivos especiales quedan fuera del proyecto.")
+                datos = lector.read(limite + 1)
+        if len(datos) > limite:
+            raise ValueError(f"El archivo supera {limite // 1024} KiB.")
+        return datos
 
     def leer(self, nombre):
-        ruta = self.ruta(nombre)
-        if not ruta.is_file():
-            raise ValueError("El archivo no existe dentro del proyecto.")
-        with ruta.open("rb") as lector:
-            datos = lector.read(MAX_ARCHIVO + 1)
-        if len(datos) > MAX_ARCHIVO:
-            raise ValueError("El archivo supera 512 KiB.")
-        salida = datos.decode("utf-8")
+        self.ruta(nombre)
+        salida = self._bytes(nombre, MAX_ARCHIVO).decode("utf-8")
         if "\x00" in salida:
             raise ValueError("El archivo no es texto UTF-8.")
         return salida
 
+    def inspeccionar(self, nombre, *, contenido=True):
+        extension = Path(nombre if isinstance(nombre, str) else "").suffix.lower()
+        with self._padre(nombre) as (fd, hoja):
+            tipo, info = self._tipo(fd, hoja)
+        datos = {"archivo": nombre, "tipo": tipo, "extension": extension, "bytes": info.st_size,
+                 "app_externa": tipo == "archivo" and extension in DOCUMENTOS_EXTERNOS}
+        if tipo != "archivo" or not contenido:
+            return datos
+        if extension in FORMATOS:
+            try:
+                texto = self.leer(nombre)
+                respuesta = {**datos, "visor": "texto", "texto": texto}
+                if extension == ".html":
+                    from core.visores_studio import html_estatico
+                    respuesta["fragmentos"] = html_estatico(texto)[:4000]
+                elif extension in {".csv", ".tsv"}:
+                    from csv import Error
+                    from core.visores_studio import tabla
+                    try:
+                        respuesta["filas"] = tabla(texto, extension)
+                    except Error as error:
+                        respuesta["aviso"] = "Tabla inválida: " + str(error)
+                return respuesta
+            except (ValueError, UnicodeError) as error:
+                return {**datos, "aviso": str(error)}
+        if extension in IMAGENES | {".pdf"}:
+            if info.st_size > MAX_VISOR:
+                return {**datos, "aviso": "La vista previa admite archivos de hasta 4 MiB."}
+            bruto = self._bytes(nombre, MAX_VISOR)
+            if extension == ".pdf":
+                from core.visores_studio import pdf_vista
+
+                try:
+                    return {**datos, "visor": "pdf", **pdf_vista(bruto)}
+                except (OSError, ValueError) as error:
+                    return {**datos, "aviso": str(error)}
+            return {**datos, "visor": "imagen", "base64": base64.b64encode(bruto).decode("ascii")}
+        return datos
+
+    def gestionar(self, accion, nombre, destino=None, *, texto=""):
+        with self.cerrojo, self._padre(nombre) as (fd, hoja):
+            if accion == "carpeta":
+                os.mkdir(hoja, 0o700, dir_fd=fd)
+            elif accion == "crear":
+                if Path(hoja).suffix.lower() not in FORMATOS:
+                    raise ValueError("Selecciona una extensión de texto compatible.")
+                if not isinstance(texto, str) or "\x00" in texto or len(texto.encode("utf-8")) > MAX_ARCHIVO:
+                    raise ValueError("Usa texto UTF-8 de hasta 512 KiB.")
+                self._publicar_nuevo(fd, hoja, texto.encode("utf-8"), 0o600)
+            else:
+                tipo, info = self._tipo(fd, hoja)
+                if accion == "papelera":
+                    with self._directorio() as raiz:
+                        try:
+                            os.mkdir(_TRASH, 0o700, dir_fd=raiz)
+                        except FileExistsError:
+                            pass
+                        caja = os.open(_TRASH, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=raiz)
+                        try:
+                            etiqueta = secrets.token_hex(6) + "-" + hoja
+                            _renombrar_sin_reemplazar(fd, hoja, caja, etiqueta)
+                        finally:
+                            os.close(caja)
+                    return {"archivo": nombre, "papelera": _TRASH + "/" + etiqueta}
+                with self._padre(destino) as (otro, nueva):
+                    if accion == "mover":
+                        _renombrar_sin_reemplazar(fd, hoja, otro, nueva)
+                    elif accion == "copiar":
+                        if tipo == "carpeta":
+                            if destino.startswith(nombre + "/"):
+                                raise ValueError("La copia no puede quedar dentro de la carpeta de origen.")
+                            self._copiar_carpeta(fd, hoja, otro, nueva)
+                        else:
+                            bruto = self._bytes(nombre, MAX_VISOR)
+                            self._publicar_nuevo(otro, nueva, bruto, stat.S_IMODE(info.st_mode) & 0o666)
+                return {"archivo": destino}
+        return {"archivo": nombre}
+
+    def _copiar_carpeta(self, padre, origen, destino, nombre):
+        opciones = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        temporal = ".cerebro-" + secrets.token_hex(8)
+        os.mkdir(temporal, 0o700, dir_fd=destino)
+        contador, restante = 0, 16 * 1024 * 1024
+
+        def copiar(entrada, salida, nivel):
+            nonlocal contador, restante
+            if nivel > 30:
+                raise ValueError("La carpeta supera la profundidad de copia.")
+            with os.scandir(entrada) as items:
+                for item in items:
+                    hoja = item.name
+                    self._partes(hoja)
+                    contador += 1
+                    if contador > 500:
+                        raise ValueError("La carpeta supera 500 entradas.")
+                    tipo, info = self._tipo(entrada, hoja)
+                    if tipo == "carpeta":
+                        os.mkdir(hoja, 0o700, dir_fd=salida)
+                        fuente = os.open(hoja, opciones, dir_fd=entrada)
+                        try:
+                            copia = os.open(hoja, opciones, dir_fd=salida)
+                            try:
+                                copiar(fuente, copia, nivel + 1)
+                            finally:
+                                os.close(copia)
+                        finally:
+                            os.close(fuente)
+                    else:
+                        fd = os.open(hoja, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=entrada)
+                        with os.fdopen(fd, "rb") as archivo:
+                            actual = os.fstat(archivo.fileno())
+                            if not stat.S_ISREG(actual.st_mode) or actual.st_nlink != 1:
+                                raise PermissionError("La carpeta contiene un enlace o archivo especial.")
+                            bruto = archivo.read(restante + 1)
+                        restante -= len(bruto)
+                        if restante < 0:
+                            raise ValueError("La carpeta supera 16 MiB.")
+                        self._publicar_nuevo(salida, hoja, bruto, stat.S_IMODE(info.st_mode) & 0o666)
+
+        publicado = False
+        try:
+            entrada = os.open(origen, opciones, dir_fd=padre)
+            try:
+                salida = os.open(temporal, opciones, dir_fd=destino)
+                try:
+                    copiar(entrada, salida, 0)
+                finally:
+                    os.close(salida)
+            finally:
+                os.close(entrada)
+            _renombrar_sin_reemplazar(destino, temporal, destino, nombre)
+            publicado = True
+        finally:
+            if not publicado:
+                shutil.rmtree(temporal, dir_fd=destino)
+
+    @staticmethod
+    def _publicar_nuevo(fd, hoja, bruto, modo):
+        temporal = ".cerebro-" + secrets.token_hex(8)
+        creado = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, modo, dir_fd=fd)
+        try:
+            with os.fdopen(creado, "wb") as archivo:
+                archivo.write(bruto)
+                archivo.flush()
+                os.fsync(archivo.fileno())
+            _renombrar_sin_reemplazar(fd, temporal, fd, hoja)
+        finally:
+            try:
+                os.unlink(temporal, dir_fd=fd)
+            except FileNotFoundError:
+                pass
+
     def guardar(self, nombre, texto, original):
-        ruta = self.ruta(nombre)
         if not isinstance(texto, str) or "\x00" in texto or len(texto.encode("utf-8")) > MAX_ARCHIVO:
             raise ValueError("Guarda texto UTF-8 de hasta 512 KiB.")
-        if self.leer(nombre) != original:
-            raise ValueError("El archivo cambió en disco. Vuelve a abrirlo antes de guardar.")
-        modo = stat.S_IMODE(ruta.stat().st_mode) & 0o777
-        with NamedTemporaryFile(dir=ruta.parent, delete=False) as archivo:
-            temporal = Path(archivo.name)
-            archivo.write(texto.encode("utf-8"))
-        try:
-            temporal.chmod(modo)
-            temporal.replace(ruta)
-        finally:
-            temporal.unlink(missing_ok=True)
+        with self.cerrojo, self._padre(nombre) as (fd, hoja):
+            if self.leer(nombre) != original:
+                raise ValueError("El archivo cambió en disco. Vuelve a abrirlo antes de guardar.")
+            _, info = self._tipo(fd, hoja)
+            temporal = ".cerebro-" + secrets.token_hex(8)
+            creado = os.open(temporal, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             stat.S_IMODE(info.st_mode) & 0o777, dir_fd=fd)
+            try:
+                with os.fdopen(creado, "wb") as archivo:
+                    archivo.write(texto.encode("utf-8"))
+                    archivo.flush()
+                    os.fsync(archivo.fileno())
+                _, actual = self._tipo(fd, hoja)
+                if (actual.st_ino, actual.st_mtime_ns, actual.st_size) != (info.st_ino, info.st_mtime_ns, info.st_size):
+                    raise ValueError("El archivo cambió en disco. Vuelve a abrirlo antes de guardar.")
+                os.replace(temporal, hoja, src_dir_fd=fd, dst_dir_fd=fd)
+            finally:
+                try:
+                    os.unlink(temporal, dir_fd=fd)
+                except FileNotFoundError:
+                    pass
 
     def analizar(self):
         self.propuestas.clear()

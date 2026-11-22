@@ -40,6 +40,14 @@ let sondeoOcupado = false;
 let chatOcupado = false;
 let chatActivo = null;
 let revisionVisible = null;
+let proyectoActivo = "";
+let archivoAbierto = null;
+let original = "";
+let inventarioProyecto = [];
+let carpetaActual = "";
+let revisionArchivo = 0;
+let firmaArchivos = "";
+let proyectoRecordado = null;
 
 async function api(ruta, datos) {
   const headers = {Authorization: "Bearer " + token};
@@ -111,7 +119,13 @@ async function conectar(nuevaClave) {
   activarVista();
   await mostrar(location.pathname === "/universe" ? "universe" : "studio");
   cargarConversacion(await api("conversaciones"));
-  if (modoWeb === "studio") await actualizarArchivos();
+  if (modoWeb === "studio") {
+    await actualizarArchivos();
+    if (!$("elegir-proyecto").disabled) {
+      proyectoRecordado = await solicitarProyecto("recordado");
+      $("recuperar-proyecto").hidden = !proyectoRecordado.carpeta;
+    }
+  }
 }
 
 $("acceso").addEventListener("submit", evento => {
@@ -161,6 +175,9 @@ async function estado() {
   $("metricas").textContent = metricas.filter(Boolean).join("  ·  ");
   const origen = datos.identidad.creador ? "Creador declarado: " + datos.identidad.creador : "Identidad sin configurar";
   $("identidad").textContent = origen + " · " + (datos.solo_lectura ? "Solo lectura" : datos.permisos.join(", "));
+  $("elegir-proyecto").disabled = !datos.proyectos_autorizables;
+  if (!datos.proyectos_autorizables) $("proyecto-activo").textContent = "Abre con el lanzador de escritorio para autorizar carpetas.";
+
 }
 
 async function sondear() {
@@ -175,7 +192,10 @@ async function sondear() {
         if (!chatOcupado) cargarConversacion(datos);
       }
     }
-    if (vista === "studio" && modoWeb === "studio") await actualizarTareas();
+    if (vista === "studio" && modoWeb === "studio") {
+      await actualizarTareas();
+      if (proyectoActivo) await actualizarArchivos();
+    }
     if (vista === "universe") {
       nodos = (await api("nodos")).nodos;
       filtrar();
@@ -218,23 +238,40 @@ async function conversar(texto) {
   const controles = [$("enviar-chat"), $("ver-chats"), $("borrar-chat"), $("nuevo-chat"), $("lista-chats"), ...document.querySelectorAll("[data-chat]")];
   controles.forEach(control => { control.disabled = true; });
   $("estado-chat").hidden = false;
+  $("cancelar-coordinacion").hidden = esChat;
   activarVista();
   try {
     if ((await api("conversacion-activa")).activa !== chatActivo) {
       cargarConversacion(await api("conversaciones"));
       throw new Error("La conversación cambió en otra interfaz. Revisa el chat y vuelve a enviar el mensaje.");
     }
+    if (!esChat && proyectoActivo && /^(?:cerebro[, ]+)?crea (?:una )?p[aá]gina web[.!]?$/iu.test(texto)) {
+      const nombre = prompt("Confirma el nombre de la página estática nueva", prefijoProyecto() + "index.html");
+      if (!nombre) return false;
+      const creado = await solicitarProyecto("crear_pagina", {nombre, confirmar: true});
+      agregarMensaje("Tú", texto);
+      agregarMensaje("Cerebro", "Creé «" + creado.archivo + "». Puedes abrirlo desde el explorador.");
+      await actualizarArchivos();
+      if (!cambiosPendientes()) await abrirArchivo(creado.archivo);
+      return true;
+    }
     const salida = await api("chat", {mensaje: texto, modo: modoWeb, cliente: idInterfaz, conversacion: chatActivo});
     if (salida.revision_anterior === revisionVisible) revisionVisible = salida.revision;
     $("sugerencias-chat").hidden = true;
     agregarMensaje("Tú", texto);
     agregarMensaje("Cerebro", salida.respuesta);
+    if (!esChat) {
+      presentarResultados(salida);
+      if (salida.vista === "universe") await mostrar("universe");
+      if (salida.vista === "robot") await mostrar("body");
+    }
     if (salida.abrir === "studio" && modoWeb === "chat") location.assign("/proyecto");
     return true;
   } finally {
     chatOcupado = false;
     controles.forEach(control => { control.disabled = false; });
     $("estado-chat").hidden = true;
+    $("cancelar-coordinacion").hidden = true;
   }
 }
 
@@ -408,24 +445,292 @@ $("adjunto").addEventListener("change", async () => {
   finally { $("adjunto").value = ""; }
 });
 
+function central(id) {
+  for (const control of document.querySelectorAll("[data-central]")) {
+    const activo = control.dataset.central === id;
+    control.setAttribute("aria-pressed", String(activo));
+    $(control.dataset.central).hidden = !activo;
+  }
+}
+for (const control of document.querySelectorAll("[data-central]")) {
+  control.addEventListener("click", () => central(control.dataset.central));
+}
+
+function elementoTexto(etiqueta, texto) {
+  const nodo = document.createElement(etiqueta);
+  nodo.textContent = texto;
+  return nodo;
+}
+
+function presentarResultados(datos) {
+  const resultados = datos.especialistas || (datos.experiencias || []).flatMap(exp => exp.resultados);
+  if (!resultados.length) return;
+  const area = $("resultado-central");
+  area.replaceChildren(elementoTexto("h2", "Resultados y evidencias"));
+  for (const resultado of resultados) {
+    const detalle = document.createElement("details");
+    detalle.open = true;
+    detalle.append(elementoTexto("summary", resultado.especialista + " · " + resultado.estado));
+    if (resultado.error) detalle.append(elementoTexto("p", resultado.error));
+    if (resultado.plan) {
+      const listaPlan = document.createElement("ol");
+      for (const paso of resultado.plan) listaPlan.append(elementoTexto("li", paso.titulo + " · " + (paso.estado || "previsto")));
+      detalle.append(listaPlan);
+    }
+    if (resultado.simulacion) {
+      const sim = resultado.simulacion;
+      detalle.append(elementoTexto("p", "Simulación · " + sim.supuestos));
+      for (const clave of ["p50", "p90"]) {
+        const valor = sim[clave + "_horas"];
+        const medidor = document.createElement("meter");
+        medidor.max = Math.max(1, sim.p90_horas, sim.p50_horas);
+        medidor.value = valor;
+        medidor.setAttribute("aria-label", clave + " · " + valor + " horas");
+        detalle.append(elementoTexto("p", clave + " · " + valor + " h"), medidor);
+      }
+    }
+    for (const ev of resultado.evidencia || []) {
+      if (ev.tipo === "fuente") {
+        const fuente = elementoTexto("p", ev.titulo + " · " + ev.url);
+        if (ev.extracto) fuente.append(elementoTexto("small", " " + ev.extracto));
+        detalle.append(fuente);
+      } else {
+        detalle.append(elementoTexto("pre", JSON.stringify(ev, null, 2)));
+      }
+    }
+    if (resultado.sesion) detalle.append(elementoTexto("p", "Sesión de revisión en CAZEL Studio: " + resultado.sesion));
+    if (resultado.ejercicio) detalle.append(elementoTexto("p", resultado.ejercicio.pregunta));
+    if (resultado.evaluacion) detalle.append(elementoTexto("p", resultado.evaluacion.detalle));
+    for (const advertencia of resultado.avisos || []) detalle.append(elementoTexto("p", advertencia));
+    area.append(detalle);
+  }
+  central("resultado-central");
+}
+
+function solicitarProyecto(accion, datos = {}, esperado = proyectoActivo) {
+  return api("proyecto", {accion, cliente: idInterfaz, carpeta_esperada: esperado, ...datos});
+}
+function prefijoProyecto() { return carpetaActual ? carpetaActual + "/" : ""; }
+function cambiosPendientes() { return $("contenido").value !== original.replace(/\r\n?/g, "\n"); }
+
+function presentarArchivo(datos) {
+  const area = $("visor-central");
+  area.replaceChildren(elementoTexto("h2", datos.archivo),
+                       elementoTexto("p", datos.aviso || datos.bytes + " bytes"));
+  if (["imagen", "pdf"].includes(datos.visor) && datos.base64) {
+    const formatos = {".png": "png", ".gif": "gif", ".jpg": "jpeg", ".jpeg": "jpeg", ".webp": "webp", ".pdf": "png"};
+    const tipo = formatos[datos.extension];
+    if (tipo) {
+      const imagen = document.createElement("img");
+      imagen.alt = datos.archivo;
+      imagen.src = "data:image/" + tipo + ";base64," + datos.base64;
+      area.append(imagen);
+      if (datos.visor === "pdf" && datos.texto) area.append(elementoTexto("pre", datos.texto));
+    }
+  } else if (datos.fragmentos) {
+    const vistaHTML = document.createElement("div");
+    vistaHTML.className = "html-estatico";
+    area.append(elementoTexto("p", "Vista estática · sin scripts ni recursos externos"), vistaHTML);
+    for (const [texto, etiqueta] of datos.fragmentos) {
+      vistaHTML.append(elementoTexto(etiqueta === "titulo" ? "strong" : "span", texto));
+    }
+  } else if (datos.filas) {
+    const tabla = document.createElement("table");
+    for (const fila of datos.filas) {
+      const tr = document.createElement("tr");
+      tr.append(...fila.map(celda => elementoTexto("td", celda)));
+      tabla.append(tr);
+    }
+    area.append(tabla);
+  } else if (datos.texto !== undefined) {
+    area.append(elementoTexto("pre", datos.texto));
+  }
+  if (datos.app_externa) {
+    const esperado = proyectoActivo;
+    area.append(boton("Abrir en aplicación local", async () => {
+      if (!confirm("¿Abrir el documento en la aplicación predeterminada?")) return;
+      const respuesta = await solicitarProyecto("abrir_externo", {nombre: datos.archivo, confirmar: true}, esperado);
+      aviso(respuesta.salida);
+    }));
+  }
+  central("visor-central");
+}
+
 async function abrirArchivo(nombre) {
-  $("contenido").value = (await api("archivo?nombre=" + encodeURIComponent(nombre))).texto;
+  if (cambiosPendientes() && !confirm("¿Abrir otro archivo y descartar los cambios sin guardar?")) return;
+  const revision = ++revisionArchivo;
+  const esperado = proyectoActivo;
+  const contenidoPrevio = $("contenido").value;
+  const datos = esperado ? await solicitarProyecto("inspeccionar", {nombre}, esperado)
+    : await api("archivo?nombre=" + encodeURIComponent(nombre));
+  if (esperado !== proyectoActivo || revision !== revisionArchivo || contenidoPrevio !== $("contenido").value) return;
+  archivoAbierto = datos.visor === "texto" || !esperado ? nombre : null;
+  original = archivoAbierto ? datos.texto : "";
+  $("contenido").value = original;
+  $("contenido").readOnly = Boolean(esperado && !archivoAbierto);
   $("archivo").value = nombre;
   $("archivo-activo").textContent = nombre;
+  if (esperado && (datos.visor !== "texto" || [".html", ".md", ".csv", ".tsv"].includes(datos.extension))) {
+    presentarArchivo(datos);
+  } else central("editor-central");
+  if (esperado) await solicitarProyecto("recordar", {nombre}, esperado);
 }
+
+function pintarArchivos() {
+  const filtro = $("filtro-archivos").value.trim().toLocaleLowerCase("es");
+  const tipo = $("tipo-archivo").value;
+  const entradas = inventarioProyecto.filter(({ruta, tipo: clase}) => {
+    const formato = clase === "carpeta" ? "carpeta" : /\.(png|gif|jpe?g|webp)$/iu.test(ruta) ? "imagen"
+      : /\.pdf$/iu.test(ruta) ? "pdf" : "texto";
+    return (!tipo || formato === tipo) && (filtro ? ruta.toLocaleLowerCase("es").includes(filtro)
+      : ruta.split("/").slice(0, -1).join("/") === carpetaActual);
+  });
+  const firma = JSON.stringify([carpetaActual, entradas]);
+  if (firma === firmaArchivos) return;
+  firmaArchivos = firma;
+  lista($("archivos"), entradas, ({ruta, tipo: clase}) => boton(ruta + (clase === "carpeta" ? "/" : ""), async () => {
+    if (clase === "carpeta") {
+      carpetaActual = ruta;
+      $("filtro-archivos").value = "";
+      pintarArchivos();
+    } else await abrirArchivo(ruta);
+  }));
+  if (carpetaActual) $("archivos").prepend(boton("Subir carpeta", async () => {
+    carpetaActual = carpetaActual.split("/").slice(0, -1).join("/");
+    pintarArchivos();
+  }));
+}
+
 async function actualizarArchivos() {
-  lista($("archivos"), (await api("archivos")).archivos, nombre => boton(nombre, () => abrirArchivo(nombre)));
+  const esperado = proyectoActivo;
+  const datos = esperado ? await solicitarProyecto("listar", {}, esperado) : await api("archivos");
+  if (esperado !== proyectoActivo) return;
+  inventarioProyecto = datos.entradas || datos.archivos.map(ruta => ({ruta, tipo: "archivo"}));
+  pintarArchivos();
 }
+
+async function abrirProyecto(carpeta) {
+  if (!carpeta || !confirm("¿Autorizar esta carpeta en Studio? " + carpeta)) return false;
+  if (cambiosPendientes() && !confirm("¿Descartar los cambios sin guardar?")) return false;
+  const datos = await solicitarProyecto("abrir", {carpeta, confirmar: true});
+  proyectoActivo = datos.carpeta;
+  carpetaActual = "";
+  archivoAbierto = null;
+  original = "";
+  $("contenido").value = "";
+  $("contenido").readOnly = false;
+  $("archivo").value = "";
+  $("archivo-activo").textContent = "Sin archivo abierto";
+  $("proyecto-activo").textContent = proyectoActivo;
+  for (const id of ["gestionar-proyecto", "analizar-proyecto", "pruebas-proyecto"]) $(id).hidden = false;
+  await solicitarProyecto("recordar");
+  await actualizarArchivos();
+  central("editor-central");
+  return true;
+}
+
+$("elegir-proyecto").addEventListener("click", () => ejecutar($("elegir-proyecto"), async () => {
+  const carpeta = prompt("Carpeta absoluta de proyecto");
+  if (carpeta) await abrirProyecto(carpeta);
+}));
+$("recuperar-proyecto").addEventListener("click", () => ejecutar($("recuperar-proyecto"), async () => {
+  const anterior = proyectoRecordado;
+  if (anterior?.carpeta && await abrirProyecto(anterior.carpeta) && anterior.archivo) {
+    await abrirArchivo(anterior.archivo);
+  }
+}));
+$("consultar-seleccion").addEventListener("click", () => ejecutar($("consultar-seleccion"), async () => {
+  const editor = $("contenido");
+  const texto = editor.value.slice(editor.selectionStart, Math.min(editor.selectionEnd, editor.selectionStart + 4000));
+  if (!proyectoActivo || !archivoAbierto || !texto) throw new Error("Selecciona código en un proyecto autorizado.");
+  const pregunta = prompt("Pregunta sobre la selección", "Explícame este fragmento");
+  if (!pregunta) return;
+  const resultado = await solicitarProyecto("fragmento", {nombre: archivoAbierto, texto, pregunta});
+  agregarMensaje("Tú", pregunta);
+  agregarMensaje("Cerebro", resultado.respuesta);
+}));
+$("filtro-archivos").addEventListener("input", pintarArchivos);
+$("tipo-archivo").addEventListener("change", pintarArchivos);
+
+for (const control of document.querySelectorAll("[data-archivo]")) control.addEventListener("click", () => ejecutar(control, async () => {
+  if (!proyectoActivo) return;
+  const accion = control.dataset.archivo;
+  const esNuevo = ["crear", "carpeta"].includes(accion);
+  const nombre = prompt(esNuevo ? "Ruta nueva dentro del proyecto" : "Ruta de origen dentro del proyecto",
+                        esNuevo ? prefijoProyecto() : $("archivo").value);
+  if (!nombre) return;
+  const destino = ["mover", "copiar"].includes(accion) ? prompt("Ruta de destino", nombre) : null;
+  if (["mover", "copiar"].includes(accion) && (!destino || destino === nombre)) return;
+  const afecta = archivoAbierto && (archivoAbierto === nombre || archivoAbierto.startsWith(nombre + "/"));
+  if (afecta && cambiosPendientes() && ["mover", "papelera"].includes(accion)) {
+    throw new Error("Guarda primero los cambios del archivo abierto.");
+  }
+  if (accion === "papelera" && !confirm("¿Enviar a la papelera del proyecto? " + nombre)) return;
+  const salida = await solicitarProyecto(accion, {nombre, destino, confirmar: true});
+  if (afecta && ["mover", "papelera"].includes(accion)) {
+    archivoAbierto = null;
+    original = "";
+    $("contenido").value = "";
+    $("archivo-activo").textContent = "Sin archivo abierto";
+    $("archivo").value = "";
+  }
+  await actualizarArchivos();
+  aviso(salida.papelera ? "Papelera: " + salida.papelera : "Proyecto actualizado.");
+  if (accion === "crear" && !cambiosPendientes()) await abrirArchivo(salida.archivo);
+}));
+
 $("abrir-archivo").addEventListener("submit", evento => {
   evento.preventDefault();
   ejecutar(evento.submitter, () => abrirArchivo($("archivo").value.trim()));
 });
 $("guardar").addEventListener("click", () => ejecutar($("guardar"), async () => {
   const nombre = $("archivo").value.trim();
-  await api("archivo", {nombre, texto: $("contenido").value});
+  const crlf = original.includes("\r\n") && !/(^|[^\r])\n/.test(original);
+  const texto = crlf ? $("contenido").value.replace(/\n/g, "\r\n") : $("contenido").value;
+  if (proyectoActivo) {
+    if (nombre !== archivoAbierto) throw new Error("Abre el archivo desde el explorador antes de guardar.");
+    if (!confirm("¿Guardar en el proyecto? " + nombre)) return;
+    await solicitarProyecto("guardar", {nombre, texto, original, confirmar: true});
+  } else await api("archivo", {nombre, texto});
+  original = texto;
   $("archivo-activo").textContent = nombre;
   await actualizarArchivos();
   aviso("Archivo guardado.");
+}));
+
+$("analizar-proyecto").addEventListener("click", () => ejecutar($("analizar-proyecto"), async () => {
+  const esperado = proyectoActivo;
+  const informe = await solicitarProyecto("analizar", {}, esperado);
+  if (esperado !== proyectoActivo) return;
+  const area = $("resultado-central");
+  area.replaceChildren(elementoTexto("h2", "Análisis de proyecto"),
+    elementoTexto("p", informe.revisados + " archivos Python revisados."),
+    elementoTexto("pre", informe.hallazgos.join("\n")));
+  for (const cambio of informe.propuestas) {
+    const bloque = document.createElement("details");
+    bloque.append(elementoTexto("summary", cambio.archivo), elementoTexto("pre", cambio.diff),
+      boton("Aplicar propuesta de " + cambio.archivo, async () => {
+        if (esperado !== proyectoActivo) throw new Error("Cambió el proyecto.");
+        if (cambiosPendientes()) throw new Error("Guarda primero los cambios del editor.");
+        if (!confirm("¿Aplicar el diff mostrado?")) return;
+        await solicitarProyecto("aplicar", {id: cambio.id, confirmar: true}, esperado);
+        bloque.replaceChildren(elementoTexto("summary", cambio.archivo + " · aplicado"));
+        await actualizarArchivos();
+        if (archivoAbierto === cambio.archivo) await abrirArchivo(cambio.archivo);
+      }));
+    area.append(bloque);
+  }
+  central("resultado-central");
+}));
+$("pruebas-proyecto").addEventListener("click", () => ejecutar($("pruebas-proyecto"), async () => {
+  if (!confirm("¿Ejecutar unittest dentro del aislamiento?")) return;
+  await solicitarProyecto("pruebas", {confirmar: true});
+  central("pruebas-central");
+  await actualizarTareas();
+}));
+$("cancelar-coordinacion").addEventListener("click", () => ejecutar($("cancelar-coordinacion"), async () => {
+  const salida = await api("chat", {mensaje: "Cancela la coordinación", modo: "studio", cliente: idInterfaz});
+  aviso(salida.respuesta);
 }));
 
 async function actualizarTareas() {
@@ -441,8 +746,14 @@ async function actualizarTareas() {
 }
 for (const elemento of document.querySelectorAll("[data-tarea]")) {
   elemento.addEventListener("click", () => ejecutar(elemento, async () => {
-    await api("tarea", {accion: elemento.dataset.tarea, nombre: $("archivo").value.trim()});
-    await actualizarTareas();
+    if (proyectoActivo && elemento.dataset.tarea === "sintaxis") {
+      const dato = await solicitarProyecto("validar", {nombre: $("archivo").value.trim()});
+      aviso(dato.salida);
+    } else {
+      await api("tarea", {accion: elemento.dataset.tarea, nombre: $("archivo").value.trim()});
+      central("pruebas-central");
+      await actualizarTareas();
+    }
   }));
 }
 $("limpiar-tareas").addEventListener("click", () => ejecutar($("limpiar-tareas"), async () => {
