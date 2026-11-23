@@ -642,3 +642,75 @@ consulta hasta 20 repositorios con la sesión ya configurada en
 **«Compara GitHub Dirix24/cerebro main con otra-rama»** y sustituye
 `otra-rama` por una referencia existente. Esta ruta compara referencias
 remotas. Consulta [la auditoría, las pruebas y los límites](docs/NEXT_VISOR_INSTALACION.md).
+
+### Lecciones verificadas del Profesor
+
+Configura un modelo local como Profesor (Ollama o llama.cpp). En Studio,
+Terminal, chat web o el Acompañante escribe **«Profesor, prepara una
+lección de matemáticas»**. También están disponibles programación,
+español, razonamiento y herramientas. El modelo elige una variante y
+la resuelve. Cerebro comprueba el resultado con la respuesta de su
+banco de competencias. Si coincide, puedes guardar el ejemplo con
+**«Aprueba lección del Profesor»** desde la misma conversación.
+
+Desde el repositorio, utiliza el mismo `CEREBRO_HOME` con el que
+arrancas Cerebro, si lo personalizaste:
+
+```bash
+.venv/bin/python entrenar_ejemplos_aprobados.py
+.venv/bin/python entrenar_ejemplos_aprobados.py --aplicar --entrenar
+.venv/bin/python entrenar_ejemplos_aprobados.py --alumno DARAS --aplicar
+.venv/bin/python entrenar_ejemplos_aprobados.py --alumno CAZEL --aplicar
+```
+
+El primer comando muestra cuántos ejemplos hay. El segundo prepara el
+corpus y entrena un candidato aislado de Cerebro usando el checkpoint y
+la validación fija existentes. Si supera los criterios, queda para
+revisión. Los dos últimos exportan JSONL en
+`data/lecciones-profesor/` para una futura importación en cada
+especialista. La exportación conserva el origen y el criterio de
+verificación. No inicia entrenamiento en los repositorios hermanos.
+
+En la verificación de este flujo se usó un doble del Profesor para
+crear una lección y se entrenó un candidato NumPy real durante tres
+pasos en un directorio temporal. La pérdida bajó de 0,100032 a
+0,099936 bits por byte y el acierto exacto en 32 reformulaciones bajó
+del 46,9 % al 43,8 %. El control de regresión descartó el candidato.
+
+**«Consulta al equipo: [pregunta]»** pide aportes a DARAS y CAZEL.
+CEREBRO añade una comprobación local cuando reconoce una operación
+matemática o código Python. Si PROFESOR está configurado, el modelo
+local prepara una conclusión y un paso para practicar. Al repetir
+la misma pregunta recibe también un extracto de la revisión previa
+para contrastarlo con los resultados nuevos. Esa revisión se conserva
+como experiencia, separada del banco de lecciones verificadas.
+
+**«Consulta al equipo en internet: [pregunta]»** permite a DARAS usar
+la red si la sesión la tiene habilitada. CAZEL conserva sus límites de
+proyecto y PROFESOR usa el motor local configurado.
+
+El instalador informa el perfil de cámara recomendado. El control
+gestual elige el perfil ligero con menos de 4 GiB de RAM disponible o
+menos de cuatro CPU lógicas. Puedes fijarlo con
+`CEREBRO_CAMARA_PERFIL=ligero` o `CEREBRO_CAMARA_PERFIL=normal`.
+
+En el Acompañante, **Accesos → Rutinas de escritorio** permite elegir
+una ventana para enseñar, autorizar la observación, revisar y aprobar
+los pasos, y repetir una rutina guardada. La observación dura hasta
+90 segundos y registra estados compatibles de la ventana elegida
+con un indicador visible. Funciona con permisos de escritorio y
+herramientas X11/GTK. El menú no activa la observación al abrirse.
+
+Universe enlaza las lecciones aprobadas con el banco de PROFESOR.
+Cada nodo representa un ejemplo comprobado con su referencia.
+Cuando falta una respuesta local y la investigación automática está
+habilitada, las consultas de definición pública admitidas pueden
+aportar una fuente a la explicación de PROFESOR. La fuente se
+muestra junto a la respuesta.
+
+Con Internet habilitado, **«Quiero simular electrónica»** abre
+Falstad en el navegador predeterminado. También puedes decir
+**«Abre Tinkercad»** o **«Abre Wokwi»**. Desde el Acompañante,
+**«Noticias de hoy»** consulta las fuentes públicas disponibles,
+y **«Recuérdame revisar las noticias mañana a las nueve»** programa
+un aviso local. La apertura del simulador se delega al navegador.

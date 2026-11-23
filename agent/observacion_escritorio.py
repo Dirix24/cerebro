@@ -58,6 +58,8 @@ class Observador:
         agente = self.escritorio.nucleo.agente
         while not rutina.detener.wait(.4) and monotonic() < rutina.caduca:
             if rutina.indicador is not None and rutina.indicador.poll() is not None:
+                if rutina.indicador.returncode:
+                    rutina.motivo = "El indicador visible no pudo mantenerse abierto."
                 rutina.detener.set()
                 break
             if not agente.tiene_permisos("READ", "WRITE"):
@@ -156,8 +158,7 @@ class Observador:
                 if semantica and not controles:
                     return "La ventana no ofrece casillas accesibles utilizables."
                 rutina = Observacion(nombre, ventana, estado, monotonic() + 90, controles)
-                if semantica:
-                    rutina.indicador = controles_accesibles.indicador()
+                rutina.indicador = controles_accesibles.indicador()
                 self.rutinas[cliente] = rutina
                 Thread(target=self._observar, args=(rutina,), daemon=True).start()
             return "Observación iniciada. Manipula la ventana elegida y di «Detén la observación»."

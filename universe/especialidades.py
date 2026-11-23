@@ -333,11 +333,21 @@ def consultar(nucleo, pregunta, intencion):
         resultado = _resultado("PROFESOR", "ok", evaluacion={**nota, "experiencia": activa})
         ident = memoria.guardar("Evaluación de " + activa, [resultado])
         return {"respuesta": sintetizar([resultado]), "experiencia": ident, "especialistas": [resultado]}
+    equipo = re.match(r"^(?:consulta al equipo|pregunta al equipo)(?: en internet)?[: ]+", intencion)
     trabajos, profesor = _trabajos(intencion, nucleo.internet)
+    if equipo:
+        red_equipo = nucleo.internet and equipo[0].strip(": ").endswith("en internet")
+        trabajos = [("DARAS", "investigar", red_equipo), ("CAZEL", "analizar", False)]
+        profesor = True
     if not trabajos:
         return None
     nucleo.exigir_permisos("READ", "WRITE")
     objetivo = pregunta[:600]
+    if equipo:
+        objetivo = re.sub(r"^(?:cerebro[, ]+)?(?:consulta|pregunta) al equipo(?: en internet)?[: ]+", "", pregunta, flags=re.I).strip()[:360]
+        if not objetivo:
+            return {"respuesta": "Indica la pregunta después de «Consulta al equipo»."}
+    revision = None
     with nucleo.coordinacion.turno() as cancelacion:
         if cancelacion is None:
             return {"respuesta": "Ya hay una coordinación activa. Puedes pedir que se cancele."}
@@ -347,7 +357,38 @@ def consultar(nucleo, pregunta, intencion):
                                    red=red, cancelacion=cancelacion)
                        for region, accion, red in trabajos]
             resultados = [futuro.result() for futuro in futuros]
-    if profesor:
+        if equipo and not cancelacion.is_set():
+            from core.matematicas_local import consultar as calcular
+            from core.analizador_codigo_local import consultar as revisar_codigo
+            from core.documentos_usuario import _normalizar
+
+            aporte_local = calcular(_normalizar(objetivo)) or revisar_codigo(objetivo)
+            profesor_local = nucleo.profesor
+            if profesor_local.configurado:
+                aportes = [{"especialista": r["especialista"], "estado": r["estado"],
+                            "extracto": sintetizar([r])[:320]} for r in resultados]
+                aportes.append({"especialista": "CEREBRO", "extracto": aporte_local or
+                                "Organizó la consulta y revisó la disponibilidad de los aportes."})
+                anterior = next((resultado["conclusion"]
+                                 for exp in memoria.recientes(limite=5, tema=objetivo)
+                                 if exp["objetivo"] == objetivo
+                                 for resultado in exp["resultados"] if resultado.get("conclusion")), None)
+                if anterior:
+                    aportes.append({"especialista": "PROFESOR", "estado": "revision_anterior_sin_verificar",
+                                    "extracto": anterior[:300]})
+                try:
+                    texto = profesor_local.sintetizar_equipo(objetivo, aportes)
+                    if not cancelacion.is_set():
+                        revision = _resultado("PROFESOR", "ok", conclusion=texto)
+                except (RuntimeError, ValueError):
+                    revision = _resultado("PROFESOR", "no_disponible", "El modelo local no devolvió una revisión.")
+            else:
+                revision = _resultado("PROFESOR", "no_disponible", "Configura un modelo local para sintetizar los aportes.")
+        if equipo and cancelacion.is_set():
+            return {"respuesta": "Coordinación cancelada.", "especialistas": resultados}
+    if equipo:
+        resultados.append(revision)
+    elif profesor:
         plan = next((r["plan"] for r in resultados if r.get("plan")), [])
         ejercicio = ejercicio_dependencias(plan)
         resultados.append(_resultado("PROFESOR", "ok", ejercicio=ejercicio) if ejercicio else
@@ -357,6 +398,11 @@ def consultar(nucleo, pregunta, intencion):
     ident = memoria.guardar(objetivo, resultados, conversacion=conversacion)
     publicar("consolidado", "Experiencia de especialistas guardada")
     respuesta = sintetizar(resultados)
+    if equipo:
+        if revision.get("conclusion"):
+            respuesta += "\n\nRevisión de PROFESOR (modelo local)\n" + revision["conclusion"]
+        if "en internet" in equipo[0] and not nucleo.internet:
+            respuesta += "\nInternet está desactivado. DARAS trabajó con el permiso de red deshabilitado."
     if hay_ejercicio:
         respuesta += "\nPuedes contestar «Mi respuesta es IDENTIFICADOR»."
     if re.search(r"\b(?:desarrolla|programa)\b", intencion) and not any(r.get("sesion") for r in resultados):

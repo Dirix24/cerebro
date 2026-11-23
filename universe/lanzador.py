@@ -454,7 +454,7 @@ def terminal(sesion):
 def escritorio(sesion):
     import queue
     import tkinter as tk
-    from tkinter import messagebox, ttk
+    from tkinter import messagebox, simpledialog, ttk
 
     try:
         ventana = tk.Tk()
@@ -813,6 +813,35 @@ def escritorio(sesion):
                            ("Terminal", lanzar_terminal), ("Universe", lanzar_universe)):
         menu_acciones.add_command(label=nombre, command=accion)
     menu_acciones.add_separator()
+    def orden_rutina(orden):
+        if ocupado:
+            return
+        entrada.delete(0, "end")
+        entrada.insert(0, orden)
+        enviar()
+
+    def elegir_rutina(observar=False):
+        if ocupado:
+            return
+        if observar:
+            ventana_elegida = simpledialog.askstring("Enseñar una rutina", "Aplicación o título de la ventana",
+                                                      parent=ventana)
+            if not ventana_elegida:
+                return
+        nombre = simpledialog.askstring("Rutina de escritorio", "Nombre de la rutina", parent=ventana)
+        if nombre:
+            orden_rutina(f"Observa la ventana de {ventana_elegida} como {nombre}" if observar
+                         else f"Repite la demostración {nombre}")
+
+    rutinas = tk.Menu(menu_acciones, tearoff=False)
+    rutinas.add_command(label="Elegir ventana para enseñar…", command=lambda: elegir_rutina(True))
+    for etiqueta, orden in (("Autorizar observación", "Autoriza observación"),
+                           ("Detener y revisar", "Detén la observación"),
+                           ("Aprobar rutina", "Aprueba la observación"),
+                           ("Cancelar observación", "Cancela la observación")):
+        rutinas.add_command(label=etiqueta, command=lambda orden=orden: orden_rutina(orden))
+    rutinas.add_command(label="Repetir rutina…", command=elegir_rutina)
+    menu_acciones.add_cascade(label="Rutinas de escritorio", menu=rutinas)
     menu_acciones.add_command(label="Copiar respuesta", command=copiar_respuesta)
     menu_acciones.add_command(label="Elegir audio", command=audio)
     accesos.configure(menu=menu_acciones)

@@ -4,12 +4,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-def aprobar(ruta, pregunta, respuesta):
+def aprobar(ruta, pregunta, respuesta, *, procedencia=None):
     if not all(isinstance(t, str) and 1 <= len(t.strip()) <= 2000
                for t in (pregunta, respuesta)):
         raise ValueError("Pregunta y respuesta deben tener entre 1 y 2000 caracteres")
     registro = {"pregunta": pregunta.strip(), "respuesta": respuesta.strip(),
                 "aprobado": True, "fecha": datetime.now(timezone.utc).isoformat()}
+    if procedencia is not None:
+        registro["procedencia"] = procedencia
     destino = Path(ruta)
     destino.parent.mkdir(parents=True, exist_ok=True)
     with destino.open("a", encoding="utf-8") as f:

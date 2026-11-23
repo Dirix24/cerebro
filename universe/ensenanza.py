@@ -1,4 +1,5 @@
 """Trabajo supervisado compartido entre las interfaces locales."""
+import re
 from threading import Lock
 from time import monotonic
 
@@ -12,12 +13,57 @@ class Ensenanza:
         self.autorizacion = None
         self.en_curso = False
         self.cancelado = False
+        self.lecciones = {}
 
     def cancelar(self):
         with self.cerrojo:
             self.cancelado = True
 
+    def leccion(self, nucleo, orden, clave):
+        from core.ejemplos_aprobados import aprobar
+        from core.lecciones_profesor import MATERIAS, preparar
+
+        solicitud = re.fullmatch(r"(?:profesor[, ]+)?prepara (?:una )?leccion de (.+)", orden)
+        if orden != "aprueba leccion del profesor" and not solicitud:
+            return None
+        nucleo.exigir_permisos("READ", "WRITE")
+        if orden == "aprueba leccion del profesor":
+            with self.cerrojo:
+                pendiente = self.lecciones.get(clave)
+                if pendiente is None or pendiente[0] < monotonic():
+                    self.lecciones.pop(clave, None)
+                    return {"respuesta": "Pide al Profesor una lección primero en este chat."}
+                leccion = pendiente[1]
+                destino = nucleo.raiz / "data" / "ejemplos_aprobados.jsonl"
+                if destino.is_symlink() or destino.parent.is_symlink():
+                    raise PermissionError("El banco de entrenamiento debe permanecer en los datos locales.")
+                aprobar(destino, leccion["pregunta"], leccion["respuesta"],
+                        procedencia={k: v for k, v in leccion.items() if k not in {"pregunta", "respuesta"}})
+                del self.lecciones[clave]
+            return {"respuesta": "Lección verificada guardada en el banco de entrenamiento. Los pesos siguen pendientes de entrenamiento y evaluación.",
+                    "leccion": leccion}
+        materia = MATERIAS.get(solicitud[1])
+        if not materia:
+            return {"respuesta": "Materias disponibles: " + ", ".join(MATERIAS.values()) + "."}
+        with self.cerrojo:
+            self.lecciones.pop(clave, None)
+        if not nucleo.profesor.configurado:
+            return {"respuesta": "Configura un modelo local Ollama o llama.cpp como Profesor."}
+        try:
+            leccion = preparar(nucleo.profesor, materia)
+        except (RuntimeError, ValueError) as error:
+            return {"respuesta": f"No pude verificar la lección: {error}"}
+        with self.cerrojo:
+            if len(self.lecciones) >= 32:
+                self.lecciones.pop(next(iter(self.lecciones)))
+            self.lecciones[clave] = (monotonic() + 300, leccion)
+        return {"respuesta": f"{leccion['pregunta']}\nRespuesta comprobada: {leccion['respuesta']}. "
+                "Para incorporarla al banco, escribe «Aprueba lección del Profesor».", "leccion": leccion}
+
     def consultar(self, nucleo, orden, cliente):
+        leccion = self.leccion(nucleo, orden, cliente)
+        if leccion is not None:
+            return leccion
         if orden not in {"estado del alumno", "entrenar alumno", "confirma entrenar alumno",
                          "cancela entrenar alumno"}:
             return None
