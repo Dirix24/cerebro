@@ -247,7 +247,11 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         estado.set("Evaluando el modelo con fichas locales…")
         publicar(lambda: pedir("evaluar-alumno"), mostrar_nota)
 
-    mapa = MapaStudio(paginas, actualizar_mapa, analizar_universe, evaluar_universe)
+    def eliminar_recuerdo(nodo):
+        if messagebox.askyesno("Eliminar recuerdo", f"¿Eliminar «{nodo['titulo']}» de la memoria?", parent=app):
+            publicar(lambda: pedir("nodos", {"id": nodo["id"], "confirmar": True}), lambda _: actualizar_mapa())
+
+    mapa = MapaStudio(paginas, actualizar_mapa, analizar_universe, evaluar_universe, eliminar_recuerdo)
     paginas.add(mapa, text="Universe")
 
     def pagina_activa(_evento):
@@ -705,9 +709,15 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         except ValueError as error:
             estado.set(str(error))
             return
+        if origen.is_dir():
+            abrir_proyecto(str(origen.resolve()))
+            return
         if proyecto_activo and origen.is_relative_to(proyecto_activo):
             if es_seguro_salir("¿Abrir otro archivo?"):
                 cargar_nombre(origen.relative_to(proyecto_activo).as_posix())
+            return
+        if origen.suffix.lower() in {".py", ".js", ".ts", ".c", ".cpp", ".h", ".java", ".rs", ".sh", ".sql"}:
+            abrir_proyecto(str(origen.parent.resolve()), recuperar=origen.name)
             return
         if messagebox.askyesno("Autorizar archivo", f"¿Leer «{origen.name}» sin copiarlo al proyecto?", parent=app):
             publicar(lambda: proyecto("abrir_suelto", ruta=str(origen), confirmar=True), mostrar_suelto)
@@ -720,7 +730,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     def soltar(evento):
         archivos_sol = app.tk.splitlist(evento.data)
         if len(archivos_sol) != 1:
-            estado.set("Arrastra un solo archivo para abrirlo.")
+            estado.set("Arrastra un archivo o una carpeta.")
         else:
             abrir_o_soltar(archivos_sol[0])
         return dnd[1]

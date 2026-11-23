@@ -1,5 +1,6 @@
 """Mapa de conocimiento interactivo nativo para el panel Universe de Studio."""
 from math import cos, sin, tau
+from datetime import datetime
 from tkinter import Canvas, Listbox, StringVar, ttk
 
 from universe.paleta import BORDE, EDITOR, PANEL, SELECCION, TEXTO
@@ -12,7 +13,7 @@ COLORES = {
 
 
 class MapaStudio(ttk.Frame):
-    def __init__(self, padre, actualizar, analizar=None, evaluar=None):
+    def __init__(self, padre, actualizar, analizar=None, evaluar=None, eliminar=None):
         super().__init__(padre, padding=10)
         self._nodos = []
         self._puntos = {}
@@ -47,6 +48,10 @@ class MapaStudio(ttk.Frame):
         ttk.Label(fichas, textvariable=self._detalle, justify="left", wraplength=285).pack(
             fill="x", pady=(8, 2)
         )
+        self._eliminar = eliminar
+        self._borrar = ttk.Button(fichas, text="Eliminar recuerdo", command=self._eliminar_seleccionado)
+        self._borrar.pack(anchor="w")
+        self._borrar.configure(state="disabled")
         self._lienzo.bind("<Configure>", lambda _evento: self._dibujar())
         self._lienzo.bind("<ButtonPress-1>", self._pulsar)
         self._lienzo.bind("<B1-Motion>", self._mover)
@@ -56,7 +61,13 @@ class MapaStudio(ttk.Frame):
         self._lienzo.bind("<Button-5>", lambda _evento: self._ampliar(-1))
         self._lista.bind("<<ListboxSelect>>", self._desde_lista)
 
+    def _eliminar_seleccionado(self):
+        nodo = next((n for n in self._nodos if n["id"] == self._seleccionado and n.get("eliminable")), None)
+        if nodo and self._eliminar:
+            self._eliminar(nodo)
+
     def actualizar(self, datos):
+        self._borrar.configure(state="disabled")
         self._nodos = [nodo for nodo in datos.get("nodos", []) if nodo.get("id")]
         self._lista.delete(0, "end")
         for nodo in self._nodos:
@@ -151,6 +162,14 @@ class MapaStudio(ttk.Frame):
         self._lista.selection_clear(0, "end")
         self._lista.selection_set(indice)
         self._lista.see(indice)
-        self._detalle.set("\n".join(str(nodo[campo]) for campo in ("titulo", "detalle", "origen", "fecha")
-                                     if nodo.get(campo)))
+        fecha = nodo.get("fecha")
+        if fecha:
+            try:
+                fecha = datetime.fromisoformat(fecha.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+            except (ValueError, AttributeError, OSError):
+                pass
+        self._detalle.set(f"{nodo['titulo']}\nTipo: {nodo.get('tipo', 'registro')}\n"
+                          f"Origen: {nodo.get('origen') or 'Sin registrar'}\n"
+                          f"Fecha y hora: {fecha or 'Sin registrar'}\n\n{nodo.get('detalle', '')}")
+        self._borrar.configure(state="normal" if nodo.get("eliminable") and self._eliminar else "disabled")
         self._dibujar()

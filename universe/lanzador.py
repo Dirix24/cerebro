@@ -617,7 +617,7 @@ def escritorio(sesion):
 
             orden = _normalizar(texto).strip(" .!?¿¡")
             orden = re.sub(r"^cerebro[, ]+", "", orden)
-            if orden in {"mira esta ventana", "identifica esta ventana", "que ventana tengo abierta"}:
+            if orden in {"mira esta ventana", "identifica esta ventana", "que ventana tengo abierta", "mira lo que tengo en pantalla"}:
                 if not messagebox.askyesno("Identificar ventana", "¿Consultar una vez el título y la clase "
                                            "de la próxima ventana activa? No se captura la pantalla.", parent=ventana):
                     return
