@@ -141,7 +141,12 @@ def _vista(cv2, rgb, manos):
 
 def perfil_camara():
     """Perfil acotado para equipos con CPU y memoria limitadas."""
-    if os.environ.get("CEREBRO_CAMARA_PERFIL", "").casefold() == "ligero":
+    from core.recursos_locales import perfil_equipo
+
+    perfil = os.environ.get("CEREBRO_CAMARA_PERFIL", "").casefold()
+    if perfil not in {"ligero", "normal"}:
+        perfil = perfil_equipo(Path.cwd())
+    if perfil == "ligero":
         return 320, 240, 10
     return 640, 480, 20
 

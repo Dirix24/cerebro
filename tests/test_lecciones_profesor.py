@@ -39,3 +39,52 @@ def test_modelo_equivocado_no_prepara_leccion(tmp_path, incorrecta):
     respuesta = ensenanza.consultar(nucleo, "prepara leccion de matematicas", ("a", "b"))
     assert "referencia independiente" in respuesta["respuesta"]
     assert not ensenanza.lecciones
+
+
+def test_equipo_profesor_sintetiza_y_respeta_el_permiso_de_red(tmp_path, monkeypatch):
+    import config
+    from universe.nucleo import Nucleo
+
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
+    llamadas = []
+
+    def consulta(region, accion, objetivo, *, red, cancelacion):
+        llamadas.append((region, red))
+        return {"especialista": region, "estado": "ok", "version": 1}
+
+    revisiones = []
+
+    def sintetizar(objetivo, aportes):
+        assert objetivo == "calcula 2+2"
+        assert [a["especialista"] for a in aportes[:3]] == ["DARAS", "CAZEL", "CEREBRO"]
+        assert "4" in aportes[2]["extracto"]
+        if revisiones:
+            assert aportes[-1]["estado"] == "revision_anterior_sin_verificar"
+        revisiones.append(aportes)
+        return "Conclusión conjunta de prueba."
+
+    monkeypatch.setattr("universe.especialidades._consulta", consulta)
+    cerebro = Nucleo("local", profesor=SimpleNamespace(configurado=True, sintetizar_equipo=sintetizar))
+    try:
+        salida = cerebro.conversar("Consulta al equipo en internet: calcula 2+2", modo="studio")
+        assert "Conclusión conjunta" in salida["respuesta"]
+        assert "Internet está desactivado" in salida["respuesta"]
+        assert sorted(llamadas) == [("CAZEL", False), ("DARAS", False)]
+        cerebro.internet = True
+        llamadas.clear()
+        cerebro.conversar("Consulta al equipo en internet: calcula 2+2")
+        assert len(revisiones) == 2
+        assert sorted(llamadas) == [("CAZEL", False), ("DARAS", True)]
+    finally:
+        cerebro.ejecutor.shutdown()
+
+
+def test_perfil_se_adapta_a_recursos(monkeypatch):
+    from core import recursos_locales
+
+    recursos = {"cpu_logicas": 4, "memoria_mib": {"MemAvailable": 2048}}
+    monkeypatch.setattr(recursos_locales, "inspeccionar", lambda _: recursos)
+    assert recursos_locales.perfil_equipo(".") == "ligero"
+    recursos["memoria_mib"]["MemAvailable"] = 8192
+    assert recursos_locales.perfil_equipo(".") == "normal"

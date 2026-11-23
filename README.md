@@ -676,3 +676,20 @@ crear una lección y se entrenó un candidato NumPy real durante tres
 pasos en un directorio temporal. La pérdida bajó de 0,100032 a
 0,099936 bits por byte y el acierto exacto en 32 reformulaciones bajó
 del 46,9 % al 43,8 %. El control de regresión descartó el candidato.
+
+**«Consulta al equipo: [pregunta]»** pide aportes a DARAS y CAZEL.
+CEREBRO añade una comprobación local cuando reconoce una operación
+matemática o código Python. Si PROFESOR está configurado, el modelo
+local prepara una conclusión y un paso para practicar. Al repetir
+la misma pregunta recibe también un extracto de la revisión previa
+para contrastarlo con los resultados nuevos. Esa revisión se conserva
+como experiencia, separada del banco de lecciones verificadas.
+
+**«Consulta al equipo en internet: [pregunta]»** permite a DARAS usar
+la red si la sesión la tiene habilitada. CAZEL conserva sus límites de
+proyecto y PROFESOR usa el motor local configurado.
+
+El instalador informa el perfil de cámara recomendado. El control
+gestual elige el perfil ligero con menos de 4 GiB de RAM disponible o
+menos de cuatro CPU lógicas. Puedes fijarlo con
+`CEREBRO_CAMARA_PERFIL=ligero` o `CEREBRO_CAMARA_PERFIL=normal`.

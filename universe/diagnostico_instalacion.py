@@ -16,7 +16,7 @@ def probar_importacion(modulo):
 
 
 def diagnosticar(raiz):
-    from core.recursos_locales import inspeccionar
+    from core.recursos_locales import inspeccionar, perfil_equipo
 
     recursos = inspeccionar(raiz)
     base = {m: probar_importacion(m) for m in ("tkinter", "numpy", "PIL", "cv2", "mediapipe")}
@@ -31,6 +31,7 @@ def diagnosticar(raiz):
     print("Modelo de manos: " + ("archivo disponible" if modelo and Path(modelo).expanduser().is_file() else "sin archivo configurado"))
     print("Cámara V4L2: " + (", ".join(dispositivos) if dispositivos else "sin nodos detectados"))
     print(f"RAM libre: {recursos['memoria_mib'].get('MemAvailable', 'desconocida')} MiB")
+    print(f"Perfil de cámara recomendado: {perfil_equipo(raiz)}")
     print(f"Disco libre: {recursos['disco_libre_mib']} MiB")
     from core.motores_instalados import descubrir, resumir
     from core.profesor_local import ProfesorLocal

@@ -698,7 +698,7 @@ class Nucleo:
                     if not resultados:
                         resultados = [r for exp in coordinacion.get("experiencias", [])
                                       for r in exp["resultados"]]
-                    if resultados:
+                    if resultados and not any(r.get("conclusion") for r in resultados):
                         coordinacion["respuesta"] = narrar(resultados)
                         if any(r.get("sesion") for r in resultados):
                             coordinacion["respuesta"] += "\n\nLa sesión de revisión está en Resultados."

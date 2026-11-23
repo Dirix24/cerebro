@@ -90,3 +90,11 @@ def sugerir(recursos):
         sugerencias.append("Usa CEREBRO_CAMARA_PERFIL=ligero para reducir fotogramas y resolución. "
                             "Puede empeorar el seguimiento; elimina la variable para restaurar el perfil normal.")
     return sugerencias
+
+
+
+def perfil_equipo(ruta):
+    """Prefiere el perfil ligero si faltan mediciones o recursos."""
+    recursos = inspeccionar(ruta)
+    memoria = recursos["memoria_mib"].get("MemAvailable", 0)
+    return "ligero" if memoria < 4096 or (recursos["cpu_logicas"] or 0) < 4 else "normal"
