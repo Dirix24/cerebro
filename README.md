@@ -723,3 +723,7 @@ cuando OpenCV funciona. Usa `--gestos ninguno` para omitir esta
 preparación. La instalación no abre la webcam. Actívala en la ventana
 de gestos cuando quieras usarla. El control del puntero requiere X11
 y `xdotool` disponibles en el sistema.
+Si el diagnóstico de manos menciona `libGLESv2.so.2` en MX Linux,
+instala la biblioteca del sistema con `sudo apt install libgles2`.
+Si falta `xdotool`, usa `sudo apt install xdotool`. El instalador
+de Cerebro prepara los paquetes Python dentro del entorno virtual.

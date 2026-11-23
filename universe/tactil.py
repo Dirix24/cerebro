@@ -14,7 +14,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from core.figuras_tactiles import Trazo, extruir, obj
 from core.gestos_tactiles import Gestos
-from universe.diagnostico_instalacion import modelo_manos
+from universe.diagnostico_instalacion import fallo_detector_manos, modelo_manos
 from universe.paleta import ACENTO, BORDE, FONDO, PANEL, SELECCION, TEXTO
 
 
@@ -263,7 +263,13 @@ def abrir():
     motor = ttk.Combobox(raiz, state="readonly", values=("Manos · MediaPipe", "Marcador verde · solo puntero"), width=40)
     motor.pack(padx=18, pady=(0, 8))
     ficha = tecnologias()
-    motor.current(1 if ficha["opencv"] and not (ficha["mediapipe"] and ficha["modelo"]) else 0)
+    fallo_manos = None
+    if ficha["opencv"] and ficha["mediapipe"] and ficha["modelo"]:
+        fallo_manos = fallo_detector_manos(ficha["modelo"])
+    alternativas = ficha["opencv"] and (fallo_manos or not (ficha["mediapipe"] and ficha["modelo"]))
+    motor.current(1 if alternativas else 0)
+    if fallo_manos:
+        valor.set("Marcador verde disponible. MediaPipe: " + fallo_manos)
 
     def calibrar():
         nonlocal margen

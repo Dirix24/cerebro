@@ -91,9 +91,12 @@ def test_modelo_de_manos_persistente(tmp_path, monkeypatch):
 def test_auto_reutiliza_dependencias_y_descarga_modelo(tmp_path, monkeypatch):
     monkeypatch.setattr(diagnostico_instalacion.sys, "prefix", str(tmp_path))
     monkeypatch.setattr(diagnostico_instalacion, "probar_importacion", lambda _: True)
-    monkeypatch.setattr(diagnostico_instalacion, "modelo_manos", lambda: None)
     llamadas = []
+    modelo = tmp_path / "manos.task"
+    modelo.write_bytes(b"fixture")
+    monkeypatch.setattr(diagnostico_instalacion, "modelo_manos", lambda: modelo if llamadas else None)
     monkeypatch.setattr(diagnostico_instalacion, "instalar_modelo_oficial", lambda: llamadas.append(True))
+    monkeypatch.setattr(diagnostico_instalacion, "fallo_detector_manos", lambda _: None)
     assert "preparados" in diagnostico_instalacion.preparar_gestos_automaticos()
     assert llamadas == [True]
 

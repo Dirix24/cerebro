@@ -86,17 +86,35 @@ def configurar_modelo_manos(ruta):
 
 
 
+def fallo_detector_manos(modelo):
+    instruccion = ("import sys; from universe.tactil import _detector; "
+                   "_detector(sys.argv[1]).close()")
+    try:
+        comprobacion = subprocess.run([sys.executable, "-c", instruccion, str(Path(modelo).expanduser())],
+                                     cwd=Path(__file__).resolve().parent.parent, timeout=15,
+                                     stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return str(error)
+    if comprobacion.returncode:
+        lineas = comprobacion.stderr.strip().splitlines()
+        return lineas[-1][:250] if lineas else "El detector terminó sin cargar el modelo."
+    return None
+
+
 def preparar_gestos_automaticos():
     if sys.prefix == sys.base_prefix:
         raise ValueError("Instala los gestos desde el entorno virtual de Cerebro.")
-    if probar_importacion("cv2") and probar_importacion("mediapipe") or instalar_gestos("manos"):
+    if (probar_importacion("cv2") and probar_importacion("mediapipe")) or instalar_gestos("manos"):
         modelo = modelo_manos()
-        if modelo and Path(modelo).expanduser().is_file():
-            return "Manos disponibles con el modelo configurado."
         try:
-            instalar_modelo_oficial()
+            if not modelo or not Path(modelo).expanduser().is_file():
+                instalar_modelo_oficial()
+                modelo = modelo_manos()
+            fallo = fallo_detector_manos(modelo) if modelo else "No hay modelo configurado."
         except (OSError, ValueError) as error:
-            return f"No se pudo preparar el modelo de manos: {error}. Usa Marcador verde."
+            fallo = str(error)
+        if fallo:
+            return f"OpenCV disponible. Usa Marcador verde. El detector de manos falló: {fallo}"
         return "OpenCV, MediaPipe y modelo de manos preparados."
     if probar_importacion("cv2") or instalar_gestos("marcador"):
         return "OpenCV disponible. Usa Marcador verde; MediaPipe no está preparado."
