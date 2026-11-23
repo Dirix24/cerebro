@@ -166,6 +166,10 @@ class ProfesorLocal:
             raise RuntimeError("La propuesta del profesor no cumple el formato verificable.")
         return int(propuesta)
 
+    def resolver_leccion(self, pregunta):
+        return self._consultar("Resuelve el ejercicio. Responde solo con el valor solicitado.",
+                               pregunta, max_tokens=24, temperatura=0)
+
     def ensenar(self, materia, pregunta, referencia, respuesta=None):
         instruccion = ("En español, da una pista y explica por qué la referencia es correcta."
                        if respuesta is None else

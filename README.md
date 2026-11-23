@@ -642,3 +642,37 @@ consulta hasta 20 repositorios con la sesión ya configurada en
 **«Compara GitHub Dirix24/cerebro main con otra-rama»** y sustituye
 `otra-rama` por una referencia existente. Esta ruta compara referencias
 remotas. Consulta [la auditoría, las pruebas y los límites](docs/NEXT_VISOR_INSTALACION.md).
+
+### Lecciones verificadas del Profesor
+
+Configura un modelo local como Profesor (Ollama o llama.cpp). En Studio,
+Terminal, chat web o el Acompañante escribe **«Profesor, prepara una
+lección de matemáticas»**. También están disponibles programación,
+español, razonamiento y herramientas. El modelo elige una variante y
+la resuelve. Cerebro comprueba el resultado con la respuesta de su
+banco de competencias. Si coincide, puedes guardar el ejemplo con
+**«Aprueba lección del Profesor»** desde la misma conversación.
+
+Desde el repositorio, utiliza el mismo `CEREBRO_HOME` con el que
+arrancas Cerebro, si lo personalizaste:
+
+```bash
+.venv/bin/python entrenar_ejemplos_aprobados.py
+.venv/bin/python entrenar_ejemplos_aprobados.py --aplicar --entrenar
+.venv/bin/python entrenar_ejemplos_aprobados.py --alumno DARAS --aplicar
+.venv/bin/python entrenar_ejemplos_aprobados.py --alumno CAZEL --aplicar
+```
+
+El primer comando muestra cuántos ejemplos hay. El segundo prepara el
+corpus y entrena un candidato aislado de Cerebro usando el checkpoint y
+la validación fija existentes. Si supera los criterios, queda para
+revisión. Los dos últimos exportan JSONL en
+`data/lecciones-profesor/` para una futura importación en cada
+especialista. La exportación conserva el origen y el criterio de
+verificación. No inicia entrenamiento en los repositorios hermanos.
+
+En la verificación de este flujo se usó un doble del Profesor para
+crear una lección y se entrenó un candidato NumPy real durante tres
+pasos en un directorio temporal. La pérdida bajó de 0,100032 a
+0,099936 bits por byte y el acierto exacto en 32 reformulaciones bajó
+del 46,9 % al 43,8 %. El control de regresión descartó el candidato.
