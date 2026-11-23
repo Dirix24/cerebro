@@ -89,3 +89,42 @@ def test_reversion_con_conflicto_y_validaciones(tmp_path):
     assert validar_archivo('{"ok":1}', "x.json") == "Documento JSON válido."
     with pytest.raises(ValueError, match="columnas"):
         validar_archivo("a,b\n1,2,3\n", "x.csv")
+
+
+def test_permiso_persistente_reapertura_revocacion_y_cambio_de_carpeta(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
+    carpeta = tmp_path / "proyecto"
+    carpeta.mkdir()
+    (carpeta / "ejemplo.py").write_text("valor = 1\n")
+    abrir = {"accion": "abrir", "carpeta": str(carpeta), "cliente": "a" * 24}
+    primero = Nucleo("local")
+    try:
+        with pytest.raises(PermissionError):
+            primero.operar_proyecto(abrir)
+        primero.operar_proyecto({**abrir, "confirmar": True})
+        assert primero.operar_proyecto({**abrir, "accion": "listar_permisos"}) == {"carpetas": []}
+        primero.operar_proyecto({**abrir, "confirmar": True, "recordar_permiso": True})
+    finally:
+        primero.ejecutor.shutdown()
+
+    reiniciado = Nucleo("local")
+    otro = {**abrir, "cliente": "b" * 24}
+    try:
+        assert reiniciado.operar_proyecto(abrir)["archivos"] == ["ejemplo.py"]
+        reiniciado.operar_proyecto(otro)
+        revocar = {**abrir, "accion": "revocar_permiso"}
+        with pytest.raises(PermissionError):
+            reiniciado.operar_proyecto(revocar)
+        reiniciado.operar_proyecto({**revocar, "confirmar": True})
+        with pytest.raises(ValueError, match="Abre y autoriza"):
+            reiniciado.operar_proyecto({**otro, "accion": "listar", "carpeta_esperada": str(carpeta)})
+        with pytest.raises(PermissionError):
+            reiniciado.operar_proyecto(abrir)
+        reiniciado.operar_proyecto({**abrir, "confirmar": True, "recordar_permiso": True})
+        carpeta.rename(tmp_path / "anterior")
+        carpeta.mkdir()
+        with pytest.raises(PermissionError, match="autorizada cambió"):
+            reiniciado.operar_proyecto(abrir)
+    finally:
+        reiniciado.ejecutor.shutdown()

@@ -814,6 +814,8 @@ o una carpeta al centro, o usa **Archivos → Abrir proyecto**. Al abrir
 un proyecto, la izquierda muestra sus archivos. Al seleccionar una
 imagen, PDF o código, el centro abre la vista correspondiente. Para
 volver al trabajo anterior usa **Archivos → Retomar último proyecto**.
+Al abrir una carpeta puedes autorizarla para esa ventana o recordar el
+acceso. Gestiona los permisos guardados en **Archivos → Carpetas autorizadas**.
 Puedes pedir «Haz una calculadora» en el chat a la derecha con un
 motor configurado y una carpeta autorizada. Revisa la propuesta antes
 de guardar los archivos.

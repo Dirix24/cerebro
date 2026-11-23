@@ -192,6 +192,7 @@ class Nucleo:
                                             cargar_preferencias, carpetas_personales, guardar_preferencias,
                                             validar_archivo)
         preferencias = self.estudio / "studio-escritorio.json"
+        permisos_carpetas = self.estudio / "studio-permisos.json"
         if accion == "escritorio":
             guardadas = cargar_preferencias(preferencias)
             return {"carpetas": carpetas_personales(), "favoritas": guardadas.get("favoritas", []),
@@ -264,14 +265,54 @@ class Nucleo:
                 return recordado if isinstance(recordado, dict) else {}
             except (OSError, ValueError):
                 return {}
+        if accion == "listar_permisos":
+            return {"carpetas": sorted(cargar_preferencias(permisos_carpetas))}
+        if accion == "revocar_permiso":
+            self.exigir_permisos("WRITE")
+            carpeta = datos.get("carpeta")
+            if self.solo_lectura or datos.get("confirmar") is not True or not isinstance(carpeta, str):
+                raise PermissionError("Confirma la revocación de la carpeta.")
+            with self.cerrojo:
+                permisos = cargar_preferencias(permisos_carpetas)
+                if carpeta not in permisos:
+                    raise ValueError("La carpeta ya no tiene un permiso guardado.")
+                del permisos[carpeta]
+                guardar_preferencias(permisos_carpetas, permisos)
+                for ventana, activa in list(self.proyectos_studio.items()):
+                    if str(activa.raiz) == carpeta:
+                        del self.proyectos_studio[ventana]
+                for identificador, (_, origen, _) in list(self.generaciones_studio.items()):
+                    if str(origen.raiz) == carpeta:
+                        del self.generaciones_studio[identificador]
+            return {"revocada": carpeta}
         if accion == "abrir":
-            if datos.get("confirmar") is not True:
-                raise PermissionError("Autoriza la carpeta elegida en Studio.")
-            proyecto = ProyectoStudio(datos.get("carpeta"))
-            if cliente not in self.proyectos_studio and len(self.proyectos_studio) >= 32:
-                self.proyectos_studio.pop(next(iter(self.proyectos_studio)))
-            self.proyectos_studio[cliente] = proyecto
-            return {**proyecto.listar(), "carpeta": str(proyecto.raiz)}
+            carpeta = datos.get("carpeta")
+            confirmado = datos.get("confirmar") is True
+            recordar = datos.get("recordar_permiso") is True
+            with self.cerrojo:
+                permisos = cargar_preferencias(permisos_carpetas)
+                if not confirmado and (not isinstance(carpeta, str) or carpeta not in permisos):
+                    raise PermissionError("Autoriza la carpeta elegida en Studio.")
+                if recordar:
+                    self.exigir_permisos("WRITE")
+                    if not confirmado or self.solo_lectura:
+                        raise PermissionError("Confirma el permiso persistente de la carpeta.")
+                proyecto = ProyectoStudio(carpeta)
+                ruta = str(proyecto.raiz)
+                if not confirmado and (ruta != carpeta or permisos[carpeta] != list(proyecto.identidad)):
+                    raise PermissionError("La carpeta autorizada cambió. Vuelve a autorizarla.")
+                inventario = proyecto.listar()
+                if recordar:
+                    if len(ruta) > 1024 or (ruta not in permisos and len(permisos) >= 20):
+                        raise ValueError("El registro admite hasta 20 carpetas con rutas de hasta 1024 caracteres.")
+                    permisos[ruta] = list(proyecto.identidad)
+                    if len(json.dumps(permisos, ensure_ascii=False)) > 32000:
+                        raise ValueError("El registro de permisos está lleno.")
+                    guardar_preferencias(permisos_carpetas, permisos)
+                if cliente not in self.proyectos_studio and len(self.proyectos_studio) >= 32:
+                    self.proyectos_studio.pop(next(iter(self.proyectos_studio)))
+                self.proyectos_studio[cliente] = proyecto
+            return {**inventario, "carpeta": ruta}
         proyecto = self.proyectos_studio.get(cliente)
         if proyecto is None:
             raise ValueError("Abre y autoriza una carpeta de proyecto en esta ventana.")

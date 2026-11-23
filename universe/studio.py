@@ -11,7 +11,7 @@ from queue import Empty, SimpleQueue
 from secrets import token_hex
 from threading import Lock, Thread
 import tokenize
-from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError
+from tkinter import END, BOTH, LEFT, RIGHT, X, Y, Canvas, Listbox, Menu, PhotoImage, StringVar, Text, Tk, TclError, Toplevel
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from urllib.parse import quote, urlsplit
 
@@ -918,27 +918,29 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         carpeta = carpeta or filedialog.askdirectory(title="Elegir carpeta de proyecto", mustexist=True, parent=app)
         if not carpeta:
             return
-        if not messagebox.askyesno("Autorizar proyecto", f"¿Permitir a Cerebro inspeccionar «{carpeta}»?", parent=app):
-            return
+        def cargar_autorizado():
+            try:
+                return proyecto("abrir", carpeta=carpeta)
+            except ErrorAPI as error:
+                if error.codigo != 403:
+                    raise
+                return None
+
+        def solicitar(datos):
+            if datos is not None:
+                abierto(datos)
+                return
+            recordar = messagebox.askyesnocancel(
+                "Autorizar carpeta",
+                f"¿Quieres recordar el acceso a «{carpeta}»?\n\n"
+                "Sí: recordar el acceso. No: abrir solo en esta ventana. Cancelar: volver.",
+                parent=app)
+            if recordar is not None:
+                publicar(lambda: proyecto("abrir", carpeta=carpeta, confirmar=True,
+                                          recordar_permiso=recordar), abierto)
 
         def abierto(datos):
-            nonlocal proyecto_activo, archivo_proyecto, original_proyecto, subcarpeta
-            desactivar_documento()
-            proyecto_activo = datos["carpeta"]
-            proyecto_titulo.set(Path(proyecto_activo).name)
-            subcarpeta = ""
-            filtro_archivos.set("")
-            inventariar(datos)
-            ruta.set("")
-            archivo_proyecto = original_proyecto = None
-            mostrar(editor, "")
-            editor.edit_modified(False)
-            cargar_propuestas([])
-            cambios_aplicados.clear()
-            for pagina in (pagina_editor, pagina_validaciones, pagina_cambios, pagina_visor, pagina_resultados):
-                vistas_editor.hide(pagina)
-            vistas_editor.pack_forget()
-            inicio_central.pack(fill=BOTH, expand=True)
+            limpiar_proyecto(datos)
             estado.set("Proyecto abierto" + (" · inventario limitado" if datos["limitado"] else ""))
             esperado = proyecto_activo
             if recuperar and any(item["ruta"] == recuperar for item in entradas_archivos):
@@ -946,7 +948,59 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             else:
                 publicar(lambda: proyecto("recordar", esperada=esperado))
 
-        publicar(lambda: proyecto("abrir", carpeta=carpeta, confirmar=True), abierto)
+        publicar(cargar_autorizado, solicitar)
+
+    def limpiar_proyecto(datos=None):
+        nonlocal proyecto_activo, archivo_proyecto, original_proyecto, subcarpeta, solicitud_archivo
+        solicitud_archivo += 1
+        desactivar_documento()
+        proyecto_activo = datos["carpeta"] if datos else None
+        proyecto_titulo.set(Path(proyecto_activo).name if proyecto_activo else "Espacio de Studio")
+        subcarpeta = ""
+        filtro_archivos.set("")
+        inventariar(datos or {"archivos": []})
+        ruta.set("")
+        archivo_proyecto = original_proyecto = None
+        mostrar(editor, "")
+        editor.edit_modified(False)
+        cargar_propuestas([])
+        cambios_aplicados.clear()
+        for pagina in (pagina_editor, pagina_validaciones, pagina_cambios, pagina_visor, pagina_resultados):
+            vistas_editor.hide(pagina)
+        vistas_editor.pack_forget()
+        inicio_central.pack(fill=BOTH, expand=True)
+
+    def gestionar_permisos():
+        def mostrar_permisos(datos):
+            ventana = Toplevel(app)
+            ventana.title("Carpetas autorizadas")
+            ttk.Label(ventana, text="Permisos guardados de Studio").pack(anchor="w", padx=8, pady=5)
+            selector = Listbox(ventana, width=65, height=8, exportselection=False)
+            selector.pack(fill=BOTH, expand=True, padx=8)
+            for carpeta in datos["carpetas"]:
+                selector.insert(END, carpeta)
+
+            def revocar():
+                seleccion = selector.curselection()
+                if not seleccion:
+                    return
+                carpeta = selector.get(seleccion[0])
+                if carpeta == proyecto_activo and not es_seguro_salir("¿Cerrar el proyecto y revocar su acceso?"):
+                    return
+                if not messagebox.askyesno("Revocar acceso", f"¿Revocar el acceso a «{carpeta}»?", parent=ventana):
+                    return
+
+                def revocado(resultado):
+                    if resultado["revocada"] == proyecto_activo:
+                        limpiar_proyecto()
+                    ventana.destroy()
+                    estado.set("Permiso de carpeta revocado.")
+
+                publicar(lambda: proyecto("revocar_permiso", carpeta=carpeta, confirmar=True), revocado)
+
+            boton(ventana, "Revocar acceso", revocar)
+
+        publicar(lambda: proyecto("listar_permisos"), mostrar_permisos)
 
     def mostrar_diff(_evento=None):
         indice = elegir_cambio.current()
@@ -1425,6 +1479,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     acciones_archivos.add_command(label="Añadir o quitar favorita", command=marcar_favorita)
     acciones_archivos.add_cascade(label="Archivo seleccionado", menu=herramientas_archivo)
     acciones_archivos.add_command(label="Abrir proyecto…", command=abrir_proyecto)
+    acciones_archivos.add_command(label="Carpetas autorizadas…", command=gestionar_permisos)
     acciones_archivos.add_command(label="Abrir en Thunar", command=mostrar_gestor)
     acciones_archivos.add_command(label="Abrir web", command=abrir_pagina_web)
     if dnd:
