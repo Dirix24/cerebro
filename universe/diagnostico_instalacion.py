@@ -45,7 +45,11 @@ def diagnosticar(raiz):
 
 def instalar_gestos(modo):
     paquetes = ["opencv-contrib-python", "mediapipe"] if modo == "manos" else ["opencv-python"]
-    codigo = subprocess.call([sys.executable, "-m", "pip", "install", "--only-binary=:all:", *paquetes])
+    try:
+        codigo = subprocess.call([sys.executable, "-m", "pip", "install", "--only-binary=:all:", *paquetes],
+                                 timeout=240)
+    except (OSError, subprocess.TimeoutExpired):
+        codigo = 1
     if codigo:
         print("No pude instalar las ruedas compatibles. Usa --gestos marcador o revisa el Python del entorno virtual.")
         return False
@@ -79,3 +83,48 @@ def configurar_modelo_manos(ruta):
         Path(temporal.name).replace(Path(sys.prefix) / "cerebro-modelo-manos.txt")
     finally:
         Path(temporal.name).unlink(missing_ok=True)
+
+
+
+def preparar_gestos_automaticos():
+    if sys.prefix == sys.base_prefix:
+        raise ValueError("Instala los gestos desde el entorno virtual de Cerebro.")
+    if probar_importacion("cv2") and probar_importacion("mediapipe") or instalar_gestos("manos"):
+        modelo = modelo_manos()
+        if modelo and Path(modelo).expanduser().is_file():
+            return "Manos disponibles con el modelo configurado."
+        try:
+            instalar_modelo_oficial()
+        except (OSError, ValueError) as error:
+            return f"No se pudo preparar el modelo de manos: {error}. Usa Marcador verde."
+        return "OpenCV, MediaPipe y modelo de manos preparados."
+    if probar_importacion("cv2") or instalar_gestos("marcador"):
+        return "OpenCV disponible. Usa Marcador verde; MediaPipe no está preparado."
+    return "No se pudo preparar OpenCV en este entorno. La instalación básica está disponible."
+
+
+def instalar_modelo_oficial():
+    from hashlib import sha256
+    from tempfile import NamedTemporaryFile
+    from urllib.request import urlopen
+
+    url = ("https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
+           "hand_landmarker/float16/1/hand_landmarker.task")
+    huella = "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1"
+    destino = Path(sys.prefix) / "hand_landmarker.task"
+    if destino.is_file() and destino.stat().st_size == 7819105 and sha256(destino.read_bytes()).hexdigest() == huella:
+        configurar_modelo_manos(destino)
+        return
+    print("Descargando el modelo oficial de manos (7,8 MB).", flush=True)
+    with urlopen(url, timeout=15) as entrada:
+        datos = entrada.read(7819106)
+    if len(datos) != 7819105 or sha256(datos).hexdigest() != huella:
+        raise ValueError("El archivo descargado no coincide con el modelo publicado.")
+    with NamedTemporaryFile(dir=sys.prefix, delete=False) as salida:
+        temporal = Path(salida.name)
+        salida.write(datos)
+    try:
+        temporal.replace(destino)
+        configurar_modelo_manos(destino)
+    finally:
+        temporal.unlink(missing_ok=True)

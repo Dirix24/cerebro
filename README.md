@@ -714,3 +714,12 @@ Falstad en el navegador predeterminado. También puedes decir
 **«Noticias de hoy»** consulta las fuentes públicas disponibles,
 y **«Recuérdame revisar las noticias mañana a las nueve»** programa
 un aviso local. La apertura del simulador se delega al navegador.
+
+En Linux, `./instalar` prepara el modo gestual por defecto en el
+entorno virtual. Intenta instalar OpenCV y MediaPipe y descarga el
+modelo oficial de manos de 7,8 MB con verificación SHA-256 si falta
+un modelo configurado. Si MediaPipe falla, ofrece el marcador verde
+cuando OpenCV funciona. Usa `--gestos ninguno` para omitir esta
+preparación. La instalación no abre la webcam. Actívala en la ventana
+de gestos cuando quieras usarla. El control del puntero requiere X11
+y `xdotool` disponibles en el sistema.

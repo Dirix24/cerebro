@@ -954,6 +954,9 @@ class Nucleo:
                     else:
                         origen = "consulta_publica"
                         respuesta = evidencia_publica
+                elif falta_respuesta and conversacion and not self.profesor.configurado:
+                    respuesta += ("\n\nEl Profesor generativo está sin configurar. "
+                                  "Escribe «Detecta inteligencias instaladas» para comprobar Ollama o llama.cpp.")
         self.latencias.append((perf_counter() - inicio) * 1000)
         self._registrar_turno(pregunta, respuesta)
         from universe.consultas import desea_studio

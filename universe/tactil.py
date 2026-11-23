@@ -49,7 +49,7 @@ def _requisitos(marcador=False):
     if not ficha["x11"]:
         raise RuntimeError("Se necesita X11 y xdotool para controlar el puntero.")
     if not ficha["opencv"]:
-        raise RuntimeError("Falta OpenCV en el entorno de Cerebro. Consulta la instalación opcional en el README.")
+        raise RuntimeError("Falta OpenCV en el entorno de Cerebro. Vuelve a ejecutar ./instalar desde tu copia actualizada.")
     if marcador:
         return None
     if not ficha["mediapipe"]:
@@ -262,7 +262,8 @@ def abrir():
     lista.pack(padx=18, pady=(0, 8))
     motor = ttk.Combobox(raiz, state="readonly", values=("Manos · MediaPipe", "Marcador verde · solo puntero"), width=40)
     motor.pack(padx=18, pady=(0, 8))
-    motor.current(0)
+    ficha = tecnologias()
+    motor.current(1 if ficha["opencv"] and not (ficha["mediapipe"] and ficha["modelo"]) else 0)
 
     def calibrar():
         nonlocal margen
