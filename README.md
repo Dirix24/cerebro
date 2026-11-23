@@ -868,3 +868,7 @@ disponibles. Las sesiones guardan progreso y conservan los pesos activos.
 «¿Qué has aprendido hoy?» muestra informes registrados. Para los comandos
 de reanudación, prácticas programadas, resultados y recuperación consulta
 la [guía de CEREBRO Evolution](docs/CEREBRO_EVOLUTION.md).
+
+Consulta la [verificación para 1.0](docs/ESTABILIZACION_1_0.md) para ver
+el banco de conversación, los experimentos de retención, el diagnóstico
+de Bubblewrap y la alternativa optativa con Docker rootless.

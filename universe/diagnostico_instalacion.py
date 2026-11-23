@@ -16,6 +16,7 @@ def probar_importacion(modulo):
 
 
 def diagnosticar(raiz):
+    from core.aislamiento_proyecto import perfil_pruebas
     from core.local_voice import dispositivos_audio
     from core.recursos_locales import inspeccionar, perfil_equipo, resumir as resumir_recursos
     from core.profesor_local import diagnostico
@@ -68,6 +69,8 @@ def diagnosticar(raiz):
         print(resumir(descubrir(ProfesorLocal.desde_entorno())))
     except ValueError as error:
         print(f"Configuración de motores: {error}")
+    _, aislamiento, _ = perfil_pruebas()
+    print(aislamiento)
     print("El diagnóstico no abre cámaras, micrófonos ni ventanas.")
 
 

@@ -118,16 +118,17 @@ def test_profesor_conserva_la_fuente_publica(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
     monkeypatch.setattr("universe.consultas.consulta_directa", lambda *args, **kwargs: None)
     monkeypatch.setattr("universe.consultas.alternativa_publica",
-                        lambda n, pregunta, respuesta: "Fuente pública https://ejemplo.test" if n.investigar_auto else respuesta)
+                        lambda n, pregunta, respuesta: "Pasaje de prueba con cuatro palabras.\nFuente: https://ejemplo.test" if n.investigar_auto else respuesta)
     fuentes = []
     profesor = SimpleNamespace(configurado=True,
                                explicar_fragmentos=lambda pregunta, pasajes: fuentes.extend(pasajes) or "Síntesis")
     cerebro = Nucleo("local", internet=True, investigar_auto=True, profesor=profesor)
     try:
         monkeypatch.setattr(cerebro.chat, "procesar", lambda _: ("No tengo una respuesta fiable.", False))
-        resultado = cerebro.conversar("Qué es una simbiosis")
-        assert fuentes and "https://ejemplo.test" in fuentes[0]["texto"]
-        assert "Síntesis" in resultado["respuesta"] and "https://ejemplo.test" in resultado["respuesta"]
+        resultado = cerebro.conversar("Qué es el concepto sintético ficticio Zedkam")
+        assert fuentes and "https://ejemplo.test" in fuentes[0]["referencia"]
+        assert "Síntesis" not in resultado["respuesta"]
+        assert "Pasaje de prueba" in resultado["respuesta"] and "https://ejemplo.test" in resultado["respuesta"]
     finally:
         cerebro.ejecutor.shutdown()
 

@@ -67,7 +67,7 @@ def test_diagnostico_del_turno_y_aprendizaje_de_hoy(tmp_path, monkeypatch):
         assert n.conversar("que esportatil")["origen"] == "glosario_local"
         assert n.conversar("ques la fotosintesis")["origen"] == "glosario_local"
         n.conversar("¿Qué es un tema nuevo sin referencia?")
-        assert "motor conversacional" in n.conversar("¿Por qué fallaste esta pregunta?")["respuesta"]
+        assert "no encontré una referencia" in n.conversar("¿Por qué fallaste esta pregunta?")["respuesta"].lower()
         competencias.guardar(tmp_path, {"tipo": "candidato", "fecha": datetime.now(timezone.utc).isoformat(),
                                          "elegible_para_revision": False})
         assert "1 candidatos" in n.conversar("¿Qué has aprendido hoy?")["respuesta"]

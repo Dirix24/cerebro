@@ -489,16 +489,35 @@ def _agregar_dos_puntos(original, error):
 
 
 def ejecutar_pruebas(raiz):
-    """Ejecuta unittest únicamente sobre una copia dentro de Bubblewrap."""
+    """Ejecuta unittest únicamente sobre una copia dentro de un perfil comprobado."""
     from tempfile import TemporaryDirectory
+    from uuid import uuid4
 
-    from core.aislamiento_proyecto import comando_aislado, preparar_copia
+    from core.aislamiento_proyecto import (
+        comando_aislado, comando_docker, limpiar_docker, perfil_pruebas, preparar_copia,
+    )
 
+    perfil, aviso, cli = perfil_pruebas()
+    if not perfil:
+        return False, aviso
     try:
         with TemporaryDirectory(prefix="cerebro-pruebas-") as carpeta:
-            copia = Path(carpeta)
+            copia = Path(carpeta) / "proyecto"
+            copia.mkdir()
             preparar_copia(raiz, copia)
-            return _ejecutar_aislado(comando_aislado(copia))
+            if perfil == "bubblewrap":
+                return _ejecutar_aislado(comando_aislado(copia))
+            # La copia queda bajo una carpeta privada en el host. El usuario
+            # sin privilegios del contenedor debe poder leer el montaje.
+            copia.chmod(0o755)
+            for ruta in copia.rglob("*"):
+                ruta.chmod(0o755 if ruta.is_dir() else 0o644)
+            nombre = "cerebro-pruebas-" + uuid4().hex
+            try:
+                bien, salida = _ejecutar_aislado(comando_docker(cli, copia, nombre))
+                return bien, "Docker rootless · " + salida
+            finally:
+                limpiar_docker(cli, nombre)
     except (OSError, ValueError, RuntimeError) as error:
         return False, str(error)
 

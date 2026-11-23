@@ -3,6 +3,8 @@ import os
 from pathlib import Path
 import shutil
 import stat
+import subprocess
+from tempfile import TemporaryDirectory
 
 _MIB = 1024 * 1024
 _OMITIR = {"__pycache__", "build", "dist", "node_modules", "venv"}
@@ -38,24 +40,23 @@ def preparar_copia(raiz, destino):
     def propagar(error):
         raise error
 
-    for base, dirs, archivos in os.walk(raiz, onerror=propagar):
+    for base, dirs, archivos, directo in os.fwalk(raiz, onerror=propagar, follow_symlinks=False):
         entradas += len(dirs) + len(archivos)
         if entradas > _LIMITE_ENTRADAS:
             raise ValueError("La copia de pruebas supera 2048 entradas.")
         base = Path(base)
         dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in _OMITIR
-                         and not (base / d).is_symlink())
+                         and stat.S_ISDIR(os.stat(d, dir_fd=directo, follow_symlinks=False).st_mode))
         if not base.resolve(strict=True).is_relative_to(raiz):
             raise PermissionError("La carpeta del proyecto cambió al preparar las pruebas.")
         for archivo in archivos:
             origen = base / archivo
-            if (archivo.startswith(".") or origen.is_symlink()
-                    or origen.suffix.casefold() in {".pem", ".key", ".p12", ".pfx"}):
+            if archivo.startswith(".") or origen.suffix.casefold() in {".pem", ".key", ".p12", ".pfx"}:
                 continue
-            info = origen.lstat()
+            info = os.stat(archivo, dir_fd=directo, follow_symlinks=False)
             if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
                 continue
-            fd = os.open(origen, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+            fd = os.open(archivo, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW, dir_fd=directo)
             with os.fdopen(fd, "rb") as lector:
                 info = os.fstat(lector.fileno())
                 if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
@@ -72,7 +73,7 @@ def preparar_copia(raiz, destino):
             salida.write_bytes(datos)
 
 
-def comando_aislado(copia):
+def comando_aislado(copia, *, sonda=False):
     bwrap = shutil.which("bwrap")
     if not bwrap or not Path("/usr/bin/python3").is_file():
         raise RuntimeError("Las pruebas requieren Bubblewrap y /usr/bin/python3. No se ejecutaron.")
@@ -94,10 +95,138 @@ def comando_aislado(copia):
     if Path("/etc/ld.so.cache").is_file():
         comandos += ["--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache"]
     carpeta = "tests" if (copia / "tests").is_dir() else "."
+    arranque = ["-I", "-B", "-c", "print('CEREBRO_AISLADO')"] if sonda else [
+        "-I", "-B", "-c", _INICIO_PYTHON, carpeta]
     return comandos + [
         "--proc", "/proc", "--dev", "/dev", "--size", str(64 * _MIB), "--tmpfs", "/tmp",
         "--ro-bind", str(copia), "/proyecto", "--remount-ro", "/", "--chdir", "/proyecto",
         "--setenv", "HOME", "/tmp", "--setenv", "TMPDIR", "/tmp",
         "--setenv", "PATH", "/usr/bin:/bin", "--setenv", "LANG", "C.UTF-8",
-        "--", "/usr/bin/python3", "-I", "-B", "-c", _INICIO_PYTHON, carpeta,
+        "--", "/usr/bin/python3", *arranque,
     ]
+
+
+def diagnosticar():
+    """Prueba el perfil real con Python de confianza y una carpeta vacía."""
+    try:
+        with TemporaryDirectory(prefix="cerebro-sonda-") as carpeta:
+            comando = comando_aislado(Path(carpeta), sonda=True)
+            resultado = subprocess.run(comando, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, timeout=4, text=True, errors="replace")
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+        return False, f"Aislamiento no disponible. No se ejecutaron pruebas. {error}"
+    if resultado.returncode == 0 and resultado.stdout.strip() == "CEREBRO_AISLADO":
+        return True, "Perfil Bubblewrap y Python aislado comprobados."
+    detalle = resultado.stdout.strip()[:500]
+    if "uid map" in detalle and "Read-only file system" in detalle:
+        motivo = "El entorno monta el mapa de usuarios como solo lectura."
+    elif "namespace" in detalle or "Operation not permitted" in detalle:
+        motivo = "El kernel o el entorno restringe los espacios de nombres o sus montajes."
+    else:
+        motivo = "El intérprete no pudo iniciar con el perfil de aislamiento."
+    return False, f"Bubblewrap no pudo iniciar el aislamiento. No se ejecutó el proyecto. {motivo} {detalle}"
+
+
+IMAGEN_PRUEBAS = "docker.io/library/python@sha256:c5ba3deef00c7758561a0f03c26f44f10589263d40e732b8748e0d1f38f6dd89"
+
+
+_SONDA_DOCKER = """
+import os
+from pathlib import Path
+import socket
+base = Path("/sys/fs/cgroup")
+assert os.getuid() == 65534
+assert socket.if_nameindex() == [(1, "lo")]
+assert os.statvfs("/proyecto").f_flag & os.ST_RDONLY
+def comprobar(nombre, maximo):
+    observado = (base / nombre).read_text().strip()
+    if not observado.isdecimal() or int(observado) > maximo:
+        raise SystemExit("El daemon no aplicó el límite " + nombre + ".")
+comprobar("memory.max", 256 * 1024**2)
+comprobar("memory.swap.max", 0)
+comprobar("pids.max", 64)
+cuota, periodo = (base / "cpu.max").read_text().split()
+if not cuota.isdecimal() or int(cuota) > int(periodo):
+    raise SystemExit("El daemon no aplicó el límite cpu.max.")
+print("CEREBRO_AISLADO")
+"""
+
+
+def docker_local():
+    """Solo un daemon rootless sobre un socket local y una imagen preinstalada."""
+    import json
+
+    ejecutable = shutil.which("docker")
+    if not ejecutable or not hasattr(os, "getuid"):
+        raise RuntimeError("Docker rootless requiere un cliente local en Linux.")
+    sockets = [Path(f"/run/user/{os.getuid()}/docker.sock"), Path("/var/run/docker.sock")]
+    if directorio := os.environ.get("XDG_RUNTIME_DIR"):
+        if Path(directorio).is_absolute():
+            sockets.insert(0, Path(directorio) / "docker.sock")
+    for socket in sockets:
+        if not socket.is_socket():
+            continue
+        cli = [ejecutable, "--host", "unix://" + str(socket)]
+        info = subprocess.run([*cli, "info", "--format", "{{json .SecurityOptions}}"],
+                              capture_output=True, text=True, timeout=4)
+        if info.returncode != 0:
+            continue
+        opciones = json.loads(info.stdout)
+        if not isinstance(opciones, list) or "name=rootless" not in opciones:
+            continue
+        imagen = subprocess.run([*cli, "image", "inspect", IMAGEN_PRUEBAS],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=4)
+        if imagen.returncode == 0:
+            return cli
+    raise RuntimeError("Falta un daemon Docker rootless local con la imagen de pruebas fijada.")
+
+
+def comando_docker(cli, copia, nombre, *, sonda=False):
+    carpeta = "tests" if (copia / "tests").is_dir() else "."
+    if any(c in str(copia) for c in (",", "\n", "\r")):
+        raise ValueError("Ruta de copia incompatible con el montaje Docker.")
+    argumentos = ["-c", _SONDA_DOCKER] if sonda else ["-c", _INICIO_PYTHON, carpeta]
+    return [*cli, "run", "--name", nombre, "--rm", "--pull=never", "--network", "none",
+            "--read-only", "--cgroupns", "private", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+            "--pids-limit", "64", "--memory", "256m", "--memory-swap", "256m", "--cpus", "1",
+            "--user", "65534:65534", "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=16m",
+            "--mount", f"type=bind,src={copia},dst=/proyecto,readonly", "--workdir", "/proyecto",
+            IMAGEN_PRUEBAS, "python", "-I", "-B", *argumentos]
+
+
+def limpiar_docker(cli, nombre):
+    try:
+        subprocess.run([*cli, "rm", "-f", nombre], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def perfil_pruebas():
+    """Selecciona Bubblewrap o comprueba la alternativa Docker autorizada."""
+    from uuid import uuid4
+
+    funciona, aviso = diagnosticar()
+    if funciona or os.environ.get("CEREBRO_PRUEBAS_DOCKER") != "1":
+        return ("bubblewrap" if funciona else None), aviso, None
+    nombre = "cerebro-sonda-" + uuid4().hex
+    try:
+        cli = docker_local()
+        try:
+            with TemporaryDirectory(prefix="cerebro-sonda-") as carpeta:
+                copia = Path(carpeta) / "vacia"
+                copia.mkdir(mode=0o755)
+                copia.chmod(0o755)
+                prueba = subprocess.run(comando_docker(cli, copia, nombre, sonda=True),
+                                       capture_output=True, text=True, timeout=8)
+        finally:
+            limpiar_docker(cli, nombre)
+        if prueba.returncode == 0 and prueba.stdout.strip() == "CEREBRO_AISLADO":
+            return "docker", "Perfil Docker rootless local y recursos comprobados.", cli
+        detalle = (prueba.stderr or prueba.stdout).strip().splitlines()
+        aviso += " Docker rootless no superó la comprobación."
+        if detalle:
+            aviso += " " + detalle[-1][:240]
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+        aviso += " " + str(error)
+    return None, aviso, None

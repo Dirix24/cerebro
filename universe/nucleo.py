@@ -678,6 +678,22 @@ class Nucleo:
             if len(self.dialogos_profesor) > 64:
                 self.dialogos_profesor.popitem(last=False)
 
+    def _extracto_con_fuente(self, pregunta, extracto, fuente):
+        from core.respuestas_con_fuentes import normalizar
+
+        if not self.profesor.configurado or not hasattr(self.profesor, "explicar_fragmentos"):
+            return None
+        try:
+            propuesta = self.profesor.explicar_fragmentos(
+                "Cita una oración completa sin cambiar palabras. " + pregunta,
+                [{"referencia": fuente, "texto": extracto[:900]}])
+        except (RuntimeError, ValueError):
+            return None
+        oraciones = re.split(r"(?<=[.!?])\s+", extracto)
+        if not isinstance(propuesta, str) or len(normalizar(propuesta).split()) < 4:
+            return None
+        return next((oracion for oracion in oraciones if normalizar(oracion) == normalizar(propuesta)), None)
+
     def _diagnostico_turno(self, clave, detalle):
         with self.cerrojo:
             self.diagnosticos_conversacion[clave] = detalle
@@ -1019,20 +1035,75 @@ class Nucleo:
             pregunta_busqueda = pregunta
             modelo_intentado = False
             if respuesta is None and not comando:
-                from core.comprension_conversacional import conserva_contexto, pide_explicacion, pide_seguimiento, preparar
-
-                from core.respuestas_con_fuentes import DEFINICIONES_BASE, concepto_definicion
+                from core.comprension_conversacional import (
+                    conserva_contexto, consulta_referencia, pide_dato, pide_explicacion, pide_seguimiento, preparar,
+                )
+                from core.respuestas_con_fuentes import (
+                    DEFINICIONES_BASE, concepto_definicion, responder_definicion, respuesta_clara,
+                )
 
                 pregunta_busqueda, aclaracion = preparar(pregunta)
-                referencia = DEFINICIONES_BASE.get(concepto_definicion(pregunta_busqueda))
-                if referencia and self.agente.tiene_permisos("READ") and self.chat.pregunta_repaso is None:
-                    respuesta = referencia
-                    origen = "glosario_local"
-                    contexto = self._contexto_modelo(clave_dialogo)
-                    self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
+                if pregunta.lower().startswith("cerebro"):
+                    sin_mencion = re.sub(r"^cerebro[, ]+", "", pregunta, flags=re.I)
+                    if sin_mencion != pregunta:
+                        pregunta_busqueda, aclaracion = preparar(sin_mencion)
+                if intencion == "quien eres":
+                    respuesta = "Soy CEREBRO, un asistente local para conversar, usar herramientas y coordinar especialistas."
+                    origen = "identidad_local"
+                elif re.fullmatch(r"quien (?:te creo|(?:fue|es) tu creador)", intencion):
+                    respuesta, _ = self.chat.procesar(pregunta_busqueda)
+                    origen = "identidad_local"
                 elif aclaracion:
                     respuesta = aclaracion
                     origen = "aclaracion"
+                elif (pide_dato(pregunta_busqueda) and not PRIVADO.search(pregunta_busqueda)
+                      and self.chat.pregunta_repaso is None
+                      and (self.agente.tiene_permisos("READ") or explicacion is not None)):
+                    from core.conocimiento import respuesta_exacta
+                    from core.temas_locales import responder_tema
+
+                    self.exigir_permisos("READ")
+                    consulta = consulta_referencia(pregunta_busqueda)
+                    ruta = self.raiz / "data" / "conocimiento.sqlite3"
+
+                    def ficha(texto):
+                        try:
+                            return respuesta_exacta(texto, ruta=ruta)
+                        except (OSError, ValueError, sqlite3.Error):
+                            return None
+
+                    exacta = ficha(pregunta_busqueda)
+                    tema_fijo, tema_siguiente = responder_tema(pregunta_busqueda, self.chat.tema_local)
+                    if exacta:
+                        respuesta = respuesta_clara(exacta["respuesta"]) + "\nFuente: " + exacta["fuente"]
+                        origen = "conocimiento_local"
+                    elif tema_fijo:
+                        self.chat.tema_local = tema_siguiente
+                        respuesta = tema_fijo
+                        origen = "conocimiento_local" if tema_siguiente else "aclaracion"
+                    elif referencia := DEFINICIONES_BASE.get(concepto_definicion(consulta)):
+                        respuesta, origen = referencia, "glosario_local"
+                    elif local := responder_definicion(consulta, buscar_hechos=ficha):
+                        respuesta = respuesta_clara(local[0]) + "\nFuente: " + local[1]
+                        origen = "conocimiento_local"
+                    else:
+                        aviso = "No tengo una respuesta fiable con mis datos locales."
+                        publica = alternativa_publica(self, consulta, aviso)
+                        extracto, separador, fuente = publica.rpartition("\nFuente: ")
+                        if separador and extracto.strip() and fuente.strip():
+                            respuesta, origen = publica, "consulta_publica"
+                            seleccion = self._extracto_con_fuente(pregunta_busqueda, extracto, fuente)
+                            if seleccion:
+                                respuesta = seleccion + "\nFuente: " + fuente
+                        else:
+                            respuesta = "No tengo evidencia suficiente para responder con fiabilidad."
+                            if self.internet:
+                                respuesta += " Puedo investigar fuentes públicas si lo solicitas."
+                            origen = "evidencia_insuficiente"
+                            self._diagnostico_turno(clave_dialogo, "No encontré una referencia local o pública aplicable a la pregunta.")
+                    if origen != "evidencia_insuficiente":
+                        contexto = self._contexto_modelo(clave_dialogo)
+                        self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
                 elif (2 <= len(pregunta_busqueda) <= 700 and (pide_explicacion(pregunta_busqueda)
                            or pide_seguimiento(pregunta_busqueda))
                       and self.chat.pregunta_repaso is None
@@ -1044,7 +1115,7 @@ class Nucleo:
                     if contexto or pide_explicacion(pregunta_busqueda):
                         publicar("razonando", "consulta")
                         try:
-                            referencia_anterior = (DEFINICIONES_BASE.get(concepto_definicion(contexto[-1][0]))
+                            referencia_anterior = (DEFINICIONES_BASE.get(concepto_definicion(consulta_referencia(contexto[-1][0])))
                                                    if contexto and pide_seguimiento(pregunta_busqueda) else None)
                             origen = "profesor_local"
                             if referencia_anterior and hasattr(self.profesor, "explicar_fragmentos"):

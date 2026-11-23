@@ -11,22 +11,32 @@ MUESTRA = "def area(x, y):\n    return x * y\ndef doble(x):\n    return x + x\n"
 PREGUNTA_CAZEL = "En Python: def area(x, y): return x*y; def doble(x): return x+x. ¿Cuántas funciones se definen? Responde con un número."
 
 
-def _cazel(respuesta):
-    simbolos = [{"name": nodo.name, "line": nodo.lineno} for nodo in ast.parse(MUESTRA).body
+def muestras_cazel():
+    yield MUESTRA, PREGUNTA_CAZEL, "2"
+    for cantidad in (1, 3, 4):
+        lineas = [f"def paso_{i}(x): return x + {i}" for i in range(1, cantidad + 1)]
+        muestra = "\n".join(lineas) + "\n"
+        pregunta = "En este fragmento de Python: " + "; ".join(lineas)
+        yield muestra, pregunta + ". ¿Cuántas funciones se definen? Responde con un número.", str(cantidad)
+
+
+def _cazel(respuesta, variante=0):
+    muestra, pregunta, referencia = list(muestras_cazel())[variante]
+    simbolos = [{"name": nodo.name, "line": nodo.lineno} for nodo in ast.parse(muestra).body
                 if isinstance(nodo, ast.FunctionDef)]
     evidencia = next((item for item in respuesta.get("evidencia", ())
                       if item.get("path") == "practica.py" and item.get("language") == "Python"), None)
     if not evidencia or evidencia.get("errores") != [] or evidencia.get("simbolos") != simbolos:
         return None
-    return PREGUNTA_CAZEL, str(len(simbolos)), "AST de la muestra pública"
+    return pregunta, referencia, "AST de la muestra pública"
 
 
-def _daras(respuesta):
+def _daras(respuesta, variante=0):
     plan = respuesta.get("plan")
     if not isinstance(plan, list) or not 2 <= len(plan) <= 12:
         return None
     indices = {}
-    ejercicio = None
+    ejercicios = []
     for numero, tarea in enumerate(plan, 1):
         if not isinstance(tarea, dict):
             return None
@@ -35,16 +45,16 @@ def _daras(respuesta):
             return None
         if any(not isinstance(padre, str) or padre not in indices for padre in padres):
             return None
-        if len(padres) == 1 and ejercicio is None:
+        if len(padres) == 1:
             padre = indices[padres[0]]
-            ejercicio = (f"En un plan, la tarea T{numero} depende directamente de T{padre}. "
+            ejercicios.append((f"En un plan, la tarea T{numero} depende directamente de T{padre}. "
                          f"¿Qué tarea debe terminar antes que T{numero}? Responde con su identificador.",
-                         f"T{padre}", "Dependencia y orden del plan, comprobados por PROFESOR")
+                         f"T{padre}", "Dependencia y orden del plan, comprobados por PROFESOR"))
         indices[ident] = numero
-    return ejercicio
+    return ejercicios[variante % len(ejercicios)] if ejercicios else None
 
 
-def recopilar(cancelacion):
+def recopilar(cancelacion, indice_practica=0):
     from core.configuracion_especialistas import obtener
     from universe.especialidades import _consulta
 
@@ -53,10 +63,11 @@ def recopilar(cancelacion):
         origen = obtener(region + "_RAIZ")
         if not origen or cancelacion.is_set():
             continue
+        variante = indice_practica % len(list(muestras_cazel()))
         with TemporaryDirectory(prefix="cerebro-practica-") as temporal:
             carpeta = Path(temporal)
             if region == "CAZEL":
-                (carpeta / "practica.py").write_text(MUESTRA, encoding="utf-8")
+                (carpeta / "practica.py").write_text(list(muestras_cazel())[variante][0], encoding="utf-8")
             else:
                 # El adaptador DARAS v1 actual almacena SQLite junto al módulo.
                 # Una copia efímera de sus puntos de entrada impide tocar sus datos.
@@ -71,7 +82,7 @@ def recopilar(cancelacion):
             resultado = _consulta(region, accion, "practica.py" if region == "CAZEL" else
                                   "Planificar un proyecto de ejemplo", cancelacion=cancelacion,
                                   practica=carpeta)
-        if resultado["estado"] == "ok" and (ejercicio := evaluar(resultado)):
+        if resultado["estado"] == "ok" and (ejercicio := evaluar(resultado, variante)):
             pregunta, respuesta, criterio = ejercicio
             lecciones.append({"version": VERSION, "especialista": region, "pregunta": pregunta,
                               "respuesta": respuesta, "criterio": criterio,
@@ -96,7 +107,7 @@ def validar_lecciones(lecciones):
         pregunta = leccion["pregunta"]
         respuesta = leccion["respuesta"]
         if region == "CAZEL":
-            valida = pregunta == PREGUNTA_CAZEL and respuesta == "2"
+            valida = any((pregunta, respuesta) == (p, r) for _, p, r in muestras_cazel())
         elif region == "DARAS":
             dep = re.fullmatch(r"En un plan, la tarea T(\d{1,2}) depende directamente de T(\d{1,2})\. "
                                r"¿Qué tarea debe terminar antes que T\1\? Responde con su identificador\.", pregunta)

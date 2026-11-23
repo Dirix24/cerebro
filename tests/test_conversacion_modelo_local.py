@@ -25,7 +25,7 @@ def test_definiciones_locales_y_aclaracion(preparar):
         motor.ejecutor.shutdown()
 
 
-def test_modelo_precede_busqueda_y_mantiene_seis_turnos(preparar, monkeypatch):
+def test_modelo_atendiendo_dialogo_abierto_mantiene_seis_turnos(preparar, monkeypatch):
     llamadas = []
 
     def conversar(pregunta, contexto):
@@ -39,7 +39,7 @@ def test_modelo_precede_busqueda_y_mantiene_seis_turnos(preparar, monkeypatch):
 
         monkeypatch.setattr(nucleo.chat, "procesar", inesperado)
         for i in range(7):
-            assert nucleo.conversar(f"¿Qué es tema {i}?")["origen"] == "profesor_local"
+            assert nucleo.conversar(f"Cuéntame tema {i}")["origen"] == "profesor_local"
         assert len(llamadas[-1][1]) == 6
         assert "4" in nucleo.conversar("Calcula 2 + 2")["respuesta"]
         assert len(llamadas) == 7
@@ -186,3 +186,25 @@ def test_esquema_codigo_usa_nombre_solicitado_sin_tomar_rutas():
     prueba = archivos("Crea una página en carpeta/index.html.")
     assert prueba["maxItems"] == 6
     assert "pattern" in prueba["items"]["properties"]["nombre"]
+
+
+
+def test_nucleo_se_abstiene_sin_evidencia_y_recupera_ficha_exacta(preparar):
+    from core.conocimiento import guardar
+
+    def inventar(*_):
+        pytest.fail("Una consulta factual sin respaldo no debe llamar al generador.")
+
+    motor = Nucleo("local", profesor=SimpleNamespace(configurado=True, conversar=inventar))
+    try:
+        pregunta = "¿Cuándo se inauguró el faro experimental?"
+        assert motor.conversar(pregunta)["origen"] == "evidencia_insuficiente"
+        ruta = preparar / "data" / "conocimiento.sqlite3"
+        guardar(pregunta, "Se inauguró en 1998.", "Acta de prueba", ruta=ruta)
+        dato = motor.conversar(pregunta)
+        assert dato["origen"] == "conocimiento_local"
+        assert "1998" in dato["respuesta"] and "Acta de prueba" in dato["respuesta"]
+        assert "país insular" in motor.conversar("¿Qué es Japón?")["respuesta"]
+        assert "Tokio" in motor.conversar("¿Cuál es su capital?")["respuesta"]
+    finally:
+        motor.ejecutor.shutdown()

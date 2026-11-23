@@ -291,7 +291,12 @@ class GestorAprendizaje:
                 lecciones = []
                 if ensayo.colectivo:
                     from core.lecciones_colectivas import recopilar
-                    lecciones = recopilar(ensayo.cancelado)
+                    historial = competencias.historial(nucleo.raiz)
+                    previas = {(l["especialista"], l["pregunta"], l["respuesta"])
+                               for informe in historial for l in informe.get("lecciones_colectivas", ())}
+                    indice = sum(bool(informe.get("lecciones_colectivas")) for informe in historial)
+                    lecciones = [l for l in recopilar(ensayo.cancelado, indice)
+                                 if (l["especialista"], l["pregunta"], l["respuesta"]) not in previas]
                 self._comprobar(nucleo, ensayo)
                 carpeta = Path(mkdtemp(prefix="ensayo-", dir=raiz))
                 (carpeta / "variantes.json").write_text(json.dumps(variantes), encoding="utf-8")

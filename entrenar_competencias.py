@@ -65,7 +65,7 @@ def _preguntas(documentos):
 
 
 def entrenar(origen, carpeta, pasos, variantes=None, *, reanudar=None, semilla=config.SEED,
-             intervalo=None, repeticion=0, lecciones=()):
+             intervalo=None, repeticion=0, lecciones=(), tasa=.0001):
     if type(pasos) is not int or pasos < 1:
         raise ValueError("El presupuesto debe incluir al menos un paso.")
     intervalo = min(8, pasos) if intervalo is None else intervalo
@@ -95,7 +95,9 @@ def entrenar(origen, carpeta, pasos, variantes=None, *, reanudar=None, semilla=c
         corpus, _, _ = cargar_datos()
         corpus = [d for d in corpus if _preguntas([d]).isdisjoint(reserva)]
         practicas += Random(semilla).sample(corpus, min(repeticion, len(corpus)))
-    optimizacion = ConfigEntrenamiento(batch_size=2, lr=.0001, total_pasos=pasos, seed=semilla,
+    if not math.isfinite(tasa) or not 0 < tasa <= .01:
+        raise ValueError("La tasa inicial debe ser positiva y no superar 0,01.")
+    optimizacion = ConfigEntrenamiento(batch_size=2, lr=tasa, total_pasos=pasos, seed=semilla,
                                      eval_cada=intervalo, paciencia_early_stop=0)
     ficha = {"version": 1, "origen_sha256": _huella_archivo(origen),
              "optimizacion": asdict(optimizacion),
@@ -190,6 +192,7 @@ def main():
     argumentos.add_argument("--pasos", type=int, default=3)
     argumentos.add_argument("--intervalo", type=int, help="pasos entre guardados de progreso")
     argumentos.add_argument("--semilla", type=int, default=config.SEED)
+    argumentos.add_argument("--tasa", type=float, default=.0001, help="tasa inicial del ajuste")
     argumentos.add_argument("--repaso", type=int, default=0, help="número de documentos anteriores para el control de retención")
     argumentos.add_argument("--reanudar", type=Path, help="subcarpeta de sesión creada dentro de --salida")
     argumentos.add_argument("--lecciones", type=Path, help="lecciones del protocolo colectivo verificadas")
@@ -216,7 +219,7 @@ def main():
     informe = entrenar(opciones.origen, opciones.salida, opciones.pasos, variantes,
                        reanudar=opciones.reanudar, semilla=opciones.semilla,
                        intervalo=opciones.intervalo or min(8, opciones.pasos),
-                       repeticion=opciones.repaso, lecciones=lecciones)
+                       repeticion=opciones.repaso, lecciones=lecciones, tasa=opciones.tasa)
     if opciones.registrar:
         competencias.guardar(config.raiz_datos(), informe["antes"])
         competencias.guardar(config.raiz_datos(), {**informe["despues"], "tipo": "candidato",

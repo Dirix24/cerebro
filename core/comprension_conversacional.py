@@ -43,3 +43,21 @@ def conserva_contexto(respuesta, referencia):
     principal = set(palabra for palabra in normalizar(referencia).split() if len(palabra) >= 5)
     salida = set(normalizar(respuesta).split())
     return len(principal & salida) >= 2
+
+
+def pide_dato(pregunta):
+    texto = normalizar(pregunta)
+    return bool(re.match(r"^(?:que (?:es|son|hace|significa|paso|ocurrio)|"
+                         r"quien(?:es)?|cuando|donde|cual(?:es)?|cuanto(?:s|a|as)?|"
+                         r"como (?:funciona|se|ocurrio)|por que|para que sirve|explicame|explica)\b", texto))
+
+
+def consulta_referencia(pregunta):
+    """Equivalencias acotadas para buscar un tema, conservando la consulta exacta aparte."""
+    if concepto_definicion(pregunta):
+        return pregunta
+    texto = normalizar(pregunta)
+    tema = re.fullmatch(r"(?:como funciona|para que sirve|explicame|explica) (.{2,100})", texto)
+    if tema:
+        return "¿Qué es " + tema[1] + "?"
+    return pregunta
