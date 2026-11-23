@@ -93,6 +93,17 @@ class ProfesorLocal:
                 return cls(guardado.get("puerto"), ollama=guardado["modelo"])
             except (KeyError, TypeError, ValueError):
                 pass
+        if guardado and guardado.get("motor") == "llama.cpp":
+            from shutil import which
+
+            binario = which("llama-server")
+            ruta = guardado.get("modelo")
+            if binario and isinstance(ruta, str):
+                modelo = Path(ruta)
+                carpeta = Path(config.raiz_datos()) / "models"
+                if (modelo.parent == carpeta.resolve() and modelo.suffix == ".gguf"
+                        and not carpeta.is_symlink() and not modelo.is_symlink() and modelo.is_file()):
+                    return ProfesorBajoDemanda(binario, modelo)
         return cls()
 
     @property
@@ -111,7 +122,7 @@ class ProfesorLocal:
         if not 2 <= len(pregunta) <= 700:
             raise ValueError("El profesor local admite mensajes de hasta 700 caracteres.")
         return self._consultar(
-            "Conversa en español con explicaciones breves. Si el término es ambiguo, pregunta antes de adivinar. "
+            "Conversa en español con explicaciones breves. Interpreta erratas y expresiones coloquiales usando el contexto. Si el término es ambiguo, pregunta antes de adivinar. "
             "Si te piden acciones, ofrece orientación "
             "o un plan textual y evita afirmar que has ejecutado acciones.",
             pregunta, contexto=contexto,

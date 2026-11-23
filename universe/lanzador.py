@@ -842,6 +842,9 @@ def escritorio(sesion):
         rutinas.add_command(label=etiqueta, command=lambda orden=orden: orden_rutina(orden))
     rutinas.add_command(label="Repetir rutina…", command=elegir_rutina)
     menu_acciones.add_cascade(label="Rutinas de escritorio", menu=rutinas)
+    from universe.dialogo_recuerdos import abrir as abrir_recuerdos
+    menu_acciones.add_command(label="Recuerdos de la conversación…",
+                              command=lambda: abrir_recuerdos(ventana, lambda op, datos=None: api(sesion, op, datos)))
     menu_acciones.add_command(label="Copiar respuesta", command=copiar_respuesta)
     menu_acciones.add_command(label="Elegir audio", command=audio)
     accesos.configure(menu=menu_acciones)

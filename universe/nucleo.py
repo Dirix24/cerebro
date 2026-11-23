@@ -45,7 +45,7 @@ SIMULADOR = parsear_ayuda([
 ])
 COMANDOS = {
     "/ayuda", "/estado", "/limpiar", "/calc", "/calcular-local", "/deducir", "/razonar",
-    "/memoria", "/recuerdo", "/recordar", "/olvidar", "/extraer-recuerdos", "/insertar-recuerdo",
+    "/memoria", "/recuerdo", "/contexto-recuerdo", "/recordar", "/olvidar", "/extraer-recuerdos", "/insertar-recuerdo",
     "/origen", "/configurar-creador", "/conocimiento", "/enseñar-habilidad", "/corregir-habilidad",
     "/usar-habilidad", "/encadenar-habilidades", "/aprender-ficha", "/internet",
     "/recordar-tarea", "/recordatorios", "/cancelar-recordatorio",
@@ -132,9 +132,11 @@ class Nucleo:
                                  if tarjeta.name[4:].isdigit() and (tarjeta / "device").exists())
                           if drm.is_dir() else None)
         modelo = self.chat.modelo
+        modelo_generativo = getattr(self.profesor, "modelo", None)
         return {
             "perfil": self.perfil, "entorno": entorno, "cuota": self.cuota,
-            "modelo_conversacional": (getattr(self.profesor, "ollama", None) or "Profesor local"
+            "modelo_conversacional": ((getattr(self.profesor, "ollama", None)
+                                       or (Path(modelo_generativo).name if modelo_generativo else "Motor local"))
                                       if self.profesor.configurado else None),
             "uso": self._uso(), "identidad": leer_origen(self.raiz),
             "internet": self.internet, "investigar_auto": self.investigar_auto,
@@ -613,6 +615,23 @@ class Nucleo:
             except OSError:
                 publicar("error", "fallo")
 
+    def _contexto_modelo(self, clave):
+        with self.cerrojo:
+            if clave in self.dialogos_profesor:
+                return self.dialogos_profesor[clave]
+        # Para una conversación nueva en memoria, recuperar los pares persistidos.
+        turnos = self.conversaciones.turnos(clave[1], incluir_temporales=False)
+        return tuple((usuario["texto"], asistente["texto"])
+                     for usuario, asistente in zip(turnos, turnos[1:])
+                     if usuario["rol"] == "usuario" and asistente["rol"] == "cerebro")[-6:]
+
+    def _guardar_contexto_modelo(self, clave, contexto, pregunta, respuesta):
+        with self.cerrojo:
+            self.dialogos_profesor[clave] = (*contexto, (pregunta, respuesta))[-6:]
+            self.dialogos_profesor.move_to_end(clave)
+            if len(self.dialogos_profesor) > 64:
+                self.dialogos_profesor.popitem(last=False)
+
     def conversar(self, pregunta, modo=None, cliente=None, documento=None):
         if not isinstance(pregunta, str) or not pregunta.strip() or len(pregunta) > 24000:
             raise ValueError("Escribe un mensaje de hasta 24 000 caracteres.")
@@ -628,9 +647,11 @@ class Nucleo:
             raise PermissionError("La conversación está desactivada en modo de solo lectura.")
         if cliente is not None and (not isinstance(cliente, str) or not re.fullmatch(r"[a-f0-9]{24}", cliente)):
             raise ValueError("Identificador de conversación inválido.")
+        from core.comprension_conversacional import intencion_comun
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        intencion = intencion_comun(intencion)
         if re.fullmatch(r"(?:quiero (?:hacer|aprender|practicar) (?:algo de )?|ayudame con (?:la )?)"
                         r"(?:electronica|electroncia|eletronica)", intencion):
             self.exigir_permisos("READ")
@@ -653,7 +674,7 @@ class Nucleo:
             return {"respuesta": f"Simulador de electrónica: {nombre} · {url}", "abrir_url": url}
         if modo == "studio" and not comando:
             orden_generar = re.fullmatch(
-                r"(?:haz(?:me)?|crea(?:me)?|disena(?:me)?|programa(?:me)?|genera(?:me)?) (?:una? |el |la )?"
+                r"(?:quiero crear|haz(?:me)?|crea(?:me)?|disena(?:me)?|programa(?:me)?|genera(?:me)?) (?:una? |el |la )?"
                 r"(?:calculadora|web|pagina web|programa|proyecto|script)(?: .*)?", intencion)
             if orden_generar and intencion not in {"crea una pagina web", "crea pagina web"}:
                 proyecto = self.proyectos_studio.get(cliente)
@@ -887,7 +908,9 @@ class Nucleo:
             plan = self.escritorio.planificar(pregunta, cliente)
             if plan is not None:
                 return {**plan, "compartir_temporal": True}
-            resultado_escritorio = self.escritorio.consultar(pregunta, cliente)
+            orden_escritorio = ("Abre el editor de código" if intencion == "abre el programa de codigo"
+                               else pregunta)
+            resultado_escritorio = self.escritorio.consultar(orden_escritorio, cliente)
             if resultado_escritorio is not None:
                 return {"respuesta": resultado_escritorio, "compartir_temporal": True}
         from universe.consultas import destino_desktop
@@ -902,6 +925,8 @@ class Nucleo:
         origen = None
         if self.agente.tiene_permisos("READ"):
             self.memoria.cargar_memoria()
+        if comando == "/contexto-recuerdo":
+            return self._consultar_recuerdo_portable(pregunta.partition(" ")[2])
         if comando == "/modelo":
             self.exigir_permisos("READ")
             if self.chat.modelo is None:
@@ -922,33 +947,33 @@ class Nucleo:
                 return {"respuesta": respuesta, "compartir_temporal": True}
             pregunta_busqueda = pregunta
             modelo_intentado = False
+            clave_dialogo = (cliente, self.conversaciones.activa())
             if respuesta is None and not comando:
-                from core.comprension_conversacional import pide_explicacion, preparar
+                from core.comprension_conversacional import pide_explicacion, pide_seguimiento, preparar
 
                 pregunta_busqueda, aclaracion = preparar(pregunta)
                 if aclaracion:
                     respuesta = aclaracion
                     origen = "aclaracion"
-                elif (2 <= len(pregunta_busqueda) <= 700 and pide_explicacion(pregunta_busqueda)
+                elif (2 <= len(pregunta_busqueda) <= 700 and (pide_explicacion(pregunta_busqueda)
+                           or pide_seguimiento(pregunta_busqueda))
+                      and self.chat.pregunta_repaso is None
                       and not PRIVADO.search(pregunta_busqueda)
                       and self.profesor.configurado and self.agente.tiene_permisos("READ")
                       and hasattr(self.profesor, "conversar")):
                     modelo_intentado = True
-                    clave_dialogo = (cliente, self.conversaciones.activa())
-                    with self.cerrojo:
-                        contexto = self.dialogos_profesor.get(clave_dialogo, ())
-                    try:
-                        explicada = self.profesor.conversar(pregunta_busqueda, contexto)
-                    except (RuntimeError, ValueError):
-                        pass
+                    contexto = self._contexto_modelo(clave_dialogo)
+                    if contexto or pide_explicacion(pregunta_busqueda):
+                        publicar("razonando", "consulta")
+                        try:
+                            respuesta = self.profesor.conversar(pregunta_busqueda, contexto)
+                        except (RuntimeError, ValueError):
+                            publicar("error", "fallo")
+                        else:
+                            self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta, respuesta)
+                            origen = "profesor_local"
                     else:
-                        with self.cerrojo:
-                            self.dialogos_profesor[clave_dialogo] = (*contexto, (pregunta, explicada))[-6:]
-                            self.dialogos_profesor.move_to_end(clave_dialogo)
-                            if len(self.dialogos_profesor) > 64:
-                                self.dialogos_profesor.popitem(last=False)
-                        respuesta = "Profesor local: " + explicada
-                        origen = "profesor_local"
+                        modelo_intentado = False
             if respuesta is None:
                 respuesta, _ = self.chat.procesar(pregunta_busqueda)
                 memoria_solicitada = comando == "/recuerdo" or re.fullmatch(
@@ -974,10 +999,12 @@ class Nucleo:
                     alternativa = alternativa_publica(self, pregunta_busqueda, respuesta)
                     if alternativa != respuesta:
                         evidencia_publica = alternativa
-                if not modelo_intentado and (falta_respuesta or explicita) and self.profesor.configurado and (tema or conversacion):
+                if (not modelo_intentado and (falta_respuesta or explicita)
+                        and self.profesor.configurado and (tema or conversacion)
+                        and not PRIVADO.search(pregunta_busqueda)):
                     self.exigir_permisos("READ")
-                    publicar("razonando", "profesor_local")
-                    clave_dialogo = (cliente, self.conversaciones.activa())
+                    publicar("razonando", "consulta")
+                    contexto = self._contexto_modelo(clave_dialogo)
                     try:
                         if evidencia_publica and hasattr(self.profesor, "explicar_fragmentos"):
                             explicada = self.profesor.explicar_fragmentos(pregunta, [
@@ -985,19 +1012,12 @@ class Nucleo:
                         elif tema:
                             explicada = self.profesor.explicar(tema)
                         else:
-                            with self.cerrojo:
-                                contexto = self.dialogos_profesor.get(clave_dialogo, ())
                             explicada = self.profesor.conversar(pregunta, contexto)
-                        with self.cerrojo:
-                            previos = self.dialogos_profesor.get(clave_dialogo, ())
-                            self.dialogos_profesor[clave_dialogo] = (*previos, (pregunta, explicada))[-6:]
-                            self.dialogos_profesor.move_to_end(clave_dialogo)
-                            if len(self.dialogos_profesor) > 64:
-                                self.dialogos_profesor.popitem(last=False)
-                    except RuntimeError as exc:
-                        respuesta += "\nProfesor local: " + str(exc)
+                    except (RuntimeError, ValueError):
+                        publicar("error", "fallo")
                     else:
-                        respuesta = "Profesor local: " + explicada
+                        self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta, explicada)
+                        respuesta = explicada
                         origen = "profesor_local"
                 if evidencia_publica:
                     if origen == "profesor_local":
@@ -1325,6 +1345,59 @@ class Nucleo:
                 raise ValueError("El recuerdo no está disponible para eliminar.")
             eliminado = self.memoria.eliminar_largo_plazo(identificador.removeprefix("memoria:"))
         return {"eliminado": eliminado}
+
+    def _consultar_recuerdo_portable(self, consulta):
+        from core.recuerdo_portable import validar
+
+        self.exigir_permisos("READ")
+        clave, _, pregunta = consulta.strip().partition(" ")
+        if not re.fullmatch(r"recuerdo_[a-f0-9]{64}", clave) or not 2 <= len(pregunta.strip()) <= 700:
+            raise ValueError("Uso: /contexto-recuerdo recuerdo_ID pregunta")
+        entrada = self.memoria.recuperar_largo_plazo(clave)
+        if entrada is None:
+            return {"respuesta": "Ese fragmento no está en la memoria."}
+        recuerdo = validar(entrada)
+        # Elegir citas por términos de la pregunta y mantener su orden original.
+        palabras = set(re.findall(r"\w{4,}", pregunta.casefold()))
+        mensajes = recuerdo["mensajes"]
+        indices = sorted(range(len(mensajes)), key=lambda i: (
+            len(palabras.intersection(re.findall(r"\w{4,}", mensajes[i]["texto"].casefold()))), i), reverse=True)
+        citas = [{"referencia": f"{recuerdo['tema']} · {m['rol']} · {m['fecha']}", "texto": m["texto"][:420]}
+                 for i in sorted(indices[:4]) for m in [mensajes[i]]]
+        if self.profesor.configurado and hasattr(self.profesor, "explicar_fragmentos"):
+            try:
+                respuesta = self.profesor.explicar_fragmentos(pregunta, citas)
+                return {"respuesta": respuesta, "origen": "profesor_local"}
+            except (RuntimeError, ValueError):
+                publicar("error", "fallo")
+        return {"respuesta": "\n\n".join(cita["referencia"] + "\n" + cita["texto"] for cita in citas),
+                "origen": "memoria"}
+
+    def recuerdo_portable(self, datos):
+        from core.recuerdo_portable import validar
+
+        self.exigir_permisos("READ")
+        recuerdo = validar(datos.get("recuerdo"))
+        clave = "recuerdo_" + recuerdo["id"]
+        with self.cerrojo:
+            self.memoria.cargar_memoria()
+            anterior = self.memoria.recuperar_largo_plazo(clave)
+            estado = "nuevo" if clave not in self.memoria.long_term_memory else (
+                "duplicado" if anterior == recuerdo else "conflicto")
+            if datos.get("confirmar") is True:
+                self.exigir_permisos("WRITE")
+                if self.solo_lectura:
+                    raise PermissionError("La sesión es de solo lectura.")
+                if estado == "conflicto":
+                    raise ValueError("Ya existe un recuerdo diferente para ese fragmento.")
+                if estado == "nuevo":
+                    if len(json.dumps(self.memoria.long_term_memory, ensure_ascii=False).encode()) + len(
+                            json.dumps(recuerdo, ensure_ascii=False).encode()) > 6 * MIB:
+                        raise ValueError("La memoria combinada supera 6 MiB.")
+                    self.memoria.importar_recuerdos({clave: recuerdo})
+                    publicar("aprendido", "memoria")
+                    estado = "guardado"
+        return {"clave": clave, "estado": estado}
 
     def respaldo(self, datos=None):
         self.exigir_permisos("READ" if datos is None else "WRITE")

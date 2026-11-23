@@ -43,7 +43,7 @@ def descubrir(profesor):
     except ValueError:
         puerto = 0
     modelos = _modelos_ollama(puerto) if 1024 <= puerto <= 65535 else None
-    gguf = os.environ.get("CEREBRO_PROFESOR_MODELO")
+    gguf = getattr(profesor, "modelo", None) or os.environ.get("CEREBRO_PROFESOR_MODELO")
     ruta_gguf = Path(gguf).expanduser() if gguf else None
     gguf_instalado = bool(ruta_gguf and ruta_gguf.suffix.lower() == ".gguf" and ruta_gguf.is_file())
     resultado = [

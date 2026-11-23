@@ -73,10 +73,10 @@ class Conversaciones:
         self.temporales.pop(identificador, None)
         self.revisiones_temporales.pop(identificador, None)
 
-    def turnos(self, identificador=None):
+    def turnos(self, identificador=None, *, incluir_temporales=True):
         activa = self.activa() if identificador is None else identificador
         guardados = consultar(self.ruta(activa), limite=60)
-        temporales = self.temporales.get(activa, ())
+        temporales = self.temporales.get(activa, ()) if incluir_temporales else ()
         return sorted([*guardados, *temporales], key=lambda turno: str(turno.get("fecha", "")))[-60:]
 
     def version_activa(self):

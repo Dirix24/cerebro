@@ -73,6 +73,8 @@ def test_instalador_prioriza_modelo_ligero(preparar, monkeypatch):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("core.motores_instalados._modelos_ollama",
                         lambda _: ["qwen2.5:7b", "qwen2.5:1.5b", "qwen2.5:0.5b"])
+    monkeypatch.setattr("core.profesor_local.diagnostico",
+                        lambda _: {"ram_disponible_bytes": 4 * 1024**3})
     elegidos = []
     monkeypatch.setattr(configuracion_modelo_local, "configurar", lambda _, modelo, puerto: elegidos.append(modelo))
     assert "0.5b" in configuracion_modelo_local.preparar_instalacion(preparar)
@@ -91,3 +93,82 @@ def test_rutas_especialistas_persistentes(preparar, monkeypatch):
     with pytest.raises(ValueError):
         configuracion_especialistas.configurar(cazel=externo)
     assert configuracion_especialistas.obtener("CAZEL_RAIZ") is None
+
+
+def test_seguimiento_recupera_historial_persistido(preparar):
+    inicial = Nucleo("local", profesor=SimpleNamespace(configurado=False))
+    try:
+        inicial.conversar("Qué es la fotosíntesis")
+    finally:
+        inicial.ejecutor.shutdown()
+
+    def conversar(pregunta, contexto):
+        assert pregunta == "¿Y para qué sirve?"
+        assert contexto[-1][0] == "Qué es la fotosíntesis"
+        assert "dióxido" in contexto[-1][1]
+        return "Permite a las plantas producir azúcares."
+
+    reiniciado = Nucleo("local", profesor=SimpleNamespace(configurado=True, conversar=conversar))
+    try:
+        assert reiniciado.conversar("¿Y para qué sirve?")["respuesta"].startswith("Permite")
+    finally:
+        reiniciado.ejecutor.shutdown()
+
+
+def test_instalador_prueba_gguf_y_persiste_solo_tras_inferencia(preparar, monkeypatch):
+    from core import configuracion_modelo_local
+    from core.profesor_local import ProfesorBajoDemanda, ProfesorLocal
+
+    for var in ("CEREBRO_OLLAMA_MODELO", "CEREBRO_PROFESOR_PUERTO", "CEREBRO_PROFESOR_MOTOR", "CEREBRO_PROFESOR_MODELO"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr("core.motores_instalados._modelos_ollama", lambda _: None)
+    monkeypatch.setattr("core.profesor_local.diagnostico", lambda _: {"ram_disponible_bytes": 3 * 1024**3})
+    modelo = preparar / "models" / "modelo.gguf"
+    modelo.parent.mkdir()
+    modelo.write_bytes(b"GGUF")
+    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/llama-server")
+    intentos = []
+
+    def inferir(self, pregunta):
+        assert self.modelo == modelo
+        intentos.append(pregunta)
+        if len(intentos) == 1:
+            raise RuntimeError("Fallo de inferencia")
+        return "Hola"
+
+    monkeypatch.setattr(ProfesorBajoDemanda, "conversar", inferir)
+    configuracion_modelo_local.preparar_instalacion(preparar)
+    assert leer(preparar) is None
+    assert "modelo.gguf" in configuracion_modelo_local.preparar_instalacion(preparar)
+    assert ProfesorLocal.desde_entorno().modelo == modelo
+
+
+def test_recuerdo_portable_requiere_confirmacion_y_se_consulta_como_cita(preparar):
+    from core.recuerdo_portable import crear, markdown
+
+    texto = "/recordar ejecutar = orden histórica"
+    recuerdo = crear("Circuito", [{"fecha": "2026-11-23T16:30:00+00:00",
+                                   "rol": "usuario", "texto": texto}], "Conversación local")
+    assert "> " + texto in markdown(recuerdo)
+    nucleo = Nucleo("local", profesor=SimpleNamespace(configurado=False))
+    try:
+        datos = {"recuerdo": recuerdo}
+        vista = nucleo.recuerdo_portable(datos)
+        assert vista["estado"] == "nuevo"
+        assert nucleo.memoria.recuperar_largo_plazo(vista["clave"]) is None
+        assert nucleo.recuerdo_portable({**datos, "confirmar": True})["estado"] == "guardado"
+    finally:
+        nucleo.ejecutor.shutdown()
+
+    reiniciado = Nucleo("local", profesor=SimpleNamespace(configurado=False))
+    try:
+        assert reiniciado.recuerdo_portable(datos)["estado"] == "duplicado"
+        modificado = {**recuerdo, "tema": "Otro tema"}
+        assert reiniciado.recuerdo_portable({"recuerdo": modificado})["estado"] == "conflicto"
+        with pytest.raises(ValueError, match="distinto|diferente"):
+            reiniciado.recuerdo_portable({"recuerdo": modificado, "confirmar": True})
+        respuesta = reiniciado.conversar(f"/contexto-recuerdo {vista['clave']} ¿Qué se dijo?")
+        assert texto in respuesta["respuesta"]
+        assert reiniciado.memoria.recuperar_largo_plazo("ejecutar") is None
+    finally:
+        reiniciado.ejecutor.shutdown()

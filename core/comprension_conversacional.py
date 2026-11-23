@@ -17,4 +17,19 @@ def preparar(pregunta):
 
 def pide_explicacion(pregunta):
     texto = normalizar(pregunta)
-    return bool(concepto_definicion(texto) or re.match(r"^(?:explicame|cuentame|por que|como funciona) ", texto))
+    return bool(concepto_definicion(texto) or re.match(r"^(?:explicame|cuentame|por que|como funciona|como se|cual es la diferencia|que diferencia hay) ", texto))
+
+
+def pide_seguimiento(pregunta):
+    texto = normalizar(pregunta)
+    return bool(re.match(r"^(?:y (?:como|por que|para que|cuando|que)\b|"
+                         r"(?:dame|ponme|muestrame) (?:otro|un) ejemplo\b|"
+                         r"(?:explicalo|resumelo) (?:mejor|de nuevo|en pocas palabras)\b)", texto))
+
+
+def intencion_comun(texto):
+    """Corrige vocabulario de la interfaz, sin reescribir nombres de archivos."""
+    if not re.match(r"^(?:quiero |abre |abreme |crea |hazme )", texto):
+        return texto
+    palabras = {"aser": "hacer", "pajina": "pagina", "pograma": "programa"}
+    return " ".join(palabras.get(palabra, palabra) for palabra in texto.split())

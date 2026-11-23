@@ -103,6 +103,7 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
     if region == "DARAS" and red:
         claves += ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR")
     entorno = {clave: os.environ[clave] for clave in claves if clave in os.environ}
+    inicio = monotonic()
     try:
         codigo, salida = _ejecutar(comando, raiz, entrada, entorno, 72 if accion == "proponer" else 23,
                                    cancelacion or Event())
@@ -114,13 +115,15 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
                 or respuesta.get("estado") not in ESTADOS):
             raise ValueError("Contrato incompatible.")
         sintetizar([respuesta])
-        return respuesta
+        return {**respuesta, "accion": accion, "duracion_ms": round((monotonic() - inicio) * 1000)}
     except subprocess.TimeoutExpired:
-        return _resultado(region, "error", "Tiempo de espera agotado.")
-    except InterruptedError as error:
-        return _resultado(region, "parcial", str(error))
+        error = "Tiempo de espera agotado."
+    except InterruptedError as cancelado:
+        return _resultado(region, "parcial", str(cancelado), accion=accion,
+                          duracion_ms=round((monotonic() - inicio) * 1000))
     except (OSError, ValueError, TypeError, KeyError):
-        return _resultado(region, "error", "El adaptador no devolvió un resultado válido.")
+        error = "El adaptador no devolvió un resultado válido."
+    return _resultado(region, "error", error, accion=accion, duracion_ms=round((monotonic() - inicio) * 1000))
 
 
 class Experiencias:
@@ -203,7 +206,9 @@ class Experiencias:
                                "titulo": region + " · " + resultado["estado"],
                                "detalle": sintetizar([resultado])[:600], "grupo": region,
                                "vinculos": [vinculo], "origen": "Resultado de especialista",
-                               "fecha": exp["fecha"]})
+                               "fecha": exp["fecha"], "estado": resultado["estado"],
+                               **{clave: resultado[clave] for clave in ("accion", "duracion_ms")
+                                  if clave in resultado}})
         return salida
 
 
@@ -341,6 +346,18 @@ def consultar(nucleo, pregunta, intencion):
         red_equipo = nucleo.internet and equipo[0].strip(": ").endswith("en internet")
         trabajos = [("DARAS", "investigar", red_equipo), ("CAZEL", "analizar", False)]
         profesor = True
+    if not trabajos and nucleo.agente.tiene_permisos("READ", "WRITE"):
+        from core.configuracion_especialistas import obtener
+        from universe.consultas import tema_publico
+
+        tema = re.fullmatch(r"investiga(?: en internet| en la web)? (?:sobre )?(.+)", intencion)
+        if (tema and tema[1] not in {"la actualidad", "las noticias de hoy"}
+                and tema_publico(tema[1]) and obtener("DARAS_RAIZ")):
+            red = nucleo.internet and bool(re.match(r"investiga en (?:internet|la web) ", intencion))
+            trabajos = [("DARAS", "investigar", red)]
+        elif (intencion in {"analiza el proyecto", "revisa el codigo"}
+              and obtener("CAZEL_RAIZ") and obtener("CAZEL_PROYECTO")):
+            trabajos = [("CAZEL", "analizar", False)]
     if not trabajos:
         return None
     nucleo.exigir_permisos("READ", "WRITE")

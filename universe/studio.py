@@ -212,6 +212,9 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                  lambda datos: messagebox.showinfo("Motores y especialistas", datos["respuesta"], parent=app))
 
     menu_opciones.add_command(label="Motores y especialistas…", command=mostrar_motores)
+    from universe.dialogo_recuerdos import abrir as abrir_recuerdos
+    menu_opciones.add_command(label="Recuerdos de la conversación…",
+                              command=lambda: abrir_recuerdos(app, pedir))
     opciones.configure(menu=menu_opciones)
     opciones.pack(side=RIGHT, padx=5)
     paginas = ttk.Notebook(app)
@@ -303,7 +306,16 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     barra_archivos.pack(fill=X)
 
     vistas_editor = ttk.Notebook(codigo)
-    vistas_editor.pack(fill=BOTH, expand=True)
+    inicio_central = ttk.Label(codigo, text="Arrastra un archivo o una carpeta aquí, o abre un proyecto.",
+                               anchor="center", wraplength=300)
+    inicio_central.pack(fill=BOTH, expand=True)
+
+    def mostrar_vista(pagina):
+        inicio_central.pack_forget()
+        vistas_editor.pack(fill=BOTH, expand=True)
+        vistas_editor.add(pagina)
+        vistas_editor.select(pagina)
+
     pagina_editor = ttk.Frame(vistas_editor, padding=6)
     pagina_validaciones = ttk.Frame(vistas_editor, padding=6)
     vistas_editor.add(pagina_editor, text="Editor")
@@ -366,8 +378,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     visor.tag_configure("codigo", foreground=TEXTO, font="TkFixedFont")
     grafica = Canvas(pagina_resultados, bg=EDITOR, height=90, highlightthickness=0)
     detalles = campo_texto(pagina_resultados)
-    acciones_proyecto = ttk.Frame(codigo)
-    acciones_proyecto.pack(fill=X)
+    for pagina in (pagina_editor, pagina_validaciones, pagina_cambios, pagina_visor, pagina_resultados):
+        vistas_editor.hide(pagina)
 
     ttk.Label(chat, text="CONVERSACIÓN", style="Seccion.TLabel").pack(anchor="w", pady=(0, 6))
     modelo_visible = StringVar(value="Comprobando configuración del motor…")
@@ -602,7 +614,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             else:
                 visor.insert(END, contenido)
             visor.configure(state="disabled")
-        vistas_editor.select(pagina_visor)
+        mostrar_vista(pagina_visor)
 
     def cargar_nombre(nombre):
         nonlocal solicitud_archivo
@@ -632,9 +644,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 editor.edit_modified(False)
                 programar_resaltado()
                 if Path(nombre).suffix.lower() in {".html", ".md", ".csv", ".tsv"} and abierto_en:
+                    vistas_editor.add(pagina_editor)
                     visualizar(datos)
                 else:
-                    vistas_editor.select(pagina_editor)
+                    mostrar_vista(pagina_editor)
             if abierto_en:
                 publicar(lambda: proyecto("recordar", nombre=nombre, esperada=abierto_en))
 
@@ -724,7 +737,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             if es_seguro_salir("¿Abrir otro archivo?"):
                 cargar_nombre(origen.relative_to(proyecto_activo).as_posix())
             return
-        if origen.suffix.lower() in {".py", ".js", ".ts", ".c", ".cpp", ".h", ".java", ".rs", ".sh", ".sql"}:
+        if origen.suffix.lower() in {".py", ".js", ".ts", ".c", ".cpp", ".h", ".java", ".rs", ".sh", ".sql", ".html"}:
             abrir_proyecto(str(origen.parent.resolve()), recuperar=origen.name)
             return
         if messagebox.askyesno("Autorizar archivo", f"¿Leer «{origen.name}» sin copiarlo al proyecto?", parent=app):
@@ -765,7 +778,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             if documento_activo != (esperado, nombre, visor_tipo):
                 return
             grafica.pack_forget()
-            vistas_editor.select(pagina_resultados)
+            mostrar_vista(pagina_resultados)
             if "ejercicio" not in dato:
                 mostrar(detalles, nombre + "\n\n" + dato["salida"])
                 return
@@ -889,13 +902,13 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             return
         if proyecto_activo:
             esperado = proyecto_activo
-            vistas_editor.select(pagina_validaciones)
+            mostrar_vista(pagina_validaciones)
             publicar(lambda: proyecto("validar", nombre=nombre, esperada=esperado),
                      lambda dato: mostrar(validaciones, dato["salida"] + "\n", anexar=True))
             return
         publicar(lambda: pedir("tarea", {"accion": "sintaxis", "nombre": nombre}),
                   lambda dato: tareas_en_curso.add(dato["id"]))
-        vistas_editor.select(pagina_validaciones)
+        mostrar_vista(pagina_validaciones)
         mostrar(validaciones, "Validando «" + nombre + "»…\n", anexar=True)
         estado.set("Validación solicitada.")
 
@@ -922,6 +935,10 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             editor.edit_modified(False)
             cargar_propuestas([])
             cambios_aplicados.clear()
+            for pagina in (pagina_editor, pagina_validaciones, pagina_cambios, pagina_visor, pagina_resultados):
+                vistas_editor.hide(pagina)
+            vistas_editor.pack_forget()
+            inicio_central.pack(fill=BOTH, expand=True)
             estado.set("Proyecto abierto" + (" · inventario limitado" if datos["limitado"] else ""))
             esperado = proyecto_activo
             if recuperar and any(item["ruta"] == recuperar for item in entradas_archivos):
@@ -966,7 +983,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                 lineas.append("Revisa el diff en Cambios y elige qué aplicar. Después puedes ejecutar las pruebas.")
             mostrar_mensaje("Cerebro", "\n".join(lineas))
             cargar_propuestas(datos["propuestas"])
-            vistas_editor.select(pagina_cambios)
+            mostrar_vista(pagina_cambios)
             estado.set("Inspección terminada.")
 
         publicar(lambda: proyecto("analizar", esperada=base), analizado)
@@ -1029,7 +1046,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                                    parent=app):
             return
         esperado = proyecto_activo
-        vistas_editor.select(pagina_validaciones)
+        mostrar_vista(pagina_validaciones)
         mostrar(validaciones, "Ejecutando unittest…\n", anexar=True)
         publicar(lambda: proyecto("pruebas", confirmar=True, esperada=esperado), lambda dato: tareas_en_curso.add(dato["id"]))
 
@@ -1043,7 +1060,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             esperado = proyecto_activo
             grafica.pack_forget()
             mostrar(detalles, generacion["diff"])
-            vistas_editor.select(pagina_resultados)
+            mostrar_vista(pagina_resultados)
             def guardar_propuesta():
                 if proyecto_activo != esperado:
                     estado.set("La propuesta corresponde a otra carpeta.")
@@ -1074,7 +1091,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             mostrar(detalles, "Robot simulado\n\n" +
                     f"Posición: {simulado['posicion']} · Ángulo: {simulado['angulo']}°\n" +
                     ("Detenido." if simulado["parado"] else "Armado en simulación."))
-            vistas_editor.select(pagina_resultados)
+            mostrar_vista(pagina_resultados)
             return
         resultados = dato.get("especialistas", [])
         if not resultados:
@@ -1106,7 +1123,7 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
         if dato.get("vista") == "universe":
             paginas.select(mapa)
         else:
-            vistas_editor.select(pagina_resultados)
+            mostrar_vista(pagina_resultados)
 
     def previsualizar_editor():
         nombre = ruta.get()
@@ -1407,17 +1424,17 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     acciones_archivos.add_command(label="Actualizar visor", command=actualizar_suelto)
     acciones_archivos.add_command(label="Añadir o quitar favorita", command=marcar_favorita)
     acciones_archivos.add_cascade(label="Archivo seleccionado", menu=herramientas_archivo)
-    boton(acciones_proyecto, "Abrir proyecto", abrir_proyecto)
-    boton(acciones_proyecto, "Abrir en Thunar", mostrar_gestor)
-    boton(acciones_proyecto, "Abrir web", abrir_pagina_web)
+    acciones_archivos.add_command(label="Abrir proyecto…", command=abrir_proyecto)
+    acciones_archivos.add_command(label="Abrir en Thunar", command=mostrar_gestor)
+    acciones_archivos.add_command(label="Abrir web", command=abrir_pagina_web)
     if dnd:
-        for superficie in (editor, visor, visor_raster.lienzo, pagina_resultados):
+        for superficie in (inicio_central, editor, visor, visor_raster.lienzo, pagina_resultados):
             superficie.drop_target_register(dnd[0])
             superficie.dnd_bind("<<Drop>>", soltar)
         lista.drag_source_register(1, dnd[0])
         lista.dnd_bind("<<DragInitCmd>>", iniciar_arrastre)
-    boton(acciones_proyecto, "Analizar", analizar_proyecto)
-    boton(acciones_proyecto, "Pruebas", probar_proyecto)
+    acciones_archivos.add_command(label="Analizar proyecto", command=analizar_proyecto)
+    acciones_archivos.add_command(label="Probar proyecto", command=probar_proyecto)
     boton(acciones_cambio, "Aplicar propuesta", aplicar_cambio, "Principal.TButton")
     boton(acciones_cambio, "Rechazar", lambda: revisar_decision("rechazar"))
     boton(acciones_cambio, "Revertir último", lambda: revisar_decision("revertir"))
@@ -1466,8 +1483,9 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     actualizar_archivos()
 
     def recordar_al_abrir(datos):
-        if datos.get("carpeta") and proyecto_activo is None and inicial != "universe":
-            abrir_proyecto(datos["carpeta"], datos.get("archivo"))
+        if datos.get("carpeta"):
+            acciones_archivos.add_command(label="Retomar último proyecto",
+                                          command=lambda: abrir_proyecto(datos["carpeta"], datos.get("archivo")))
 
     publicar(lambda: proyecto("escritorio"), actualizar_preferencias)
     publicar(lambda: proyecto("recordado"), recordar_al_abrir)

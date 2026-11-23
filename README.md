@@ -764,7 +764,9 @@ Las preguntas informativas reconocidas pasan primero al modelo
 configurado. Los permisos, operaciones exactas y acciones de
 escritorio siguen pasando por las herramientas existentes.
 El contexto del modelo conserva hasta seis pares recientes por
-cliente y conversación. «Que esportatil» se interpreta como una
+cliente y conversación y recupera los pares guardados al reiniciar.
+Puedes continuar con «¿Y para qué sirve?» o «Dame un ejemplo».
+«Que esportatil» se interpreta como una
 definición y «ques tayo» pide aclaración. Si la definición usa
 el respaldo de consulta pública, se muestra un extracto corto
 junto a su fuente.
@@ -777,10 +779,12 @@ configurar y autorizar sus rutas de trabajo.
 
 Consulta [pruebas y estados de los modelos](docs/CONVERSACION_MODELO_LOCAL.md).
 
-Durante `./instalar`, Cerebro intenta activar automáticamente un
-Qwen2.5 ligero que ya esté instalado en Ollama. Conserva la
-configuración existente y prueba una respuesta antes de guardar una
-selección nueva. Para preparar el modelo ligero en una instalación
+Durante `./instalar`, Cerebro contrasta la RAM disponible con los
+modelos Qwen2.5 ya instalados en Ollama. Si hace falta otro motor,
+puede probar un GGUF que ya esté en la carpeta `models/` de los datos
+de Cerebro con `llama-server` disponible. Conserva la configuración
+existente y requiere una inferencia antes de guardar una selección
+nueva. Para preparar el modelo ligero en una instalación
 donde el servicio de Ollama ya responde:
 
 ```bash
@@ -801,3 +805,27 @@ proyecto de CAZEL en la misma instalación:
 Studio indica el modelo configurado junto a la conversación. El menú
 **Opciones → Motores y especialistas** muestra el inventario local.
 Para gestionar o eliminar conversaciones, usa **Chats**.
+
+
+### Empezar a trabajar en Studio
+
+Abre **Cerebro Studio** desde el menú de aplicaciones. Arrastra un archivo
+o una carpeta al centro, o usa **Archivos → Abrir proyecto**. Al abrir
+un proyecto, la izquierda muestra sus archivos. Al seleccionar una
+imagen, PDF o código, el centro abre la vista correspondiente. Para
+volver al trabajo anterior usa **Archivos → Retomar último proyecto**.
+Puedes pedir «Haz una calculadora» en el chat a la derecha con un
+motor configurado y una carpeta autorizada. Revisa la propuesta antes
+de guardar los archivos.
+
+En **Opciones → Recuerdos de la conversación**, selecciona mensajes
+y elige guardar o exportar. El Acompañante ofrece el mismo diálogo.
+El JSON puede importarse con vista previa y confirmación. Markdown
+sirve como copia legible. Una vez guardado, el diálogo proporciona el
+comando para consultar el fragmento y preguntar sobre él.
+
+En **Universe**, usa la leyenda y filtra por categoría, grupo, estado
+o proceso. Los resultados de adaptadores registran su operación y
+duración cuando se intentó ejecutarlos.
+
+Consulta la [auditoría, el formato portable y las pruebas](docs/NEXT_ENTREGA.md).
