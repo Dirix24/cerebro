@@ -19,6 +19,7 @@ que una interrupción a mitad de guardado no deja un checkpoint corrupto.
 import datetime
 import json
 import os
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 
@@ -68,10 +69,15 @@ def guardar_checkpoint(ruta, modelo, optimizador=None, meta_extra=None):
 
     directorio = os.path.dirname(os.path.abspath(ruta))
     os.makedirs(directorio, exist_ok=True)
-    tmp = ruta + ".tmp"
-    with open(tmp, "wb") as f:
-        np.savez_compressed(f, **arrays)
-    os.replace(tmp, ruta)
+    with NamedTemporaryFile(dir=directorio, suffix=".npz.tmp", delete=False) as f:
+        temporal = f.name
+        try:
+            np.savez_compressed(f, **arrays)
+            f.close()
+            os.replace(temporal, ruta)
+        finally:
+            if os.path.exists(temporal):
+                os.unlink(temporal)
 
 
 def leer_meta(ruta):

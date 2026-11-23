@@ -338,11 +338,11 @@ class TrainerEngine:
             meta.update(extra)
         return meta
 
-    def guardar_ultimo(self, ruta):
+    def guardar_ultimo(self, ruta, *, metadatos=None):
         """Estado final + optimizador (para --resume)."""
         ev = self.evaluar()
         guardar_checkpoint(ruta, self.modelo, optimizador=self.optim,
-                           meta_extra=self._meta({"val_bpb": ev["bpb"], "val_loss": ev["loss"],
+                           meta_extra=self._meta({**(metadatos or {}), "val_bpb": ev["bpb"], "val_loss": ev["loss"],
                                                   "val_ppl": ev["ppl"],
                                                   "rng_state": self.estado_rng()}))
 

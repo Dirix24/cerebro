@@ -62,3 +62,69 @@ def consultar(intencion):
         return resolver(expresion)
     except (SyntaxError, ValueError, ZeroDivisionError) as error:
         return "No pude calcularlo: " + (str(error) if isinstance(error, ValueError) else "revisa la expresión y los divisores.")
+
+
+# Escalas exactas respecto a la unidad base de cada dimensión.
+UNIDADES = {
+    "km": ("longitud", 1000), "m": ("longitud", 1), "cm": ("longitud", Fraction(1, 100)),
+    "mm": ("longitud", Fraction(1, 1000)),
+    "kg": ("masa", 1000), "g": ("masa", 1), "mg": ("masa", Fraction(1, 1000)),
+    "l": ("volumen", 1000), "ml": ("volumen", 1),
+    "h": ("tiempo", 3600), "min": ("tiempo", 60), "s": ("tiempo", 1),
+}
+NOMBRES = {
+    "kilometro": "km", "metro": "m", "centimetro": "cm", "milimetro": "mm",
+    "kilogramo": "kg", "gramo": "g", "miligramo": "mg",
+    "litro": "l", "mililitro": "ml", "hora": "h", "minuto": "min", "segundo": "s",
+}
+NUMERO = r"[+-]?\d{1,14}(?:[.,]\d{1,10})?"
+
+
+def _numero(texto):
+    return Fraction(texto.replace(",", "."))
+
+
+def _mostrar(valor):
+    """Usa decimal exacto cuando cabe en diez posiciones."""
+    for cifras in range(11):
+        escalado = valor * 10 ** cifras
+        if escalado.denominator == 1:
+            if not cifras:
+                return str(escalado.numerator)
+            entero, decimal = divmod(abs(escalado.numerator), 10 ** cifras)
+            signo = "-" if escalado < 0 else ""
+            return f"{signo}{entero},{decimal:0{cifras}d}"
+    return str(valor)
+
+
+def consultar_medidas(pregunta):
+    import unicodedata
+
+    texto = "".join(c for c in unicodedata.normalize("NFD", pregunta.casefold())
+                    if not unicodedata.combining(c)).strip(" ¿?¡!.")
+    texto = " ".join(texto.split())
+    porcentaje = re.fullmatch(
+        rf"(?:cuanto es|cuanto da|calcula(?:me)?) (?:el )?({NUMERO})\s*(?:%|por ciento) de ({NUMERO})", texto)
+    if porcentaje:
+        tasa, base = map(_numero, porcentaje.groups())
+        return f"El {_mostrar(tasa)} % de {_mostrar(base)} es {_mostrar(tasa * base / 100)}."
+    conversion = re.fullmatch(
+        rf"(?:convierte|pasa|cuanto(?:s|as)? son|a cuanto equivale(?:n)?) ({NUMERO})\s*([a-z]{{1,14}}) (?:a|en) ([a-z]{{1,14}})",
+        texto,
+    )
+    if not conversion:
+        return None
+    cantidad, origen, destino = conversion.groups()
+
+    def simbolo(medida):
+        return medida if medida in UNIDADES else NOMBRES.get(medida.removesuffix("s"))
+
+    origen, destino = simbolo(origen), simbolo(destino)
+    if not origen or not destino:
+        return None
+    dimension, escala = UNIDADES[origen]
+    otra, factor = UNIDADES[destino]
+    if dimension != otra:
+        return "Esas unidades miden magnitudes distintas. ¿Qué unidad quieres usar como destino?"
+    valor = _numero(cantidad)
+    return f"{_mostrar(valor)} {origen} equivalen a {_mostrar(valor * escala / factor)} {destino}."

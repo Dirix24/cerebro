@@ -69,15 +69,15 @@ def test_coordinador_profesor_compartido_respeta_permisos_y_prioriza_herramienta
                             lambda orden: procesar(orden) if orden.startswith("/calc ") else (espera, False))
         for modo in ("web", "studio", "escritorio", "terminal"):
             resultado = nucleo.conversar("Cerebro, explícame la fotosíntesis", modo=modo)
-            assert resultado["origen"] == "profesor_local"
-        assert len(enviados) == 4
+            assert resultado["origen"] == "glosario_local"
+        assert len(enviados) == 0
         assert nucleo.conversar("Explícame mi contraseña")["respuesta"] == espera
         assert "4" in nucleo.conversar("/calc 2 + 2")["respuesta"]
-        assert len(enviados) == 4
+        assert len(enviados) == 0
         nucleo.agente.permisos_concedidos.discard("READ")
         with pytest.raises(PermissionError):
             nucleo.conversar("Explícame la fotosíntesis", modo="web")
-        assert len(enviados) == 4
+        assert len(enviados) == 0
     finally:
         nucleo.ejecutor.shutdown()
         terminal.ejecutor.shutdown()

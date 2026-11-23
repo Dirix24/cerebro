@@ -80,6 +80,41 @@ def escribir(ruta, contenido, marca, modo=0o644):
     ruta.chmod(modo)
 
 
+def confirmar(mensaje):
+    if not sys.stdin.isatty():
+        return False
+    try:
+        return input(mensaje + " [s/N] ").strip().casefold() in {"s", "sí", "si"}
+    except EOFError:
+        return False
+
+
+def preparar_especialistas(args):
+    import config
+    from core.configuracion_especialistas import MODULOS, configurar, obtener
+    from core.motores_instalados import _adaptador_vecino
+    from universe.especialidades import _consulta
+
+    rutas = {"CAZEL": args.cazel_raiz, "DARAS": args.daras_raiz}
+    for nombre, modulo in MODULOS.items():
+        if not rutas[nombre] and not obtener(nombre + "_RAIZ"):
+            vecino = _adaptador_vecino(nombre, modulo)
+            if vecino and confirmar(f"¿Conectar {nombre} y ejecutar su adaptador local de confianza en {vecino}?"):
+                rutas[nombre] = vecino
+    proyecto = args.proyecto_cazel or obtener("CAZEL_PROYECTO")
+    if not proyecto and (rutas["CAZEL"] or obtener("CAZEL_RAIZ")):
+        if confirmar(f"¿Autorizar a CAZEL a analizar proyectos en {config.WORKSPACE_DIR}?"):
+            proyecto = Path(config.WORKSPACE_DIR)
+            proyecto.mkdir(parents=True, exist_ok=True)
+    if any(rutas.values()) or args.proyecto_cazel or (proyecto and not obtener("CAZEL_PROYECTO")):
+        configurar(rutas["CAZEL"], rutas["DARAS"], proyecto)
+    for nombre in rutas:
+        if obtener(nombre + "_RAIZ"):
+            prueba = _consulta(nombre, "capacidades", "", red=False)
+            print(f"{nombre} · comprobación de conexión: {prueba['estado']}. "
+                  + prueba.get("error", ""))
+
+
 def main():
     ap = ArgumentParser(description=__doc__)
     ap.add_argument("--sin-autoinicio", action="store_true", help="no registrar el acompañante al iniciar sesión")
@@ -95,39 +130,65 @@ def main():
     ap.add_argument("--daras-raiz", help="autoriza y guarda la ruta del adaptador de DARAS")
     ap.add_argument("--proyecto-cazel", help="selecciona el proyecto local para CAZEL")
     ap.add_argument("--sin-diagnostico", action="store_true", help="omite el diagnóstico final")
+    ap.add_argument("--sin-red", action="store_true", help="Usa modelos y gestos ya disponibles localmente")
+    ap.add_argument("--ruedas", help="Carpeta local usada para preparar el entorno Python")
     args = ap.parse_args()
+    if args.sin_red and args.descargar_modelo_ligero:
+        ap.error("--descargar-modelo-ligero requiere conexión.")
     instalar(automatico=not args.sin_autoinicio)
+    import config
+    raiz = config.raiz_datos()
     from universe.diagnostico_instalacion import configurar_modelo_manos, diagnosticar, instalar_gestos, preparar_gestos_automaticos
     if args.modelo_manos:
         try:
             configurar_modelo_manos(args.modelo_manos)
         except (OSError, ValueError) as error:
             print(f"No se registró el modelo de manos: {error}")
-    if args.gestos == "auto":
+    if args.sin_red:
+        if args.gestos != "ninguno":
+            print("Gestos sin red: se conservan los componentes locales y el modelo de manos configurado.")
+    elif args.gestos == "auto":
         print(preparar_gestos_automaticos())
     elif args.gestos != "ninguno" and not instalar_gestos(args.gestos):
         print("La instalación básica sigue disponible. El modo gestual elegido requiere revisión.")
     if args.modelo_ollama or not args.sin_modelo_auto:
-        import config
         import subprocess
-        from core.configuracion_modelo_local import descargar_ligero, preparar_instalacion
+        from core.configuracion_modelo_local import descargar_ligero, leer, preparar_instalacion
+        from core.provision_modelo import ofrecer
 
         try:
-            raiz = config.raiz_datos()
+            anterior = leer(raiz)
             print(descargar_ligero(raiz) if args.descargar_modelo_ligero
                   else preparar_instalacion(raiz, args.modelo_ollama))
+            explicito = any(os.environ.get("CEREBRO_" + nombre) for nombre in
+                            ("OLLAMA_MODELO", "PROFESOR_PUERTO", "PROFESOR_MOTOR", "PROFESOR_MODELO"))
+            if anterior or explicito:
+                from core.profesor_local import ProfesorLocal
+
+                motor = ProfesorLocal.desde_entorno()
+                try:
+                    motor.conversar("Responde hola en español.")
+                    print("Modelo conversacional existente: inferencia de prueba ejecutada.")
+                except (OSError, RuntimeError, ValueError) as error:
+                    print(f"Modelo conversacional existente conservado, sin inferencia verificada. {error}")
+                finally:
+                    if hasattr(motor, "cerrar"):
+                        motor.cerrar()
+            elif not args.sin_red and not (leer(raiz) or args.modelo_ollama or args.descargar_modelo_ligero):
+                print(ofrecer(raiz, confirmar))
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
             print(f"Modelo local: no se guardó la selección. {error}")
-    if args.cazel_raiz or args.daras_raiz or args.proyecto_cazel:
-        from core.configuracion_especialistas import configurar
-
-        try:
-            configurar(args.cazel_raiz, args.daras_raiz, args.proyecto_cazel)
-            print("Rutas de especialistas guardadas. La conexión se comprueba al consultar el equipo.")
-        except (OSError, ValueError) as error:
-            print(f"No se registraron los especialistas: {error}")
+    try:
+        preparar_especialistas(args)
+    except (OSError, ValueError) as error:
+        print(f"No se registraron los especialistas: {error}")
     if not args.sin_diagnostico:
-        diagnosticar(Path(__file__).resolve().parent.parent)
+        diagnosticar(Path(raiz))
+    if (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")) and confirmar("¿Abrir Studio ahora?"):
+        from universe.lanzador import lanzar_estudio
+
+        if not lanzar_estudio():
+            print("Abre Cerebro Studio desde el menú de aplicaciones.")
 
 
 if __name__ == "__main__":

@@ -8,7 +8,8 @@ from universe.paleta import BORDE, EDITOR, PANEL, SELECCION, TEXTO
 COLORES = {
     "memoria": "#7adafa", "aprendizaje": "#85f3b6", "conocimiento": "#55d8bf",
     "relaciones": "#e6c68d", "razonamiento": "#9eacff", "investigación": "#f4ae84",
-    "procesamiento": "#c1e1e6", "error": "#ef8888",
+    "procesamiento": "#c1e1e6", "errores": "#ef8888",
+    "creación": "#e7a7f7", "inactividad": "#9aafc3",
 }
 
 
@@ -16,6 +17,7 @@ class MapaStudio(ttk.Frame):
     def __init__(self, padre, actualizar, analizar=None, evaluar=None, eliminar=None):
         super().__init__(padre, padding=10)
         self._nodos = []
+        self._inventario = []
         self._puntos = {}
         self._seleccionado = None
         self._arrastre = None
@@ -34,6 +36,21 @@ class MapaStudio(ttk.Frame):
         ttk.Label(controles, text="Arrastra para girar · Rueda para ampliar · Selecciona para inspeccionar").pack(
             side="left", padx=8
         )
+        filtros = ttk.Frame(self)
+        filtros.pack(fill="x", pady=(8, 0))
+        self._filtros = {}
+        for campo, etiqueta in (("tipo", "Categoría"), ("grupo", "Grupo"),
+                                ("estado", "Estado"), ("accion", "Proceso"), ("modelo", "Modelo")):
+            ttk.Label(filtros, text=etiqueta).pack(side="left", padx=(0, 4))
+            selector = ttk.Combobox(filtros, state="readonly", width=13, values=("Todos",))
+            selector.current(0)
+            selector.pack(side="left", padx=(0, 9))
+            selector.bind("<<ComboboxSelected>>", lambda _evento: self._filtrar())
+            self._filtros[campo] = selector
+        leyenda = ttk.Frame(self)
+        leyenda.pack(fill="x", pady=(8, 0))
+        for categoria, color in COLORES.items():
+            ttk.Label(leyenda, text="● " + categoria.capitalize(), foreground=color).pack(side="left", padx=(0, 9))
         panel = ttk.Panedwindow(self, orient="horizontal")
         panel.pack(fill="both", expand=True, pady=(8, 0))
         self._lienzo = Canvas(panel, width=500, height=350, background=EDITOR, highlightthickness=1, highlightbackground=BORDE)
@@ -67,8 +84,20 @@ class MapaStudio(ttk.Frame):
             self._eliminar(nodo)
 
     def actualizar(self, datos):
+        self._inventario = [nodo for nodo in datos.get("nodos", []) if nodo.get("id")]
+        for campo, selector in self._filtros.items():
+            seleccion = selector.get()
+            valores = sorted({nodo[campo] for nodo in self._inventario if nodo.get(campo)})
+            selector.configure(values=("Todos", *valores))
+            selector.set(seleccion if seleccion in valores else "Todos")
+        self._filtrar()
+
+    def _filtrar(self):
         self._borrar.configure(state="disabled")
-        self._nodos = [nodo for nodo in datos.get("nodos", []) if nodo.get("id")]
+        filtros = {campo: selector.get() for campo, selector in self._filtros.items()
+                   if selector.current() != 0}
+        self._nodos = [nodo for nodo in self._inventario
+                       if all(nodo.get(campo) == valor for campo, valor in filtros.items())]
         self._lista.delete(0, "end")
         for nodo in self._nodos:
             self._lista.insert("end", nodo["titulo"])
@@ -82,7 +111,8 @@ class MapaStudio(ttk.Frame):
                 self._detalle.set("Selecciona un recuerdo, una medida, una ficha o un evento.")
         else:
             self._seleccionado = None
-            self._detalle.set("Aún no hay datos. Guarda un recuerdo o aprende de un modelo OBJ.")
+            self._detalle.set("No hay nodos que coincidan con los filtros." if self._inventario
+                              else "Aún no hay datos. Guarda un recuerdo o aprende de un modelo OBJ.")
         self._dibujar()
 
     def _dibujar(self):
@@ -168,8 +198,12 @@ class MapaStudio(ttk.Frame):
                 fecha = datetime.fromisoformat(fecha.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
             except (ValueError, AttributeError, OSError):
                 pass
+        proceso = "".join(f"{nombre}: {nodo[campo]}{unidad}\n" for campo, nombre, unidad in
+                          (("estado", "Estado", ""), ("accion", "Operación", ""),
+                           ("modelo", "Modelo", ""), ("duracion_ms", "Duración", " ms"))
+                          if campo in nodo)
         self._detalle.set(f"{nodo['titulo']}\nTipo: {nodo.get('tipo', 'registro')}\n"
                           f"Origen: {nodo.get('origen') or 'Sin registrar'}\n"
-                          f"Fecha y hora: {fecha or 'Sin registrar'}\n\n{nodo.get('detalle', '')}")
+                          f"Fecha y hora: {fecha or 'Sin registrar'}\n{proceso}\n{nodo.get('detalle', '')}")
         self._borrar.configure(state="normal" if nodo.get("eliminable") and self._eliminar else "disabled")
         self._dibujar()

@@ -6,6 +6,7 @@ from pathlib import Path
 from shutil import which
 
 from core.configuracion_especialistas import obtener
+from core.provision_modelo import binario_llama
 
 
 def _modelos_ollama(puerto):
@@ -43,14 +44,14 @@ def descubrir(profesor):
     except ValueError:
         puerto = 0
     modelos = _modelos_ollama(puerto) if 1024 <= puerto <= 65535 else None
-    gguf = os.environ.get("CEREBRO_PROFESOR_MODELO")
+    gguf = getattr(profesor, "modelo", None) or os.environ.get("CEREBRO_PROFESOR_MODELO")
     ruta_gguf = Path(gguf).expanduser() if gguf else None
     gguf_instalado = bool(ruta_gguf and ruta_gguf.suffix.lower() == ".gguf" and ruta_gguf.is_file())
     resultado = [
         {"nombre": "Ollama", "estado": "servicio local respondió" if modelos is not None else
          ("binario detectado, servicio sin verificar" if which("ollama") else "sin respuesta local"),
          "modelos": modelos or [], "capacidades": "inferencia de texto según el modelo configurado"},
-        {"nombre": "llama.cpp", "estado": "binario detectado" if which("llama-server") else "binario fuera de PATH",
+        {"nombre": "llama.cpp", "estado": "binario detectado" if binario_llama() else "binario sin detectar",
          "modelos": [ruta_gguf.name] if gguf_instalado else [], "capacidades": "inferencia con GGUF configurado"},
         {"nombre": "PROFESOR", "estado": "modelo configurado" if profesor.configurado else "evaluación local",
          "modelos": [], "capacidades": "enseñanza y evaluación verificable"},

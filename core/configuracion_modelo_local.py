@@ -26,25 +26,43 @@ def configurar(raiz, modelo, puerto=11434):
     if modelo not in instalados:
         raise ValueError("El modelo elegido no aparece entre los modelos instalados.")
     respuesta = motor.conversar("Responde a este saludo breve en español: hola.")
-    datos = {"motor": "ollama", "modelo": modelo, "puerto": puerto}
+    _guardar(raiz, {"motor": "ollama", "modelo": modelo, "puerto": puerto})
+    return respuesta
+
+
+def _guardar(raiz, datos):
     padre = Path(raiz) / "data"
     if padre.is_symlink():
         raise PermissionError("La configuración requiere un directorio de datos local.")
     padre.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(mode="w", encoding="utf-8", dir=padre, delete=False) as archivo:
         temporal = Path(archivo.name)
-        json.dump(datos, archivo)
+        try:
+            json.dump(datos, archivo)
+            archivo.close()
+            temporal.replace(padre / "modelo-local.json")
+        finally:
+            temporal.unlink(missing_ok=True)
+
+
+def configurar_gguf(raiz, binario, ruta):
+    from core.profesor_local import ProfesorBajoDemanda
+
+    motor = ProfesorBajoDemanda(binario, ruta)
     try:
-        temporal.replace(padre / "modelo-local.json")
+        motor.conversar("Responde a este saludo breve en español: hola.")
     finally:
-        temporal.unlink(missing_ok=True)
-    return respuesta
+        motor.cerrar()
+    _guardar(raiz, {"motor": "llama.cpp", "modelo": str(ruta.resolve())})
+    return f"Modelo local: {ruta.name} configurado después de una inferencia de prueba."
 
 
 def preparar_instalacion(raiz, modelo=None):
     """Conserva la configuración y prueba únicamente candidatos ligeros instalados."""
     import os
+    from core.provision_modelo import binario_llama
     from core.motores_instalados import _modelos_ollama
+    from core.profesor_local import GIB, diagnostico
 
     variables = ("CEREBRO_OLLAMA_MODELO", "CEREBRO_PROFESOR_PUERTO",
                  "CEREBRO_PROFESOR_MOTOR", "CEREBRO_PROFESOR_MODELO")
@@ -53,15 +71,44 @@ def preparar_instalacion(raiz, modelo=None):
     puerto = int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434"))
     if not 1024 <= puerto <= 65535:
         raise ValueError("Puerto de Ollama inválido.")
-    if not modelo:
-        disponibles = _modelos_ollama(puerto)
-        if disponibles is None:
-            return "Modelo local: Ollama no respondió. Inicia Ollama para preparar el motor."
-        modelo = next((n for n in ("qwen2.5:0.5b", "qwen2.5:1.5b") if n in disponibles), None)
-        if modelo is None:
-            return "Modelo local: no hay un candidato ligero conocido. Usa cerebro configurar-modelo para elegir uno instalado."
-    configurar(raiz, modelo, puerto)
-    return f"Modelo local: {modelo} configurado después de una inferencia de prueba."
+    if modelo:
+        configurar(raiz, modelo, puerto)
+        return f"Modelo local: {modelo} configurado después de una inferencia de prueba."
+
+    recursos = diagnostico(raiz)
+    ram = recursos["ram_disponible_bytes"] or 0
+    disponibles = _modelos_ollama(puerto) or []
+    candidatos = (("qwen2.5:0.5b", 2), ("qwen2.5:1.5b", 3),
+                  ("qwen2.5:3b", 5), ("qwen2.5:7b", 9))
+    # En equipos con margen amplio, se puede probar primero el modelo más capaz.
+    if ram >= 12 * GIB:
+        candidatos = candidatos[::-1]
+    for nombre, minimo in candidatos:
+        if nombre not in disponibles or ram < minimo * GIB:
+            continue
+        try:
+            configurar(raiz, nombre, puerto)
+        except (RuntimeError, ValueError):
+            continue
+        return f"Modelo local: {nombre} configurado después de una inferencia de prueba."
+
+    binario = binario_llama()
+    carpeta = Path(raiz) / "models"
+    if binario and carpeta.is_dir() and not carpeta.is_symlink():
+        modelos = []
+        for ruta in carpeta.glob("*.gguf"):
+            if ruta.is_file() and not ruta.is_symlink() and not ruta.name.startswith("mmproj"):
+                peso = ruta.stat().st_size
+                if 0 < peso <= ram - 2 * GIB:
+                    modelos.append((peso, ruta))
+        for _, ruta in sorted(modelos)[:3]:
+            try:
+                return configurar_gguf(raiz, binario, ruta)
+            except (OSError, RuntimeError, ValueError):
+                continue
+
+    return ("Modelo local: sin candidato instalado y comprobado. "
+            "Usa cerebro configurar-modelo para elegir un modelo de Ollama.")
 
 
 def descargar_ligero(raiz):

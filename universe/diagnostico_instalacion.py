@@ -15,9 +15,55 @@ def probar_importacion(modulo):
     return salida.returncode == 0
 
 
-def diagnosticar(raiz):
-    from core.recursos_locales import inspeccionar, perfil_equipo
+def probar_nucleo():
+    """Prueba el servicio HTTP local sin abrir sesiones ni datos reales del usuario."""
+    from tempfile import TemporaryDirectory
 
+    receta = """
+from threading import Thread
+from types import SimpleNamespace
+from universe.lanzador import api
+from universe.nucleo import Nucleo
+from universe.servidor import crear_servidor
+n = Nucleo("local", profesor=SimpleNamespace(configurado=False))
+try:
+    with crear_servidor(0, n, "sonda-local") as servidor:
+        hilo = Thread(target=servidor.serve_forever, daemon=True)
+        hilo.start()
+        try:
+            s = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": "sonda-local"}
+            respuesta = api(s, "chat", {"mensaje": "Calcula 23 * 14"}, tiempo=4)
+            assert "322" in respuesta["respuesta"]
+            assert api(s, "historial", tiempo=4)["turnos"]
+        finally:
+            servidor.shutdown()
+            hilo.join(timeout=2)
+finally:
+    n.ejecutor.shutdown()
+print("CEREBRO_NUCLEO_OK")
+"""
+    try:
+        with TemporaryDirectory(prefix="cerebro-diagnostico-") as temporal:
+            resultado = subprocess.run([sys.executable, "-c", receta], timeout=12, capture_output=True, text=True,
+                                       cwd=Path(__file__).resolve().parent.parent, stdin=subprocess.DEVNULL,
+                                       env={**os.environ, "CEREBRO_HOME": temporal})
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return resultado.returncode == 0 and resultado.stdout.strip() == "CEREBRO_NUCLEO_OK"
+
+
+def diagnosticar(raiz):
+    from core.aislamiento_proyecto import perfil_pruebas
+    from core.local_voice import dispositivos_audio
+    from core.recursos_locales import inspeccionar, perfil_equipo, resumir as resumir_recursos
+    from core.profesor_local import diagnostico
+    from main import cargar_modelo
+
+    ficha = diagnostico(raiz)
+    print(f"Sistema: {ficha['sistema']} {ficha['arquitectura']} · "
+          f"CPU: {ficha['procesador'] or 'sin identificar'}")
+    baterias = Path("/sys/class/power_supply")
+    print("Tipo de equipo: " + ("batería detectada" if any(baterias.glob("BAT*")) else "sin batería visible"))
     recursos = inspeccionar(raiz)
     base = {m: probar_importacion(m) for m in ("tkinter", "numpy", "PIL", "cv2", "mediapipe")}
     sistema = {p: which(p) is not None for p in
@@ -30,9 +76,29 @@ def diagnosticar(raiz):
     modelo = modelo_manos()
     print("Modelo de manos: " + ("archivo disponible" if modelo and Path(modelo).expanduser().is_file() else "sin archivo configurado"))
     print("Cámara V4L2: " + (", ".join(dispositivos) if dispositivos else "sin nodos detectados"))
-    print(f"RAM libre: {recursos['memoria_mib'].get('MemAvailable', 'desconocida')} MiB")
+    audio = dispositivos_audio()
+    entradas = [nombre for nombre in audio["entradas"] if nombre != "default"]
+    print(f"Entradas de audio detectadas: {len(entradas)}. Captura sin probar.")
+    print(resumir_recursos(recursos))
     print(f"Perfil de cámara recomendado: {perfil_equipo(raiz)}")
-    print(f"Disco libre: {recursos['disco_libre_mib']} MiB")
+    try:
+        propio, _, ruta = cargar_modelo()
+        if propio is None:
+            print("Modelo neuronal propio: no se encontró un checkpoint.")
+        else:
+            propio.generar_ids([0], max_nuevos=1, temperatura=0)
+            print(f"Modelo neuronal propio: {Path(ruta).name}, inferencia CPU ejecutada.")
+    except (OSError, ValueError, RuntimeError, KeyError) as error:
+        print(f"Modelo neuronal propio: no se pudo validar. {error}")
+    for interfaz, modulo in (("Studio", "universe.studio"), ("Universe", "universe.mapa_studio"),
+                             ("Terminal y Acompañante", "universe.lanzador")):
+        try:
+            prueba = subprocess.run([sys.executable, "-c", f"import {modulo}"], timeout=12,
+                                    cwd=Path(__file__).resolve().parent.parent,
+                                    stdin=subprocess.DEVNULL, capture_output=True)
+            print(f"{interfaz}: " + ("módulo cargado" if prueba.returncode == 0 else "fallo al cargar"))
+        except (OSError, subprocess.TimeoutExpired):
+            print(f"{interfaz}: fallo al comprobar el módulo.")
     from core.motores_instalados import descubrir, resumir
     from core.profesor_local import ProfesorLocal
 
@@ -40,7 +106,11 @@ def diagnosticar(raiz):
         print(resumir(descubrir(ProfesorLocal.desde_entorno())))
     except ValueError as error:
         print(f"Configuración de motores: {error}")
-    print("El diagnóstico no inicia modelos ni captura imágenes.")
+    _, aislamiento, _ = perfil_pruebas()
+    print(aislamiento)
+    print("Servicio local: " + ("arranque, consulta HTTP, historial y cierre comprobados."
+                               if probar_nucleo() else "no superó la prueba de arranque o de loopback."))
+    print("El diagnóstico no abre cámaras, micrófonos ni ventanas.")
 
 
 def instalar_gestos(modo):

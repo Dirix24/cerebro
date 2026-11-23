@@ -74,20 +74,20 @@ def _ejecutar(comando, raiz, entrada, entorno, timeout, cancelacion):
                 entrada = None
 
 
-def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
+def _consulta(region, accion, objetivo, *, red=False, cancelacion=None, practica=None):
     from core.configuracion_especialistas import obtener
 
     carpeta = obtener(region + "_RAIZ")
     if not carpeta:
         return _resultado(region, "no_disponible", "Falta configurar el repositorio local.")
     modulo = "especialista" if region == "DARAS" else "cazel.especialista"
-    raiz = Path(carpeta).expanduser().resolve()
+    raiz = practica if practica and region == "DARAS" else Path(carpeta).expanduser().resolve()
     punto = raiz.joinpath(*modulo.split(".")).with_suffix(".py")
     if not punto.is_file():
         return _resultado(region, "no_disponible", "El adaptador v1 no existe en la carpeta configurada.")
     comando = [sys.executable, "-E", "-s", "-B", "-m", modulo]
     if region == "CAZEL":
-        proyecto = obtener("CAZEL_PROYECTO")
+        proyecto = practica or obtener("CAZEL_PROYECTO")
         if not proyecto:
             return _resultado(region, "no_disponible", "Falta seleccionar el proyecto CAZEL.")
         comando += ["--proyecto", str(Path(proyecto).expanduser().resolve())]
@@ -95,7 +95,7 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
             comando.append("--permitir-pruebas")
         if accion == "proponer" and os.environ.get("CEREBRO_CAZEL_PROPUESTAS") == "1":
             comando.append("--permitir-propuestas")
-        if datos := os.environ.get("CEREBRO_CAZEL_DATOS"):
+        if datos := (practica / ".datos" if practica else os.environ.get("CEREBRO_CAZEL_DATOS")):
             comando += ["--datos", str(Path(datos).expanduser().resolve())]
     entrada = json.dumps({"version": VERSION, "accion": accion, "objetivo": objetivo, "red": red},
                          ensure_ascii=True).encode("ascii")
@@ -103,6 +103,7 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
     if region == "DARAS" and red:
         claves += ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "SSL_CERT_FILE", "SSL_CERT_DIR")
     entorno = {clave: os.environ[clave] for clave in claves if clave in os.environ}
+    inicio = monotonic()
     try:
         codigo, salida = _ejecutar(comando, raiz, entrada, entorno, 72 if accion == "proponer" else 23,
                                    cancelacion or Event())
@@ -114,13 +115,15 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
                 or respuesta.get("estado") not in ESTADOS):
             raise ValueError("Contrato incompatible.")
         sintetizar([respuesta])
-        return respuesta
+        return {**respuesta, "accion": accion, "duracion_ms": round((monotonic() - inicio) * 1000)}
     except subprocess.TimeoutExpired:
-        return _resultado(region, "error", "Tiempo de espera agotado.")
-    except InterruptedError as error:
-        return _resultado(region, "parcial", str(error))
+        error = "Tiempo de espera agotado."
+    except InterruptedError as cancelado:
+        return _resultado(region, "parcial", str(cancelado), accion=accion,
+                          duracion_ms=round((monotonic() - inicio) * 1000))
     except (OSError, ValueError, TypeError, KeyError):
-        return _resultado(region, "error", "El adaptador no devolvió un resultado válido.")
+        error = "El adaptador no devolvió un resultado válido."
+    return _resultado(region, "error", error, accion=accion, duracion_ms=round((monotonic() - inicio) * 1000))
 
 
 class Experiencias:
@@ -203,11 +206,15 @@ class Experiencias:
                                "titulo": region + " · " + resultado["estado"],
                                "detalle": sintetizar([resultado])[:600], "grupo": region,
                                "vinculos": [vinculo], "origen": "Resultado de especialista",
-                               "fecha": exp["fecha"]})
+                               "fecha": exp["fecha"], "estado": resultado["estado"],
+                               **{clave: resultado[clave] for clave in ("accion", "duracion_ms")
+                                  if clave in resultado}})
         return salida
 
 
 def sintetizar(resultados):
+    from core.investigador_local import diferencias_numericas
+
     partes = []
     for resultado in resultados:
         region = resultado["especialista"]
@@ -219,9 +226,14 @@ def sintetizar(resultados):
         if simulacion := resultado.get("simulacion"):
             detalles.append(f"Simulación, p50 {simulacion['p50_horas']} h y p90 {simulacion['p90_horas']} h. "
                             + simulacion["supuestos"])
+        fuentes = []
         for evidencia in resultado.get("evidencia", []):
             if evidencia["tipo"] == "fuente":
                 detalles.append(f"Fuente: {evidencia['titulo']} · {evidencia['url']}")
+                fuentes.append(evidencia)
+                cita = evidencia.get("extracto")
+                if isinstance(cita, str) and cita.strip():
+                    detalles.append("Extracto: «" + " ".join(cita.split())[:300] + "».")
             elif evidencia["tipo"] == "analisis":
                 errores = evidencia["errores"]
                 detalles.append(f"{evidencia['path']}: {evidencia['language']}, "
@@ -231,6 +243,9 @@ def sintetizar(resultados):
             elif evidencia["tipo"] in {"prueba", "prueba_registrada"}:
                 nombre = "Prueba registrada" if evidencia["tipo"] == "prueba_registrada" else "Prueba ejecutada"
                 detalles.append(f"{nombre}: {evidencia['state']} (código {evidencia['returncode']}).")
+        if discrepancia := diferencias_numericas(fuentes):
+            detalles.append("Posible discrepancia numérica entre " + " y ".join(discrepancia)
+                            + ". Comprueba que se refieran a las mismas condiciones.")
         detalles.extend(resultado.get("avisos", []))
         if resultado.get("sesion"):
             detalles.append("Sesión de revisión en CAZEL Studio: " + resultado["sesion"] + ".")
@@ -341,6 +356,18 @@ def consultar(nucleo, pregunta, intencion):
         red_equipo = nucleo.internet and equipo[0].strip(": ").endswith("en internet")
         trabajos = [("DARAS", "investigar", red_equipo), ("CAZEL", "analizar", False)]
         profesor = True
+    if not trabajos and nucleo.agente.tiene_permisos("READ", "WRITE"):
+        from core.configuracion_especialistas import obtener
+        from universe.consultas import tema_publico
+
+        tema = re.fullmatch(r"investiga(?: en internet| en la web)? (?:sobre )?(.+)", intencion)
+        if (tema and tema[1] not in {"la actualidad", "las noticias de hoy"}
+                and tema_publico(tema[1]) and obtener("DARAS_RAIZ")):
+            red = nucleo.internet and bool(re.match(r"investiga en (?:internet|la web) ", intencion))
+            trabajos = [("DARAS", "investigar", red)]
+        elif (intencion in {"analiza el proyecto", "revisa el codigo"}
+              and obtener("CAZEL_RAIZ") and obtener("CAZEL_PROYECTO")):
+            trabajos = [("CAZEL", "analizar", False)]
     if not trabajos:
         return None
     nucleo.exigir_permisos("READ", "WRITE")
