@@ -776,3 +776,28 @@ hermano. Para usar esos adaptadores sigue siendo necesario
 configurar y autorizar sus rutas de trabajo.
 
 Consulta [pruebas y estados de los modelos](docs/CONVERSACION_MODELO_LOCAL.md).
+
+Durante `./instalar`, Cerebro intenta activar automáticamente un
+Qwen2.5 ligero que ya esté instalado en Ollama. Conserva la
+configuración existente y prueba una respuesta antes de guardar una
+selección nueva. Para preparar el modelo ligero en una instalación
+donde el servicio de Ollama ya responde:
+
+```bash
+./instalar --sin-autoinicio --descargar-modelo-ligero
+```
+
+La opción autoriza una descarga de unos 400 MB. También puedes
+seleccionar un modelo ya instalado con `--modelo-ollama NOMBRE`.
+El instalador no instala el servicio Ollama. Si CAZEL y DARAS ya
+están descargados, puedes configurar sus adaptadores locales y el
+proyecto de CAZEL en la misma instalación:
+
+```bash
+./instalar --sin-autoinicio --cazel-raiz /ruta/a/CAZEL_IA \
+  --daras-raiz /ruta/a/Daras-IA --proyecto-cazel /ruta/a/mi-proyecto
+```
+
+Studio indica el modelo configurado junto a la conversación. El menú
+**Opciones → Motores y especialistas** muestra el inventario local.
+Para gestionar o eliminar conversaciones, usa **Chats**.

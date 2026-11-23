@@ -164,6 +164,8 @@ $("mostrar-acompanante").addEventListener("click", () => ejecutar($("mostrar-aco
 
 async function estado() {
   const datos = await api("estado");
+  $("modelo-conversacional").textContent = datos.modelo_conversacional
+    ? "Modelo local configurado: " + datos.modelo_conversacional : "Modelo conversacional sin configurar";
   const mib = bytes => (bytes / 1048576).toLocaleString("es", {maximumFractionDigits: 1}) + " MiB";
   const metricas = [datos.perfil, datos.entorno.cpus_logicas + " CPU",
     datos.entorno.ram_bytes ? mib(datos.entorno.ram_bytes) + " RAM" : "RAM sin medir",

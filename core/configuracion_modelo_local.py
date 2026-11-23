@@ -39,3 +39,54 @@ def configurar(raiz, modelo, puerto=11434):
     finally:
         temporal.unlink(missing_ok=True)
     return respuesta
+
+
+def preparar_instalacion(raiz, modelo=None):
+    """Conserva la configuración y prueba únicamente candidatos ligeros instalados."""
+    import os
+    from core.motores_instalados import _modelos_ollama
+
+    variables = ("CEREBRO_OLLAMA_MODELO", "CEREBRO_PROFESOR_PUERTO",
+                 "CEREBRO_PROFESOR_MOTOR", "CEREBRO_PROFESOR_MODELO")
+    if not modelo and (leer(raiz) or any(os.environ.get(v) for v in variables)):
+        return "Modelo local: se conserva la configuración existente."
+    puerto = int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434"))
+    if not 1024 <= puerto <= 65535:
+        raise ValueError("Puerto de Ollama inválido.")
+    if not modelo:
+        disponibles = _modelos_ollama(puerto)
+        if disponibles is None:
+            return "Modelo local: Ollama no respondió. Inicia Ollama para preparar el motor."
+        modelo = next((n for n in ("qwen2.5:0.5b", "qwen2.5:1.5b") if n in disponibles), None)
+        if modelo is None:
+            return "Modelo local: no hay un candidato ligero conocido. Usa cerebro configurar-modelo para elegir uno instalado."
+    configurar(raiz, modelo, puerto)
+    return f"Modelo local: {modelo} configurado después de una inferencia de prueba."
+
+
+def descargar_ligero(raiz):
+    """Descarga solicitada expresamente en el Ollama local ya instalado."""
+    import os
+    from shutil import disk_usage, which
+    import subprocess
+    from core.motores_instalados import _modelos_ollama
+
+    modelo = "qwen2.5:0.5b"
+    puerto = int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434"))
+    if not 1024 <= puerto <= 65535:
+        raise ValueError("Puerto de Ollama inválido.")
+    instalados = _modelos_ollama(puerto)
+    if instalados is None:
+        raise ValueError("Inicia Ollama antes de descargar un modelo.")
+    if modelo not in instalados:
+        binario = which("ollama")
+        if not binario:
+            raise ValueError("Falta el ejecutable de Ollama.")
+        if disk_usage(raiz).free < 1024**3:
+            raise ValueError("Deja al menos 1 GiB libre antes de descargar el modelo ligero.")
+        print("Descargando Qwen2.5 0.5B (aproximadamente 400 MB) en Ollama.", flush=True)
+        resultado = subprocess.run([binario, "pull", modelo], timeout=600,
+                                   env={**os.environ, "OLLAMA_HOST": f"127.0.0.1:{puerto}"})
+        if resultado.returncode:
+            raise RuntimeError("Ollama no pudo descargar el modelo ligero.")
+    return preparar_instalacion(raiz, modelo)

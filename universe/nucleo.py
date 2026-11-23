@@ -134,6 +134,8 @@ class Nucleo:
         modelo = self.chat.modelo
         return {
             "perfil": self.perfil, "entorno": entorno, "cuota": self.cuota,
+            "modelo_conversacional": (getattr(self.profesor, "ollama", None) or "Profesor local"
+                                      if self.profesor.configurado else None),
             "uso": self._uso(), "identidad": leer_origen(self.raiz),
             "internet": self.internet, "investigar_auto": self.investigar_auto,
             "solo_lectura": self.solo_lectura,

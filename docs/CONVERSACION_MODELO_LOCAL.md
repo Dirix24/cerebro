@@ -39,3 +39,26 @@ La configuración, el enrutamiento generativo y el historial se
 comprobaron con dobles de motor. El recorrido de Chromium comprobó los
 visores, el zoom, la generación revisable y las evidencias de
 coordinación que presenta Studio.
+
+## Preparación desde el instalador
+
+El instalador propone el modelo ligero instalado y lo conserva solo
+tras una inferencia. La descarga explícita del modelo Qwen2.5 0.5B
+requiere Ollama en loopback y espacio libre. El servicio Ollama se
+instala por separado. Las rutas de CAZEL y DARAS se pueden registrar
+al instalar y se validan por la presencia del adaptador v1. La
+configuración no ejecuta esos archivos. El diagnóstico diferencia
+la configuración de un adaptador de una colaboración que ha devuelto
+un resultado.
+
+Studio nativo y web muestran el estado del motor en el chat. Studio
+nativo concentra la eliminación de conversaciones en el gestor Chats
+y ofrece un acceso al inventario de motores. El indicador distingue
+una configuración guardada de una prueba de inferencia actual.
+
+Ampliación verificada con 485 pruebas locales aprobadas, 6 omitidas y
+3 subpruebas. Chromium comprobó el indicador del chat. En un directorio
+temporal se guardaron las rutas y se ejecutaron los adaptadores reales
+de CAZEL y DARAS sin red. CAZEL devolvió evidencia de análisis de
+Python y DARAS devolvió plan y simulación. El instalador de modelos se
+probó con dobles. No se ejecutó una descarga o inferencia real de Ollama.

@@ -206,6 +206,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     menu_opciones.add_command(label="Modo gestual por cámara", command=lambda: estado.set(
         "Activa la cámara desde la ventana de gestos." if lanzar_tactil()
         else "No se pudo abrir el control gestual en este escritorio."))
+    def mostrar_motores():
+        publicar(lambda: pedir("chat", {"mensaje": "Detecta inteligencias instaladas",
+                                       "modo": "studio", "cliente": identificador}),
+                 lambda datos: messagebox.showinfo("Motores y especialistas", datos["respuesta"], parent=app))
+
+    menu_opciones.add_command(label="Motores y especialistas…", command=mostrar_motores)
     opciones.configure(menu=menu_opciones)
     opciones.pack(side=RIGHT, padx=5)
     paginas = ttk.Notebook(app)
@@ -364,6 +370,8 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     acciones_proyecto.pack(fill=X)
 
     ttk.Label(chat, text="CONVERSACIÓN", style="Seccion.TLabel").pack(anchor="w", pady=(0, 6))
+    modelo_visible = StringVar(value="Comprobando configuración del motor…")
+    ttk.Label(chat, textvariable=modelo_visible, wraplength=280).pack(anchor="w", pady=(0, 6))
     selector = ttk.Combobox(chat, state="readonly", width=16)
     selector.pack(fill=X, pady=(0, 3))
     barra_conversaciones = ttk.Frame(chat)
@@ -1233,26 +1241,17 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
             mostrar_mensaje("Tú" if turno["rol"] == "usuario" else "Cerebro", turno["texto"])
 
 
-    def gestionar_chat(borrar=False):
+    def gestionar_chat():
         if chat_activo is None:
             return
-        if borrar and not messagebox.askyesno("Eliminar chat", "¿Eliminar la conversación actual?", parent=app):
-            return
-        activa = chat_activo
-
-        def operar():
-            if borrar:
-                pedir("historial", {"confirmar": True, "id": activa})
-                return pedir("conversaciones")
-            return pedir("conversaciones", {"accion": "nueva"})
 
         def actualizado(datos):
             nonlocal chat_activo
             chat_activo = None
             mostrar_chat(datos)
-            estado.set("Conversación eliminada." if borrar else "Nueva conversación.")
+            estado.set("Nueva conversación.")
 
-        publicar(operar, actualizado)
+        publicar(lambda: pedir("conversaciones", {"accion": "nueva"}), actualizado)
 
     def seleccionar_chat(_evento):
         indice = selector.current()
@@ -1434,7 +1433,6 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
                                "cliente": identificador}),
         lambda dato: estado.set(dato["respuesta"])))
     boton(barra_conversaciones, "Nuevo chat", gestionar_chat)
-    boton(barra_conversaciones, "Eliminar chat", lambda: gestionar_chat(borrar=True), "Eliminar.TButton")
     def ver_chats():
         from universe.dialogo_chats import gestionar_conversaciones
         gestionar_conversaciones(app, pedir, mostrar_chat)
@@ -1474,7 +1472,12 @@ def abrir_studio(sesion, solicitud=None, inicial="proyecto"):
     publicar(lambda: proyecto("escritorio"), actualizar_preferencias)
     publicar(lambda: proyecto("recordado"), recordar_al_abrir)
     publicar(lambda: pedir("conversaciones"), mostrar_chat)
-    publicar(lambda: pedir("estado"), lambda _: estado.set("Núcleo conectado"))
+    def mostrar_estado_inicial(datos):
+        modelo = datos.get("modelo_conversacional")
+        modelo_visible.set(f"Modelo local configurado: {modelo}" if modelo else "Modelo conversacional sin configurar")
+        estado.set("Núcleo conectado")
+
+    publicar(lambda: pedir("estado"), mostrar_estado_inicial)
     informar(True)
     temporizador_cola = app.after(75, procesar)
     temporizador_pulso = app.after(2000, pulso)
