@@ -82,7 +82,18 @@ class ProfesorLocal:
             return cls(int(valor))
         motor = os.environ.get("CEREBRO_PROFESOR_MOTOR")
         modelo = os.environ.get("CEREBRO_PROFESOR_MODELO")
-        return ProfesorBajoDemanda(motor, modelo) if motor and modelo else cls()
+        if motor and modelo:
+            return ProfesorBajoDemanda(motor, modelo)
+        import config
+        from core.configuracion_modelo_local import leer
+
+        guardado = leer(config.raiz_datos())
+        if guardado and guardado.get("motor") == "ollama":
+            try:
+                return cls(guardado.get("puerto"), ollama=guardado["modelo"])
+            except (KeyError, TypeError, ValueError):
+                pass
+        return cls()
 
     @property
     def configurado(self):
@@ -100,7 +111,8 @@ class ProfesorLocal:
         if not 2 <= len(pregunta) <= 700:
             raise ValueError("El profesor local admite mensajes de hasta 700 caracteres.")
         return self._consultar(
-            "Conversa en español con explicaciones breves. Si te piden acciones, ofrece orientación "
+            "Conversa en español con explicaciones breves. Si el término es ambiguo, pregunta antes de adivinar. "
+            "Si te piden acciones, ofrece orientación "
             "o un plan textual y evita afirmar que has ejecutado acciones.",
             pregunta, contexto=contexto,
         )
@@ -206,7 +218,7 @@ class ProfesorLocal:
             conexion = HTTPConnection("127.0.0.1", puerto, timeout=40)
             mensajes = [
                 {"role": "system", "content": instruccion + " Responde solo con texto."},
-                *[{"role": rol, "content": contenido[:240]} for par in contexto[-2:]
+                *[{"role": rol, "content": contenido[:240]} for par in contexto[-6:]
                   for rol, contenido in zip(("user", "assistant"), par)],
                 {"role": "user", "content": mensaje_usuario},
             ]

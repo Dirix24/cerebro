@@ -64,6 +64,7 @@ with TemporaryDirectory() as temporal:
                 btn = lambda nombre: page.get_by_role("button", name=nombre, exact=True)
                 fila = lambda nombre: page.locator("#archivos").get_by_role("button", name=nombre, exact=True)
                 contenido = page.get_by_label("Contenido del archivo")
+                expect(page.locator("#modelo-conversacional")).to_contain_text("Modelo")
                 respuestas.append(str(carpeta))
                 btn("Abrir proyecto").click()
                 expect(fila("robot.py")).to_be_visible()

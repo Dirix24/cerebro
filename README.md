@@ -748,3 +748,56 @@ de Cerebro prepara los paquetes Python dentro del entorno virtual.
   Dirix24/cerebro». También puedes pedir ramas, issues o pull requests.
 
 Ver [alcance y validación](docs/STUDIO_CONTEXTO_UNIVERSE.md).
+
+### Activar la conversación con un modelo local
+
+Si Ollama ya está iniciado y tiene un modelo descargado, ejecuta
+`cerebro configurar-modelo` y elige su número. Cerebro le pide
+un saludo de prueba a través de loopback y guarda la selección
+solo si recibe una respuesta. Reinicia Cerebro una vez para
+aplicarla. También puedes ejecutar
+`cerebro configurar-modelo NOMBRE`. El selector no descarga
+pesos. La configuración explícita de Ollama o llama.cpp mediante
+las variables ya documentadas sigue teniendo prioridad.
+
+Las preguntas informativas reconocidas pasan primero al modelo
+configurado. Los permisos, operaciones exactas y acciones de
+escritorio siguen pasando por las herramientas existentes.
+El contexto del modelo conserva hasta seis pares recientes por
+cliente y conversación. «Que esportatil» se interpreta como una
+definición y «ques tayo» pide aclaración. Si la definición usa
+el respaldo de consulta pública, se muestra un extracto corto
+junto a su fuente.
+
+Universe distingue el checkpoint propio cargado del motor
+generativo configurado. «Detecta inteligencias instaladas» también
+puede mostrar un adaptador v1 de CAZEL o DARAS en un repositorio
+hermano. Para usar esos adaptadores sigue siendo necesario
+configurar y autorizar sus rutas de trabajo.
+
+Consulta [pruebas y estados de los modelos](docs/CONVERSACION_MODELO_LOCAL.md).
+
+Durante `./instalar`, Cerebro intenta activar automáticamente un
+Qwen2.5 ligero que ya esté instalado en Ollama. Conserva la
+configuración existente y prueba una respuesta antes de guardar una
+selección nueva. Para preparar el modelo ligero en una instalación
+donde el servicio de Ollama ya responde:
+
+```bash
+./instalar --sin-autoinicio --descargar-modelo-ligero
+```
+
+La opción autoriza una descarga de unos 400 MB. También puedes
+seleccionar un modelo ya instalado con `--modelo-ollama NOMBRE`.
+El instalador no instala el servicio Ollama. Si CAZEL y DARAS ya
+están descargados, puedes configurar sus adaptadores locales y el
+proyecto de CAZEL en la misma instalación:
+
+```bash
+./instalar --sin-autoinicio --cazel-raiz /ruta/a/CAZEL_IA \
+  --daras-raiz /ruta/a/Daras-IA --proyecto-cazel /ruta/a/mi-proyecto
+```
+
+Studio indica el modelo configurado junto a la conversación. El menú
+**Opciones → Motores y especialistas** muestra el inventario local.
+Para gestionar o eliminar conversaciones, usa **Chats**.

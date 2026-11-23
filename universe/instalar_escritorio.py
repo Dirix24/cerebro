@@ -86,6 +86,14 @@ def main():
     ap.add_argument("--gestos", choices=("auto", "manos", "marcador", "ninguno"), default="auto",
                     help="prepara los gestos en el entorno virtual (predeterminado: auto)")
     ap.add_argument("--modelo-manos", metavar="RUTA", help="registra un modelo .task ya descargado")
+    modelos = ap.add_mutually_exclusive_group()
+    modelos.add_argument("--modelo-ollama", metavar="NOMBRE", help="verifica y configura un modelo ya instalado")
+    modelos.add_argument("--descargar-modelo-ligero", action="store_true",
+                        help="descarga Qwen2.5 0.5B en un Ollama ya instalado (aprox. 400 MB)")
+    modelos.add_argument("--sin-modelo-auto", action="store_true", help="no seleccionar un modelo automáticamente")
+    ap.add_argument("--cazel-raiz", help="autoriza y guarda la ruta del adaptador de CAZEL")
+    ap.add_argument("--daras-raiz", help="autoriza y guarda la ruta del adaptador de DARAS")
+    ap.add_argument("--proyecto-cazel", help="selecciona el proyecto local para CAZEL")
     ap.add_argument("--sin-diagnostico", action="store_true", help="omite el diagnóstico final")
     args = ap.parse_args()
     instalar(automatico=not args.sin_autoinicio)
@@ -99,6 +107,25 @@ def main():
         print(preparar_gestos_automaticos())
     elif args.gestos != "ninguno" and not instalar_gestos(args.gestos):
         print("La instalación básica sigue disponible. El modo gestual elegido requiere revisión.")
+    if args.modelo_ollama or not args.sin_modelo_auto:
+        import config
+        import subprocess
+        from core.configuracion_modelo_local import descargar_ligero, preparar_instalacion
+
+        try:
+            raiz = config.raiz_datos()
+            print(descargar_ligero(raiz) if args.descargar_modelo_ligero
+                  else preparar_instalacion(raiz, args.modelo_ollama))
+        except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
+            print(f"Modelo local: no se guardó la selección. {error}")
+    if args.cazel_raiz or args.daras_raiz or args.proyecto_cazel:
+        from core.configuracion_especialistas import configurar
+
+        try:
+            configurar(args.cazel_raiz, args.daras_raiz, args.proyecto_cazel)
+            print("Rutas de especialistas guardadas. La conexión se comprueba al consultar el equipo.")
+        except (OSError, ValueError) as error:
+            print(f"No se registraron los especialistas: {error}")
     if not args.sin_diagnostico:
         diagnosticar(Path(__file__).resolve().parent.parent)
 

@@ -75,7 +75,9 @@ def _ejecutar(comando, raiz, entrada, entorno, timeout, cancelacion):
 
 
 def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
-    carpeta = os.environ.get("CEREBRO_" + region + "_RAIZ")
+    from core.configuracion_especialistas import obtener
+
+    carpeta = obtener(region + "_RAIZ")
     if not carpeta:
         return _resultado(region, "no_disponible", "Falta configurar el repositorio local.")
     modulo = "especialista" if region == "DARAS" else "cazel.especialista"
@@ -83,9 +85,9 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
     punto = raiz.joinpath(*modulo.split(".")).with_suffix(".py")
     if not punto.is_file():
         return _resultado(region, "no_disponible", "El adaptador v1 no existe en la carpeta configurada.")
-    comando = [sys.executable, "-E", "-s", "-m", modulo]
+    comando = [sys.executable, "-E", "-s", "-B", "-m", modulo]
     if region == "CAZEL":
-        proyecto = os.environ.get("CEREBRO_CAZEL_PROYECTO")
+        proyecto = obtener("CAZEL_PROYECTO")
         if not proyecto:
             return _resultado(region, "no_disponible", "Falta seleccionar el proyecto CAZEL.")
         comando += ["--proyecto", str(Path(proyecto).expanduser().resolve())]
