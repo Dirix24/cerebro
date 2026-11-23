@@ -54,6 +54,20 @@ def activa(ventanas=None):
     return None
 
 
+def clase_activa():
+    """Lee solo WM_CLASS de la ventana enfocada, sin consultar títulos."""
+    tipo = os.environ.get("XDG_SESSION_TYPE", "").lower()
+    if not os.environ.get("DISPLAY") or tipo == "wayland" or (not tipo and os.environ.get("WAYLAND_DISPLAY")):
+        raise RuntimeError("Los hábitos de ventanas requieren una sesión X11.")
+    salida = _ejecutar("xprop", "-root", "_NET_ACTIVE_WINDOW")
+    valor = re.search(r"window id # (0x[0-9a-fA-F]+)", salida)
+    if not valor or int(valor[1], 16) == 0:
+        return None
+    propiedad = _ejecutar("xprop", "-id", valor[1], "WM_CLASS")
+    clase = re.fullmatch(r'WM_CLASS\(STRING\) = "[^"]*", "([a-zA-Z0-9_-]{1,40})"\s*', propiedad)
+    return clase[1].casefold() if clase else None
+
+
 def _geometria(identificador):
     informe = _ejecutar("xwininfo", "-id", identificador)
     valores = []

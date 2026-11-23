@@ -266,6 +266,17 @@ def terminal(sesion):
     compartido = False
     ultima_respuesta = ""
 
+    proyecto_activo = None
+
+    def proyecto(accion, **datos):
+        return api(sesion, "proyecto", {"accion": accion, "cliente": identificador,
+                                       "carpeta_esperada": proyecto_activo, **datos},
+                   tiempo=75 if accion == "generar" else 25)
+
+    def salida_proyecto(texto):
+        # Evita interpretar secuencias de control de diffs o resultados de pruebas.
+        print("".join(caracter for caracter in texto if caracter.isprintable() or caracter in "\n\t"))
+
     def presencia(visible, enfocar=False):
         return api(sesion, "interfaz", {"id": identificador, "modo": "terminal",
                                        "visible": visible, "enfocar": enfocar}, tiempo=2)
@@ -326,6 +337,8 @@ def terminal(sesion):
         print(formato("─" * ancho, "38;5;24"))
         for accesos_visibles in ("Chats: /nuevo-chat  /chats  /historial  /eliminar-chat",
                                  "Compartir: /sincronizar  /separar  /guardar-en-studio",
+                                 "Proyecto: /proyecto RUTA  /analizar-proyecto  /probar-proyecto",
+                                 "Generación: /generar OBJETIVO",
                                  "Vistas: /studio  /web    Sesión: /ayuda  /salir"):
             print(fill(accesos_visibles, width=ancho, subsequent_indent="  ",
                        break_long_words=False, break_on_hyphens=False))
@@ -368,6 +381,50 @@ def terminal(sesion):
                     if api(sesion, "archivo?nombre=" + nombre)["texto"] != ultima_respuesta:
                         raise RuntimeError("No pude verificar el contenido guardado en Studio.")
                     print(f"Guardado en Studio: {nombre}")
+                    continue
+                orden_proyecto, _, argumento = entrada.partition(" ")
+                orden_proyecto = orden_proyecto.casefold()
+                if orden_proyecto == "/proyecto":
+                    destino = str(Path(argumento or ".").expanduser().absolute())
+                    try:
+                        datos = proyecto("abrir", carpeta=destino)
+                    except ErrorAPI as error:
+                        if error.codigo != 403:
+                            raise
+                        if input(f"¿Autorizar el proyecto {destino}? [s/N] ").strip().casefold() not in {"s", "si", "sí"}:
+                            continue
+                        datos = proyecto("abrir", carpeta=destino, confirmar=True)
+                    proyecto_activo = datos["carpeta"]
+                    salida_proyecto(f"Proyecto abierto: {proyecto_activo} ({len(datos['archivos'])} archivos compatibles).")
+                    continue
+                if orden_proyecto in {"/analizar-proyecto", "/generar", "/probar-proyecto"}:
+                    if proyecto_activo is None:
+                        print("Abre primero una carpeta con /proyecto RUTA.")
+                        continue
+                    if orden_proyecto == "/generar":
+                        if not argumento.strip():
+                            print("Describe el proyecto después de /generar.")
+                            continue
+                        preparacion = proyecto("generar", objetivo=argumento.strip())
+                        salida_proyecto(preparacion["diff"])
+                        nombre = input("Subcarpeta nueva para publicar la propuesta (Enter cancela): ").strip()
+                        if nombre:
+                            resultado = proyecto("publicar_generado", nombre=nombre, id=preparacion["id"], confirmar=True)
+                            salida_proyecto("\n".join(resultado["archivos"]))
+                    elif orden_proyecto == "/analizar-proyecto":
+                        resultado = proyecto("analizar")
+                        salida_proyecto(json.dumps(resultado, ensure_ascii=False, indent=2))
+                    elif input("¿Ejecutar las pruebas del proyecto con el aislamiento local? [s/N] ").strip().casefold() in {"s", "si", "sí"}:
+                        tarea = proyecto("pruebas", confirmar=True)["id"]
+                        limite = monotonic() + 30
+                        while monotonic() < limite:
+                            datos = next((dato for dato in api(sesion, "tareas") if dato["id"] == tarea), None)
+                            if datos and datos["estado"] in {"terminada", "error"}:
+                                salida_proyecto(datos["salida"])
+                                break
+                            sleep(.35)
+                        else:
+                            print("La tarea sigue en el núcleo. Consulta Validaciones en Studio.")
                     continue
                 if comando == "/historial":
                     mostrar_historial(12)
@@ -487,6 +544,54 @@ def escritorio(sesion):
     cabecera.pack(fill="x", padx=14, pady=(10, 0))
     tk.Label(cabecera, text="Cerebro", fg=texto, bg=fondo,
              font=("TkDefaultFont", 12, "bold")).pack(side="left")
+    import config
+    from core.habitos_escritorio import APLICACIONES, Habitos
+    from core.ventanas_x11 import clase_activa
+
+    habitos = Habitos(config.raiz_datos())
+    indicador_habitos = tk.StringVar()
+    revision_habitos = 0
+    consulta_habitos = False
+
+    def mostrar_habitos():
+        activo = habitos.leer()["activo"]
+        indicador_habitos.set("Hábitos activos" if activo else "Hábitos pausados")
+
+    tk.Label(cabecera, textvariable=indicador_habitos, bg=fondo, fg=SECUNDARIO).pack(side="left", padx=8)
+    mostrar_habitos()
+
+    def cambiar_habitos(activar=False, borrar=False):
+        nonlocal revision_habitos
+        if activar and not messagebox.askyesno(
+                "Hábitos de aplicaciones",
+                "¿Recordar la frecuencia de uso de editores y herramientas de electrónica? "
+                "Solo mientras el Acompañante esté visible, sin títulos ni capturas.", parent=ventana):
+            return
+        if borrar and not messagebox.askyesno("Borrar hábitos", "¿Borrar los contadores y pausar el aprendizaje?",
+                                              parent=ventana):
+            return
+        revision_habitos += 1
+        try:
+            habitos.borrar() if borrar else habitos.cambiar(activar)
+            mostrar_habitos()
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Hábitos de aplicaciones", str(error), parent=ventana)
+
+    def muestrear_habitos():
+        nonlocal consulta_habitos
+        if ventana.state() == "normal" and habitos.leer()["activo"] and not consulta_habitos:
+            consulta_habitos = True
+            revision = revision_habitos
+
+            def leer_clase():
+                try:
+                    eventos.put(("hábito", (revision, clase_activa())))
+                except (OSError, RuntimeError):
+                    eventos.put(("hábito", (revision, None)))
+
+            Thread(target=leer_clase, daemon=True).start()
+        ventana.after(8000, muestrear_habitos)
+
     contenido = tk.Frame(ventana, bg=fondo)
     compacto = False
 
@@ -716,7 +821,7 @@ def escritorio(sesion):
         Thread(target=tarea_de_voz, args=(operar, "conversación"), daemon=True).start()
 
     def actualizar():
-        nonlocal ultima_respuesta, chat_activo, revision_visible, temporizador
+        nonlocal ultima_respuesta, chat_activo, revision_visible, temporizador, consulta_habitos
         while not eventos.empty():
             tipo, valor = eventos.get()
             if tipo == "servicio cerrado":
@@ -735,6 +840,14 @@ def escritorio(sesion):
                 cambiar_estado("Disponible")
                 if voz_activada:
                     hablar_respuesta(ultima_respuesta)
+            elif tipo == "hábito":
+                consulta_habitos = False
+                revision, clase = valor
+                if revision == revision_habitos and ventana.state() == "normal":
+                    try:
+                        habitos.registrar(clase)
+                    except (OSError, ValueError) as error:
+                        aviso.set(str(error))
             elif tipo == "ventana identificada":
                 ventana.deiconify()
                 agregar_turno("Cerebro", valor)
@@ -842,6 +955,18 @@ def escritorio(sesion):
         rutinas.add_command(label=etiqueta, command=lambda orden=orden: orden_rutina(orden))
     rutinas.add_command(label="Repetir rutina…", command=elegir_rutina)
     menu_acciones.add_cascade(label="Rutinas de escritorio", menu=rutinas)
+    def ver_habitos():
+        datos = habitos.leer()
+        filas = [f"{APLICACIONES[clave][0]} · {cantidad}" for clave, cantidad in sorted(datos["cuentas"].items())]
+        messagebox.showinfo("Hábitos de aplicaciones", "\n".join(filas) or "Todavía no hay aplicaciones registradas.",
+                            parent=ventana)
+
+    menu_habitos = tk.Menu(menu_acciones, tearoff=False)
+    menu_habitos.add_command(label="Ver contadores…", command=ver_habitos)
+    menu_habitos.add_command(label="Activar…", command=lambda: cambiar_habitos(activar=True))
+    menu_habitos.add_command(label="Pausar", command=cambiar_habitos)
+    menu_habitos.add_command(label="Borrar…", command=lambda: cambiar_habitos(borrar=True))
+    menu_acciones.add_cascade(label="Hábitos de aplicaciones", menu=menu_habitos)
     from universe.dialogo_recuerdos import abrir as abrir_recuerdos
     menu_acciones.add_command(label="Recuerdos de la conversación…",
                               command=lambda: abrir_recuerdos(ventana, lambda op, datos=None: api(sesion, op, datos)))
@@ -852,6 +977,7 @@ def escritorio(sesion):
     ventana.bind("<Escape>", lambda _evento: alternar_panel() if not compacto else None)
     ventana.protocol("WM_DELETE_WINDOW", cerrar)
     Thread(target=observar, daemon=True).start()
+    ventana.after(1000, muestrear_habitos)
     temporizador = ventana.after(150, actualizar)
     ventana.mainloop()
 

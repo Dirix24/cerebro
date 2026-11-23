@@ -11,6 +11,7 @@ from threading import Event, RLock, Thread
 from time import monotonic
 
 from core import competencias
+from core.recursos_portatil import motivos_pausa
 
 
 _RAIZ_CODIGO = Path(__file__).resolve().parent.parent
@@ -99,6 +100,9 @@ class GestorAprendizaje:
                 return "Prepara primero un entrenamiento autónomo en este chat."
             if self.ensayo and self.ensayo.estado in {"preparando ejercicios", "entrenando y evaluando"}:
                 return "Ya hay un entrenamiento autónomo en curso."
+            motivos = motivos_pausa(minimo_ram_mb=1024)
+            if motivos:
+                return "Entrenamiento aplazado: " + ", ".join(motivos) + ". Prepara otro cuando se liberen recursos."
             ensayo = Ensayo(cliente, propuesta[1])
             self.ensayo = ensayo
             self.hilo = Thread(target=self._ejecutar, args=(nucleo, ensayo), daemon=True)
@@ -148,7 +152,7 @@ class GestorAprendizaje:
             entrada = carpeta / "variantes.json"
             entrada.write_text(json.dumps(variantes, ensure_ascii=False), encoding="utf-8")
             self._actualizar(ensayo, "entrenando y evaluando",
-                             f"{len(variantes)} propuestas de Qwen verificadas; las demás referencias son locales.")
+                             f"{len(variantes)} propuestas del modelo local verificadas; las demás referencias son locales.")
             limite = monotonic() + 120
             with (carpeta / "entrenador.log").open("w", encoding="utf-8") as log:
                 proceso = subprocess.Popen(
@@ -157,9 +161,16 @@ class GestorAprendizaje:
                     cwd=_RAIZ_CODIGO, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                     env={**os.environ, "CEREBRO_HOME": str(nucleo.raiz), "CEREBRO_SIN_INTERNET": "1",
                          "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"})
+                proxima_revision = monotonic() + 5
                 while proceso.poll() is None:
                     self._comprobar(nucleo, ensayo)
-                    if monotonic() >= limite:
+                    ahora = monotonic()
+                    if ahora >= proxima_revision:
+                        motivos = motivos_pausa(minimo_ram_mb=512)
+                        if motivos:
+                            raise InterruptedError("Entrenamiento detenido: " + ", ".join(motivos) + ".")
+                        proxima_revision = ahora + 5
+                    if ahora >= limite:
                         raise TimeoutError("El entrenamiento excedió los 120 segundos.")
                     ensayo.cancelado.wait(.25)
             self._comprobar(nucleo, ensayo)
@@ -178,7 +189,7 @@ class GestorAprendizaje:
                         "bpb_antes": informe["validacion_bpb_antes"], "bpb_despues": informe["validacion_bpb_despues"]}
             competencias.guardar(nucleo.raiz, antes)
             competencias.guardar(nucleo.raiz, registro)
-            self._actualizar(ensayo, "terminado", f"{estado}. {len(variantes)} variantes de Qwen. "
+            self._actualizar(ensayo, "terminado", f"{estado}. {len(variantes)} variantes del modelo local. "
                             "Los pesos activos siguen intactos.\n" + competencias.resumen(registro))
         except (PermissionError, InterruptedError) as exc:
             fallo = ("cancelado", str(exc))

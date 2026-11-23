@@ -19,7 +19,7 @@ def instalar(raiz, avanzado=False, ejecutar=None):
     if entorno.is_symlink() or python.is_file() and not (entorno / "pyvenv.cfg").is_file():
         raise ValueError("La ruta .venv debe ser un entorno virtual local de Cerebro.")
     if not python.is_file():
-        venv.EnvBuilder(with_pip=True).create(str(entorno))
+        venv.EnvBuilder(with_pip=True, symlinks=sys.platform != "win32").create(str(entorno))
     ejecutar = ejecutar or subprocess.call
     codigo = ejecutar([str(python), "-m", "pip", "install", "-r", str(raiz / "requirements.txt")])
     if codigo:

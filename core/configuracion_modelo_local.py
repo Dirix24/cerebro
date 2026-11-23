@@ -45,12 +45,24 @@ def _guardar(raiz, datos):
             temporal.unlink(missing_ok=True)
 
 
+def configurar_gguf(raiz, binario, ruta):
+    from core.profesor_local import ProfesorBajoDemanda
+
+    motor = ProfesorBajoDemanda(binario, ruta)
+    try:
+        motor.conversar("Responde a este saludo breve en español: hola.")
+    finally:
+        motor.cerrar()
+    _guardar(raiz, {"motor": "llama.cpp", "modelo": str(ruta.resolve())})
+    return f"Modelo local: {ruta.name} configurado después de una inferencia de prueba."
+
+
 def preparar_instalacion(raiz, modelo=None):
     """Conserva la configuración y prueba únicamente candidatos ligeros instalados."""
     import os
-    from shutil import which
+    from core.provision_modelo import binario_llama
     from core.motores_instalados import _modelos_ollama
-    from core.profesor_local import GIB, ProfesorBajoDemanda, diagnostico
+    from core.profesor_local import GIB, diagnostico
 
     variables = ("CEREBRO_OLLAMA_MODELO", "CEREBRO_PROFESOR_PUERTO",
                  "CEREBRO_PROFESOR_MOTOR", "CEREBRO_PROFESOR_MODELO")
@@ -80,7 +92,7 @@ def preparar_instalacion(raiz, modelo=None):
             continue
         return f"Modelo local: {nombre} configurado después de una inferencia de prueba."
 
-    binario = which("llama-server")
+    binario = binario_llama()
     carpeta = Path(raiz) / "models"
     if binario and carpeta.is_dir() and not carpeta.is_symlink():
         modelos = []
@@ -90,15 +102,10 @@ def preparar_instalacion(raiz, modelo=None):
                 if 0 < peso <= ram - 2 * GIB:
                     modelos.append((peso, ruta))
         for _, ruta in sorted(modelos)[:3]:
-            motor = ProfesorBajoDemanda(binario, ruta)
             try:
-                motor.conversar("Responde a este saludo breve en español: hola.")
-            except (RuntimeError, ValueError):
+                return configurar_gguf(raiz, binario, ruta)
+            except (OSError, RuntimeError, ValueError):
                 continue
-            finally:
-                motor.cerrar()
-            _guardar(raiz, {"motor": "llama.cpp", "modelo": str(ruta.resolve())})
-            return f"Modelo local: {ruta.name} configurado después de una inferencia de prueba."
 
     return ("Modelo local: sin candidato instalado y comprobado. "
             "Usa cerebro configurar-modelo para elegir un modelo de Ollama.")

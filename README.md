@@ -831,3 +831,30 @@ o proceso. Los resultados de adaptadores registran su operación y
 duración cuando se intentó ejecutarlos.
 
 Consulta la [auditoría, el formato portable y las pruebas](docs/NEXT_ENTREGA.md).
+
+
+### Instalación guiada y controles locales
+
+Ejecuta `./instalar` en una terminal. En Debian y MX Linux puedes
+autorizar los paquetes del sistema que falten. Si el instalador no
+encuentra un motor con un modelo compatible, ofrece un kit de CPU para
+Linux x86-64 compatible. Incluye llama.cpp y Qwen2.5 0.5B GGUF,
+hasta 509 MB en total, con un requisito de al menos 1 GiB de
+almacenamiento libre y 2 GiB de RAM disponible. La instalación
+comprueba tamaño, SHA-256 e inferencia antes de guardar el motor
+conversacional. La opción puede rechazarse y CEREBRO conserva sus
+herramientas locales. El instalador puede conectar copias vecinas de
+CAZEL y DARAS después de pedir autorización.
+
+- En Terminal, usa `/proyecto RUTA` para abrir una carpeta y
+  `/analizar-proyecto` para ver hallazgos. `/generar OBJETIVO` muestra
+  las diferencias y permite publicar en una subcarpeta nueva.
+  `/probar-proyecto` solicita confirmación y usa el aislamiento existente.
+- En el Acompañante, abre **Accesos → Hábitos de aplicaciones** para
+  activar, consultar, pausar o borrar los contadores. La observación
+  solo consulta la clase X11 de la ventana enfocada mientras el
+  Acompañante está visible. Se cuentan editores y aplicaciones de
+  electrónica conocidos.
+- En **Modo gestual**, usa **Probar cámara y manos** para revisar
+  la imagen y el detector, o **Iniciar control gestual** para autorizar
+  el puntero. Esc pausa cualquiera de los dos modos.

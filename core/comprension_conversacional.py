@@ -24,7 +24,7 @@ def pide_seguimiento(pregunta):
     texto = normalizar(pregunta)
     return bool(re.match(r"^(?:y (?:como|por que|para que|cuando|que)\b|"
                          r"(?:dame|ponme|muestrame) (?:otro|un) ejemplo\b|"
-                         r"(?:explicalo|resumelo) (?:mejor|de nuevo|en pocas palabras)\b)", texto))
+                         r"(?:explicalo|explicamelo|resumelo|resumemelo) (?:mejor|mas facil|de nuevo|en pocas palabras)\b)", texto))
 
 
 def intencion_comun(texto):

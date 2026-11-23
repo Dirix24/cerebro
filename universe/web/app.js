@@ -60,7 +60,11 @@ async function api(ruta, datos) {
   }
   const respuesta = await fetch("/api/" + ruta, opciones);
   const salida = await respuesta.json();
-  if (!respuesta.ok) throw new Error(salida.error || "Error de conexión.");
+  if (!respuesta.ok) {
+    const error = new Error(salida.error || "Error de conexión.");
+    error.codigo = respuesta.status;
+    throw error;
+  }
   return salida;
 }
 
@@ -485,8 +489,10 @@ $("adjunto").addEventListener("change", async () => {
 });
 
 function central(id) {
+  $("inicio-central").hidden = Boolean(id);
   for (const control of document.querySelectorAll("[data-central]")) {
     const activo = control.dataset.central === id;
+    if (activo) control.hidden = false;
     control.setAttribute("aria-pressed", String(activo));
     $(control.dataset.central).hidden = !activo;
   }
@@ -744,6 +750,7 @@ async function abrirArchivo(nombre) {
   $("archivo").value = nombre;
   $("archivo-activo").textContent = nombre;
   if (esperado && (datos.visor !== "texto" || datos.solo_lectura || [".html", ".md", ".csv", ".tsv"].includes(datos.extension))) {
+    if (archivoAbierto) document.querySelector('[data-central="editor-central"]').hidden = false;
     presentarArchivo(datos);
   } else central("editor-central");
   if (esperado) await solicitarProyecto("recordar", {nombre}, esperado);
@@ -783,9 +790,16 @@ async function actualizarArchivos() {
 }
 
 async function abrirProyecto(carpeta) {
-  if (!carpeta || !confirm("¿Autorizar esta carpeta en Studio? " + carpeta)) return false;
+  if (!carpeta) return false;
   if (cambiosPendientes() && !confirm("¿Descartar los cambios sin guardar?")) return false;
-  const datos = await solicitarProyecto("abrir", {carpeta, confirmar: true});
+  let datos;
+  try {
+    datos = await solicitarProyecto("abrir", {carpeta});
+  } catch (error) {
+    if (error.codigo !== 403) throw error;
+    if (!confirm("¿Autorizar esta carpeta en Studio? " + carpeta)) return false;
+    datos = await solicitarProyecto("abrir", {carpeta, confirmar: true});
+  }
   proyectoActivo = datos.carpeta;
   documentoVisible = null;
   carpetaActual = "";
@@ -799,7 +813,10 @@ async function abrirProyecto(carpeta) {
   for (const id of ["gestionar-proyecto", "analizar-proyecto", "pruebas-proyecto"]) $(id).hidden = false;
   await solicitarProyecto("recordar");
   await actualizarArchivos();
-  central("editor-central");
+  for (const control of document.querySelectorAll("[data-central]")) {
+    control.hidden = !["web-central", "pruebas-central"].includes(control.dataset.central);
+  }
+  central(null);
   return true;
 }
 
@@ -943,7 +960,10 @@ function inspeccionar(nodo) {
   const fecha = nodo.fecha ? new Date(nodo.fecha) : null;
   const detalleFecha = fecha && Number.isFinite(fecha.getTime()) ? fecha.toLocaleString("es") : nodo.fecha;
   $("detalle").textContent = [nodo.titulo, "Tipo: " + nodo.tipo,
-    "Origen: " + (nodo.origen || "Sin registrar"), "Fecha y hora: " + (detalleFecha || "Sin registrar"), nodo.detalle]
+    "Origen: " + (nodo.origen || "Sin registrar"), "Fecha y hora: " + (detalleFecha || "Sin registrar"),
+    nodo.estado && "Estado: " + nodo.estado, nodo.accion && "Operación: " + nodo.accion,
+    nodo.modelo && "Modelo: " + nodo.modelo, nodo.duracion_ms != null && "Duración: " + nodo.duracion_ms + " ms",
+    nodo.detalle]
     .filter(Boolean).join("\n");
   $("eliminar-recuerdo").hidden = !nodo.eliminable;
 }
@@ -972,7 +992,19 @@ function filtrar() {
   const consulta = $("buscar-nodo").value.trim().toLocaleLowerCase("es");
   const tipo = $("filtro").value;
   const region = $("region-nodo").value;
+  const filtros = [["estado-nodo", "estado", "Todos los estados"], ["proceso-nodo", "accion", "Todos los procesos"],
+    ["modelo-nodo", "modelo", "Todos los modelos"]].map(([id, clave, etiqueta]) => {
+    const selector = $(id);
+    const seleccionado = selector.value;
+    const valores = [...new Set(nodos.map(nodo => nodo[clave]).filter(Boolean))].sort();
+    if (JSON.stringify([...selector.options].map(opcion => opcion.value)) !== JSON.stringify(["", ...valores])) {
+      selector.replaceChildren(new Option(etiqueta, ""), ...valores.map(valor => new Option(valor, valor)));
+      selector.value = valores.includes(seleccionado) ? seleccionado : "";
+    }
+    return [clave, selector.value];
+  });
   const visibles = nodos.filter(nodo => (!tipo || nodo.tipo === tipo) && (!region || nodo.grupo === region) &&
+    filtros.every(([clave, valor]) => !valor || nodo[clave] === valor) &&
     [nodo.titulo, nodo.detalle, nodo.origen].join(" ").toLocaleLowerCase("es").includes(consulta));
   const firma = JSON.stringify([region, visibles]);
   if (firma === firmaNodos) return;
@@ -983,7 +1015,9 @@ function filtrar() {
   grafico.nodos(region ? nodos.filter(nodo => visibles.includes(nodo) || conexiones.has(nodo.id)) : visibles);
 }
 $("filtro").addEventListener("change", filtrar);
-$("region-nodo").addEventListener("change", filtrar);
+for (const id of ["region-nodo", "estado-nodo", "proceso-nodo", "modelo-nodo"]) {
+  $(id).addEventListener("change", filtrar);
+}
 $("buscar-nodo").addEventListener("input", filtrar);
 $("activar-grafo").addEventListener("change", () => {
   $("cerebro-3d").hidden = !$("activar-grafo").checked;

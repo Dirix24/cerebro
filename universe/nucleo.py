@@ -696,9 +696,13 @@ class Nucleo:
         if re.fullmatch(r"(?:quiero (?:hacer|aprender|practicar) (?:algo de )?|ayudame con (?:la )?)"
                         r"(?:electronica|electroncia|eletronica)", intencion):
             self.exigir_permisos("READ")
+            from core.habitos_escritorio import Habitos
+
+            sugerencia = Habitos(self.raiz).sugerencia("electrónica")
             return {"respuesta": "¿Quieres simular un circuito, programar Arduino o diseñar una placa? "
                     "Para circuitos, usa Falstad; para Arduino, Wokwi o Tinkercad; para placas, KiCad. "
-                    "Cuéntame qué quieres construir y te ayudo a elegir."}
+                    "Cuéntame qué quieres construir y te ayudo a elegir."
+                    + (" " + sugerencia if sugerencia else "")}
         simulador = re.fullmatch(
             r"(?:abre (?:el simulador )?(tinkercad|wokwi|falstad)|(?:quiero )?simular (?:circuitos|electronica))",
             intencion)
@@ -899,8 +903,12 @@ class Nucleo:
                 r"empecemos a programar)(?: por favor)?",
                 intencion):
             self.exigir_permisos("READ")
+            from core.habitos_escritorio import Habitos
+
+            sugerencia = Habitos(self.raiz).sugerencia("programación")
             return {"respuesta": "¿Continuamos un proyecto o empezamos uno nuevo? "
-                                 "Puedes decir «Abre Studio» o «Abre la terminal».",
+                                 "Puedes decir «Abre Studio» o «Abre la terminal»."
+                                 + (" " + sugerencia if sugerencia else ""),
                     "compartir_temporal": True}
         if not comando and re.fullmatch(
                 r"(?:abre|abreme|inicia) (?:la )?terminal(?: de cerebro)?", intencion):
@@ -1200,16 +1208,24 @@ class Nucleo:
         self.memoria.cargar_memoria()
         nodos = []
         if self.profesor.configurado:
-            nombre = getattr(self.profesor, "ollama", None)
+            gguf = getattr(self.profesor, "modelo", None)
+            nombre = getattr(self.profesor, "ollama", None) or (Path(gguf).name if gguf else None)
             nodos.append({"id": "motor:profesor-local", "tipo": "razonamiento", "grupo": "PROFESOR",
                           "titulo": "Motor generativo local configurado",
                           "detalle": nombre or "Servidor local compatible con llama.cpp.",
+                          "modelo": nombre or "Motor local", "estado": "configurado",
                           "origen": "Configuración del núcleo"})
         if self.chat.modelo is not None:
             nodos.append({"id": "motor:cerebro-propio", "tipo": "aprendizaje", "grupo": "CEREBRO",
                           "titulo": "Modelo neuronal propio cargado",
                           "detalle": "Disponible mediante /modelo y las evaluaciones locales.",
+                          "modelo": "CEREBRO NumPy", "estado": "cargado",
                           "origen": "Checkpoint de Cerebro"})
+        if aprendizaje := self.aprendizaje.estado():
+            nodos.append({"id": "entrenamiento:sesion", "tipo": "aprendizaje", "grupo": "CEREBRO",
+                          "titulo": "Entrenamiento autorizado de esta sesión", "accion": "entrenar",
+                          "modelo": "CEREBRO NumPy", "estado": aprendizaje["estado"],
+                          "detalle": aprendizaje["detalle"], "origen": "Gestor de aprendizaje"})
         from core.alumno_supervisado import cargar_activo
 
         _, activo = cargar_activo(self.raiz_alumno)
@@ -1415,7 +1431,7 @@ class Nucleo:
                 "origen": "memoria"}
 
     def recuerdo_portable(self, datos):
-        from core.recuerdo_portable import validar
+        from core.recuerdo_portable import contradicciones, validar
 
         self.exigir_permisos("READ")
         recuerdo = validar(datos.get("recuerdo"))
@@ -1438,7 +1454,10 @@ class Nucleo:
                     self.memoria.importar_recuerdos({clave: recuerdo})
                     publicar("aprendido", "memoria")
                     estado = "guardado"
-        return {"clave": clave, "estado": estado}
+            conflictos = contradicciones(recuerdo, (
+                entrada.get("valor") for entrada in self.memoria.long_term_memory.values()
+                if isinstance(entrada, dict)))
+        return {"clave": clave, "estado": estado, "contradicciones_posibles": conflictos}
 
     def respaldo(self, datos=None):
         self.exigir_permisos("READ" if datos is None else "WRITE")

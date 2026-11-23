@@ -94,9 +94,9 @@ class ProfesorLocal:
             except (KeyError, TypeError, ValueError):
                 pass
         if guardado and guardado.get("motor") == "llama.cpp":
-            from shutil import which
+            from core.provision_modelo import binario_llama
 
-            binario = which("llama-server")
+            binario = binario_llama()
             ruta = guardado.get("modelo")
             if binario and isinstance(ruta, str):
                 modelo = Path(ruta)

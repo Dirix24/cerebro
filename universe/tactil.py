@@ -52,18 +52,18 @@ def elegir_detector(ficha):
     return marcador, fallo
 
 
-def _requisitos(marcador=False):
+def _requisitos(marcador=False, *, controlar=True):
     ficha = tecnologias()
-    if not ficha["x11"]:
+    if controlar and not ficha["x11"]:
         raise RuntimeError("Se necesita X11 y xdotool para controlar el puntero.")
     if not ficha["opencv"]:
         raise RuntimeError("Falta OpenCV en el entorno de Cerebro. Vuelve a ejecutar ./instalar desde tu copia actualizada.")
     if marcador:
         return None
     if not ficha["mediapipe"]:
-        raise RuntimeError("Falta MediaPipe. Selecciona Marcador verde para mover solo el puntero.")
+        raise RuntimeError("Falta MediaPipe. Vuelve a ejecutar ./instalar para preparar los gestos.")
     if not ficha["modelo"]:
-        raise RuntimeError("Configura CEREBRO_MODELO_MANOS con el archivo local hand_landmarker.task.")
+        raise RuntimeError("Falta el modelo de manos. Vuelve a ejecutar ./instalar para prepararlo.")
     return str(Path(ficha["modelo"]).expanduser())
 
 
@@ -175,7 +175,9 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
             camara.set(cv2.CAP_PROP_FRAME_WIDTH, ancho_cuadro)
             camara.set(cv2.CAP_PROP_FRAME_HEIGHT, alto_cuadro)
             camara.set(cv2.CAP_PROP_FPS, fps)
-            avisos.put("Cámara activa · " + ("control con manos" if detector else "marcador verde · solo puntero"))
+            modo = ("control con manos" if detector else "marcador verde · solo puntero") if habilitar_puntero.is_set() else (
+                "prueba de manos" if detector else "prueba de cámara · detector de manos indisponible")
+            avisos.put("Cámara activa · " + modo)
             anterior = -1
             trazo = None
             ultimo_estado = None
@@ -264,6 +266,7 @@ def abrir():
     angulo = .45
     foto = None
     activo = False
+    control_autorizado = False
     cerrando = False
     tk.Label(raiz, text="Modo gestual por cámara", bg=FONDO, fg=ACENTO, font=("TkDefaultFont", 15, "bold")).pack(padx=18, pady=10)
     lista = ttk.Combobox(raiz, state="readonly", values=[f"video{i} · {nombre}" for i, nombre in opciones], width=40)
@@ -379,6 +382,9 @@ def abrir():
 
     def puntero():
         nonlocal foto
+        if not control_autorizado:
+            valor.set("Pausa la prueba y elige Iniciar control gestual para autorizar el puntero.")
+            return
         if ver.is_set():
             alternar_vista()
         dibujar.clear()
@@ -396,23 +402,32 @@ def abrir():
             detener.set()
             valor.set("Pausando…")
 
-    def iniciar():
-        nonlocal activo, detener
+    def iniciar(controlar=True):
+        nonlocal activo, detener, control_autorizado
         indice = lista.current()
         if indice < 0 or activo:
             return
         try:
-            modelo = _requisitos(marcador=usar_marcador)
+            modelo = _requisitos(marcador=usar_marcador, controlar=controlar)
         except RuntimeError as exc:
             valor.set(str(exc))
             return
-        if not messagebox.askyesno("Activar cámara", "¿Permitir la cámara seleccionada y el control del puntero?", parent=raiz):
+        aviso_camara = ("¿Permitir la cámara seleccionada y el control del puntero?" if controlar
+                        else "¿Permitir la cámara seleccionada para ver la imagen y probar el detector?")
+        if not messagebox.askyesno("Activar cámara", aviso_camara, parent=raiz):
             return
+        control_autorizado = controlar
+        if controlar:
+            puntero()
+        elif not ver.is_set():
+            alternar_vista()
+        habilitar_puntero.set() if controlar else habilitar_puntero.clear()
         activo = True
         boton_trazo.configure(state="normal" if modelo else "disabled")
         dibujar.clear()
         detener = Event()
         boton.configure(state="disabled")
+        boton_prueba.configure(state="disabled")
         lista.configure(state="disabled")
         valor.set("Iniciando cámara…")
         Thread(target=_capturar, args=(opciones[indice][0], modelo, detener, eventos,
@@ -437,6 +452,7 @@ def abrir():
             if mensaje is None:
                 activo = False
                 boton.configure(state="normal" if opciones else "disabled")
+                boton_prueba.configure(state="normal" if opciones else "disabled")
                 lista.configure(state="readonly")
                 if valor.get() == "Pausando…" or valor.get().startswith("Cámara activa"):
                     valor.set("Cámara apagada")
@@ -482,20 +498,35 @@ def abrir():
         lineas.append("La apertura se comprueba al activar la cámara.")
         messagebox.showinfo("Diagnóstico de cámara", "\n".join(lineas), parent=raiz)
 
-    boton = ttk.Button(controles, text="Control con las manos" if not usar_marcador else "Control con marcador", command=iniciar, state="normal" if opciones else "disabled")
-    boton.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
-    ttk.Button(controles, text="Pausar", command=pausar).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
-    boton_ver = ttk.Button(controles, text="Ver cámara", command=alternar_vista)
-    boton_ver.grid(row=0, column=2, padx=2, pady=2, sticky="ew")
-    boton_trazo = ttk.Button(controles, text="Dibujar figura", command=iniciar_trazo)
-    boton_trazo.grid(row=1, column=0, padx=2, pady=2, sticky="ew")
-    ttk.Button(controles, text="Calibrar", command=calibrar).grid(row=3, column=0, columnspan=2, pady=4)
-    convertir = ttk.Button(controles, text="Convertir a 3D", command=modelo_3d, state="disabled")
-    convertir.grid(row=1, column=1, padx=2, pady=2, sticky="ew")
-    exportar = ttk.Button(controles, text="Guardar OBJ", command=guardar_obj, state="disabled")
-    exportar.grid(row=1, column=2, padx=2, pady=2, sticky="ew")
-    ttk.Button(controles, text="Usar puntero", command=puntero).grid(row=2, column=0, columnspan=3, pady=(4, 0))
-    ttk.Button(controles, text="Diagnóstico", command=diagnosticar).grid(row=3, column=2, pady=4)
+    estado_boton = "normal" if opciones else "disabled"
+    boton_prueba = ttk.Button(controles, text="Probar cámara y manos",
+                              command=lambda: iniciar(False), state=estado_boton)
+    boton_prueba.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
+    boton = ttk.Button(controles, text="Iniciar control gestual", command=iniciar, state=estado_boton)
+    boton.grid(row=0, column=1, padx=2, pady=2, sticky="ew")
+    ttk.Button(controles, text="Pausar", command=pausar).grid(row=0, column=2, padx=2, pady=2, sticky="ew")
+    avanzadas = ttk.Menubutton(controles, text="Opciones")
+    menu = tk.Menu(avanzadas, tearoff=False)
+    avanzadas.configure(menu=menu)
+    avanzadas.grid(row=1, column=0, columnspan=3, pady=4)
+
+    class EntradaMenu:
+        def __init__(self, texto, accion, state="normal"):
+            menu.add_command(label=texto, command=accion, state=state)
+            self.indice = menu.index("end")
+
+        def configure(self, **datos):
+            if "text" in datos:
+                datos["label"] = datos.pop("text")
+            menu.entryconfigure(self.indice, **datos)
+
+    boton_ver = EntradaMenu("Ver cámara", alternar_vista)
+    boton_trazo = EntradaMenu("Dibujar figura", iniciar_trazo, "disabled")
+    convertir = EntradaMenu("Convertir a 3D", modelo_3d, "disabled")
+    exportar = EntradaMenu("Guardar OBJ", guardar_obj, "disabled")
+    EntradaMenu("Calibrar", calibrar)
+    EntradaMenu("Usar puntero", puntero)
+    EntradaMenu("Diagnóstico", diagnosticar)
     if not opciones:
         valor.set("No se detectó una cámara compatible.")
     raiz.bind("<Escape>", pausar)

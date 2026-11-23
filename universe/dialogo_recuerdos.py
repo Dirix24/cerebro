@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from tkinter import Button, END, EXTENDED, Label, Listbox, Text, Toplevel, filedialog, messagebox, simpledialog
 
-from core.recuerdo_portable import LIMITE, crear, markdown, validar
+from core.recuerdo_portable import LIMITE, crear, markdown, tipo_cita, validar
 
 
 def abrir(padre, pedir):
@@ -17,6 +17,13 @@ def abrir(padre, pedir):
         texto = Text(ventana, wrap="word", width=68, height=20)
         texto.pack(fill="both", expand=True)
         texto.insert(END, markdown(recuerdo))
+        texto.insert(END, "\nClasificación orientativa\n")
+        for numero, mensaje in enumerate(recuerdo["mensajes"], 1):
+            texto.insert(END, f"{numero}. {tipo_cita(mensaje['texto'])}\n")
+        for conflicto in estado["contradicciones_posibles"]:
+            texto.insert(END, "\nPosible contradicción\n"
+                         f"Selección: {conflicto['seleccion']}\n"
+                         f"Guardado ({conflicto['fecha']}): {conflicto['guardada']}\n")
         texto.configure(state="disabled")
 
         def guardar():

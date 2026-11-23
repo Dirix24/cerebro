@@ -16,8 +16,16 @@ def probar_importacion(modulo):
 
 
 def diagnosticar(raiz):
-    from core.recursos_locales import inspeccionar, perfil_equipo
+    from core.local_voice import dispositivos_audio
+    from core.recursos_locales import inspeccionar, perfil_equipo, resumir as resumir_recursos
+    from core.profesor_local import diagnostico
+    from main import cargar_modelo
 
+    ficha = diagnostico(raiz)
+    print(f"Sistema: {ficha['sistema']} {ficha['arquitectura']} · "
+          f"CPU: {ficha['procesador'] or 'sin identificar'}")
+    baterias = Path("/sys/class/power_supply")
+    print("Tipo de equipo: " + ("batería detectada" if any(baterias.glob("BAT*")) else "sin batería visible"))
     recursos = inspeccionar(raiz)
     base = {m: probar_importacion(m) for m in ("tkinter", "numpy", "PIL", "cv2", "mediapipe")}
     sistema = {p: which(p) is not None for p in
@@ -30,9 +38,29 @@ def diagnosticar(raiz):
     modelo = modelo_manos()
     print("Modelo de manos: " + ("archivo disponible" if modelo and Path(modelo).expanduser().is_file() else "sin archivo configurado"))
     print("Cámara V4L2: " + (", ".join(dispositivos) if dispositivos else "sin nodos detectados"))
-    print(f"RAM libre: {recursos['memoria_mib'].get('MemAvailable', 'desconocida')} MiB")
+    audio = dispositivos_audio()
+    entradas = [nombre for nombre in audio["entradas"] if nombre != "default"]
+    print(f"Entradas de audio detectadas: {len(entradas)}. Captura sin probar.")
+    print(resumir_recursos(recursos))
     print(f"Perfil de cámara recomendado: {perfil_equipo(raiz)}")
-    print(f"Disco libre: {recursos['disco_libre_mib']} MiB")
+    try:
+        propio, _, ruta = cargar_modelo()
+        if propio is None:
+            print("Modelo neuronal propio: no se encontró un checkpoint.")
+        else:
+            propio.generar_ids([0], max_nuevos=1, temperatura=0)
+            print(f"Modelo neuronal propio: {Path(ruta).name}, inferencia CPU ejecutada.")
+    except (OSError, ValueError, RuntimeError, KeyError) as error:
+        print(f"Modelo neuronal propio: no se pudo validar. {error}")
+    for interfaz, modulo in (("Studio", "universe.studio"), ("Universe", "universe.mapa_studio"),
+                             ("Terminal y Acompañante", "universe.lanzador")):
+        try:
+            prueba = subprocess.run([sys.executable, "-c", f"import {modulo}"], timeout=12,
+                                    cwd=Path(__file__).resolve().parent.parent,
+                                    stdin=subprocess.DEVNULL, capture_output=True)
+            print(f"{interfaz}: " + ("módulo cargado" if prueba.returncode == 0 else "fallo al cargar"))
+        except (OSError, subprocess.TimeoutExpired):
+            print(f"{interfaz}: fallo al comprobar el módulo.")
     from core.motores_instalados import descubrir, resumir
     from core.profesor_local import ProfesorLocal
 
@@ -40,7 +68,7 @@ def diagnosticar(raiz):
         print(resumir(descubrir(ProfesorLocal.desde_entorno())))
     except ValueError as error:
         print(f"Configuración de motores: {error}")
-    print("El diagnóstico no inicia modelos ni captura imágenes.")
+    print("El diagnóstico no abre cámaras, micrófonos ni ventanas.")
 
 
 def instalar_gestos(modo):

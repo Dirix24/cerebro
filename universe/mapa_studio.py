@@ -40,7 +40,7 @@ class MapaStudio(ttk.Frame):
         filtros.pack(fill="x", pady=(8, 0))
         self._filtros = {}
         for campo, etiqueta in (("tipo", "Categoría"), ("grupo", "Grupo"),
-                                ("estado", "Estado"), ("accion", "Proceso")):
+                                ("estado", "Estado"), ("accion", "Proceso"), ("modelo", "Modelo")):
             ttk.Label(filtros, text=etiqueta).pack(side="left", padx=(0, 4))
             selector = ttk.Combobox(filtros, state="readonly", width=13, values=("Todos",))
             selector.current(0)
@@ -199,7 +199,8 @@ class MapaStudio(ttk.Frame):
             except (ValueError, AttributeError, OSError):
                 pass
         proceso = "".join(f"{nombre}: {nodo[campo]}{unidad}\n" for campo, nombre, unidad in
-                          (("estado", "Estado", ""), ("accion", "Operación", ""), ("duracion_ms", "Duración", " ms"))
+                          (("estado", "Estado", ""), ("accion", "Operación", ""),
+                           ("modelo", "Modelo", ""), ("duracion_ms", "Duración", " ms"))
                           if campo in nodo)
         self._detalle.set(f"{nodo['titulo']}\nTipo: {nodo.get('tipo', 'registro')}\n"
                           f"Origen: {nodo.get('origen') or 'Sin registrar'}\n"

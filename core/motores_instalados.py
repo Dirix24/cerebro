@@ -6,6 +6,7 @@ from pathlib import Path
 from shutil import which
 
 from core.configuracion_especialistas import obtener
+from core.provision_modelo import binario_llama
 
 
 def _modelos_ollama(puerto):
@@ -50,7 +51,7 @@ def descubrir(profesor):
         {"nombre": "Ollama", "estado": "servicio local respondió" if modelos is not None else
          ("binario detectado, servicio sin verificar" if which("ollama") else "sin respuesta local"),
          "modelos": modelos or [], "capacidades": "inferencia de texto según el modelo configurado"},
-        {"nombre": "llama.cpp", "estado": "binario detectado" if which("llama-server") else "binario fuera de PATH",
+        {"nombre": "llama.cpp", "estado": "binario detectado" if binario_llama() else "binario sin detectar",
          "modelos": [ruta_gguf.name] if gguf_instalado else [], "capacidades": "inferencia con GGUF configurado"},
         {"nombre": "PROFESOR", "estado": "modelo configurado" if profesor.configurado else "evaluación local",
          "modelos": [], "capacidades": "enseñanza y evaluación verificable"},

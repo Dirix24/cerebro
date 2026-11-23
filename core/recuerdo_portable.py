@@ -1,5 +1,6 @@
 """Fragmentos de conversación portables. Todos los mensajes son citas históricas."""
 import json
+import re
 from datetime import datetime
 from hashlib import sha256
 
@@ -45,3 +46,51 @@ def markdown(recuerdo):
         lineas.extend([f"**{mensaje['rol']} · {mensaje['fecha']}**", "",
                        *["> " + linea for linea in mensaje["texto"].splitlines()], ""])
     return "\n".join(lineas)
+
+
+def tipo_cita(texto):
+    texto = texto.strip().casefold()
+    if re.match(r"^/(?:[\w-]+)\b|^(?:abre|cierra|borra|ejecuta|instala|guarda|recuerda)\b", texto):
+        return "Posible instrucción histórica"
+    if re.match(r"^(?:creo que|pienso que|opino que|en mi opinión|me parece que|prefiero)\b", texto):
+        return "Posible opinión o preferencia"
+    if texto.startswith("¿") or texto.endswith("?"):
+        return "Pregunta histórica"
+    return "Afirmación histórica sin verificar"
+
+
+def _polaridad(texto):
+    texto = " ".join(texto.casefold().strip(" .!").split())
+    if not texto or len(texto) > 240 or "?" in texto or tipo_cita(texto) != "Afirmación histórica sin verificar":
+        return None
+    # Solo contrasta enunciados casi literales con un único marcador de negación.
+    patron = r"\b(no )?(es|son|está|están|tiene|tienen|funciona|funcionan)\b"
+    coincidencias = list(re.finditer(patron, texto))
+    if len(coincidencias) != 1:
+        return None
+    verbo, = coincidencias
+    return (texto[:verbo.start()] + verbo[2] + texto[verbo.end():], bool(verbo[1]))
+
+
+def contradicciones(recuerdo, valores):
+    indices = {}
+    for cita in recuerdo["mensajes"]:
+        if frase := _polaridad(cita["texto"]):
+            indices[frase] = cita["texto"]
+    if not indices:
+        return []
+    resultado = []
+    for valor in valores:
+        if not isinstance(valor, dict) or valor.get("formato") != FORMATO or valor.get("id") == recuerdo["id"]:
+            continue
+        try:
+            anterior = validar(valor)
+        except (ValueError, TypeError):
+            continue
+        for cita in anterior["mensajes"]:
+            frase = _polaridad(cita["texto"])
+            if frase and (opuesto := indices.get((frase[0], not frase[1]))):
+                resultado.append({"seleccion": opuesto, "guardada": cita["texto"], "fecha": cita["fecha"]})
+                if len(resultado) == 5:
+                    return resultado
+    return resultado

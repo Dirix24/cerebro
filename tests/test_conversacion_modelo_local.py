@@ -126,7 +126,7 @@ def test_instalador_prueba_gguf_y_persiste_solo_tras_inferencia(preparar, monkey
     modelo = preparar / "models" / "modelo.gguf"
     modelo.parent.mkdir()
     modelo.write_bytes(b"GGUF")
-    monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/llama-server")
+    monkeypatch.setattr("core.provision_modelo.which", lambda _: "/usr/bin/llama-server")
     intentos = []
 
     def inferir(self, pregunta):

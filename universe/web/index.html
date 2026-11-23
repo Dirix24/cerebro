@@ -70,14 +70,15 @@
           <div id="archivos"></div>
         </aside>
         <div class="columna">
+          <p class="panel nota" id="inicio-central">Selecciona un archivo o abre un proyecto para empezar.</p>
           <nav class="acciones" aria-label="Panel central">
-            <button data-central="editor-central" aria-pressed="true">Editor</button>
-            <button data-central="visor-central" aria-pressed="false">Visor</button>
-            <button data-central="resultado-central" aria-pressed="false">Resultados</button>
-            <button data-central="pruebas-central" aria-pressed="false">Validaciones</button>
+            <button hidden data-central="editor-central" aria-pressed="true">Editor</button>
+            <button hidden data-central="visor-central" aria-pressed="false">Visor</button>
+            <button hidden data-central="resultado-central" aria-pressed="false">Resultados</button>
+            <button hidden data-central="pruebas-central" aria-pressed="false">Validaciones</button>
             <button data-central="web-central" aria-pressed="false">Web</button>
           </nav>
-          <section class="panel editor" id="editor-central">
+          <section class="panel editor" id="editor-central" hidden>
             <h2>Editor <output id="archivo-activo">Sin archivo abierto</output></h2>
             <label for="contenido" class="oculto">Contenido del archivo</label>
             <textarea id="contenido" spellcheck="false" placeholder="Crea una nota o edita código de tu espacio de trabajo."></textarea>
@@ -143,6 +144,9 @@
             <label for="filtro" class="oculto">Tipo de nodo</label><select id="filtro"><option value="">Todos los tipos</option></select>
             <label for="region-nodo" class="oculto">Región de especialista</label>
             <select id="region-nodo"><option value="">Todas las regiones</option><option>DARAS</option><option>CAZEL</option><option>PROFESOR</option></select>
+            <select id="estado-nodo" aria-label="Estado"><option value="">Todos los estados</option></select>
+            <select id="proceso-nodo" aria-label="Proceso"><option value="">Todos los procesos</option></select>
+            <select id="modelo-nodo" aria-label="Modelo"><option value="">Todos los modelos</option></select>
             <label><input id="activar-grafo" type="checkbox" checked> 3D</label>
             <label><input id="orbita" type="checkbox" checked> Rotación automática</label>
           </div>
