@@ -130,3 +130,19 @@ def test_profesor_conserva_la_fuente_publica(tmp_path, monkeypatch):
         assert "Síntesis" in resultado["respuesta"] and "https://ejemplo.test" in resultado["respuesta"]
     finally:
         cerebro.ejecutor.shutdown()
+
+
+def test_simulador_usa_enlace_fijo_y_permiso_de_red(tmp_path, monkeypatch):
+    import config
+    from universe.nucleo import Nucleo
+
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
+    cerebro = Nucleo("local")
+    try:
+        assert "abrir_url" not in cerebro.conversar("Quiero simular electrónica", modo="escritorio")
+        cerebro.internet = True
+        assert cerebro.conversar("Quiero simular electrónica")["abrir_url"] == "https://www.falstad.com/circuit/"
+        assert cerebro.conversar("Abre Tinkercad")["abrir_url"] == "https://www.tinkercad.com/circuits"
+    finally:
+        cerebro.ejecutor.shutdown()

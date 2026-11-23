@@ -707,3 +707,10 @@ Cuando falta una respuesta local y la investigación automática está
 habilitada, las consultas de definición pública admitidas pueden
 aportar una fuente a la explicación de PROFESOR. La fuente se
 muestra junto a la respuesta.
+
+Con Internet habilitado, **«Quiero simular electrónica»** abre
+Falstad en el navegador predeterminado. También puedes decir
+**«Abre Tinkercad»** o **«Abre Wokwi»**. Desde el Acompañante,
+**«Noticias de hoy»** consulta las fuentes públicas disponibles,
+y **«Recuérdame revisar las noticias mañana a las nueve»** programa
+un aviso local. La apertura del simulador se delega al navegador.

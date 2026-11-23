@@ -629,6 +629,20 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        simulador = re.fullmatch(
+            r"(?:abre (?:el simulador )?(tinkercad|wokwi|falstad)|(?:quiero )?simular (?:circuitos|electronica))",
+            intencion)
+        if simulador:
+            self.exigir_permisos("READ")
+            if not self.internet:
+                return {"respuesta": "Activa el permiso de Internet para abrir el simulador en el navegador."}
+            sitios = {
+                "tinkercad": ("Tinkercad Circuits", "https://www.tinkercad.com/circuits"),
+                "wokwi": ("Wokwi", "https://wokwi.com/"),
+                "falstad": ("Falstad CircuitJS", "https://www.falstad.com/circuit/"),
+            }
+            nombre, url = sitios[simulador[1] or "falstad"]
+            return {"respuesta": f"Simulador de electrónica: {nombre} · {url}", "abrir_url": url}
         if modo == "studio" and not comando:
             orden_generar = re.fullmatch(
                 r"(?:haz|crea|disena|programa|genera) (?:una? |el |la )?"
