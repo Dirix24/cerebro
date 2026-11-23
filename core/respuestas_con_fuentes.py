@@ -128,3 +128,49 @@ def consultar_internet_si_falta(pregunta, obtener=None, guardar=None):
         return respuesta, fuente
     except (HTTPError, URLError, OSError, TimeoutError, ssl.SSLError, ValueError, KeyError):
         return None
+
+
+def seleccion_publica(tema, paginas):
+    """Acepta un título inequívoco, incluso con una errata menor, con su extracto."""
+    from difflib import SequenceMatcher
+    from urllib.parse import urlsplit
+
+    clave = normalizar(tema)
+    exactas, cercanas = [], []
+    for pagina in paginas:
+        titulo = pagina.get("title")
+        texto = pagina.get("extract")
+        url = pagina.get("fullurl")
+        if not all(isinstance(campo, str) and campo.strip() for campo in (titulo, texto, url)):
+            continue
+        enlace = urlsplit(url)
+        if (enlace.scheme != "https" or enlace.netloc != "es.wikipedia.org"
+                or not enlace.path.startswith("/wiki/") or "disambiguation" in pagina.get("pageprops", {})):
+            continue
+        candidato = normalizar(titulo)
+        if clave == candidato:
+            exactas.append((texto, url))
+        elif (len(clave) >= 7 and len(clave.split()) == len(candidato.split())
+              and SequenceMatcher(None, clave, candidato, autojunk=False).ratio() >= .90):
+            cercanas.append((texto, url))
+    opciones = exactas or cercanas
+    if len(opciones) == 1:
+        texto, url = opciones[0]
+        return respuesta_clara(texto), url
+    return None
+
+
+def buscar_definicion_publica(tema):
+    from urllib.parse import urlencode
+
+    from core.fuentes_publicas import consultar_json
+
+    parametros = {"action": "query", "generator": "search", "gsrsearch": tema,
+                  "gsrnamespace": 0, "gsrlimit": 4, "prop": "extracts|info|pageprops",
+                  "explaintext": 1, "exintro": 1, "exchars": 900, "inprop": "url",
+                  "ppprop": "disambiguation", "format": "json", "formatversion": 2}
+    try:
+        datos = consultar_json("https://es.wikipedia.org/w/api.php?" + urlencode(parametros))
+        return seleccion_publica(tema, datos.get("query", {}).get("pages", []))
+    except (OSError, ValueError, AttributeError, TypeError):
+        return None

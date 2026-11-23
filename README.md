@@ -879,3 +879,10 @@ un módulo cada vez, señala importaciones externas y muestra el diff
 antes de publicar en una carpeta nueva. Consulta la
 [auditoría y el banco ampliado](docs/AUDITORIA_FINAL_1_0.md) para
 los resultados y límites de la preparación para 1.0.
+
+El ciclo posterior añade porcentajes y conversiones exactas desde el chat,
+recuperación pública con validación de título y detección de importaciones
+locales incompletas en Studio. La
+[auditoría comparativa](docs/AUDITORIA_FINAL_1_0.md#ciclo-de-corrección-posterior-a-8edfcb6)
+recoge métricas de conversación, pruebas funcionales de Studio y límites de
+ejecución en este entorno.

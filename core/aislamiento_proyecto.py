@@ -12,11 +12,9 @@ _LIMITE_TOTAL = 32 * _MIB
 _LIMITE_ARCHIVO = 8 * _MIB
 _LIMITE_ENTRADAS = 2048
 
-_INICIO_PYTHON = """
+_LIMITES_PYTHON = """
 import os
 import resource
-import sys
-import unittest
 
 for limite, valor in (
     (resource.RLIMIT_CPU, 20),
@@ -27,9 +25,29 @@ for limite, valor in (
     (resource.RLIMIT_CORE, 0),
 ):
     resource.setrlimit(limite, (valor, valor))
+    if resource.getrlimit(limite) != (valor, valor):
+        raise SystemExit("No se aplicó el límite de proceso: " + str(limite))
+"""
+
+_INICIO_PYTHON = _LIMITES_PYTHON + """
+import sys
+import unittest
 
 sys.path.insert(0, os.getcwd())
 unittest.main(module=None, argv=["unittest", "discover", "-s", sys.argv[1]])
+"""
+
+
+_SONDA_BWRAP = _LIMITES_PYTHON + """
+import socket
+
+if os.getuid() == 0 or not os.statvfs("/proyecto").f_flag & os.ST_RDONLY:
+    raise SystemExit("UID privilegiado o proyecto con escritura.")
+if {nombre for _, nombre in socket.if_nameindex()} != {"lo"}:
+    raise SystemExit("Hay interfaces de red adicionales.")
+if os.path.exists("/home"):
+    raise SystemExit("El perfil expone la carpeta personal.")
+print("CEREBRO_AISLADO")
 """
 
 
@@ -95,7 +113,7 @@ def comando_aislado(copia, *, sonda=False):
     if Path("/etc/ld.so.cache").is_file():
         comandos += ["--ro-bind", "/etc/ld.so.cache", "/etc/ld.so.cache"]
     carpeta = "tests" if (copia / "tests").is_dir() else "."
-    arranque = ["-I", "-B", "-c", "print('CEREBRO_AISLADO')"] if sonda else [
+    arranque = ["-I", "-B", "-c", _SONDA_BWRAP] if sonda else [
         "-I", "-B", "-c", _INICIO_PYTHON, carpeta]
     return comandos + [
         "--proc", "/proc", "--dev", "/dev", "--size", str(64 * _MIB), "--tmpfs", "/tmp",
@@ -116,7 +134,7 @@ def diagnosticar():
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         return False, f"Aislamiento no disponible. No se ejecutaron pruebas. {error}"
     if resultado.returncode == 0 and resultado.stdout.strip() == "CEREBRO_AISLADO":
-        return True, "Perfil Bubblewrap y Python aislado comprobados."
+        return True, "Perfil Bubblewrap, red, montaje y límites por proceso comprobados."
     detalle = resultado.stdout.strip()[:500]
     if "uid map" in detalle and "Read-only file system" in detalle:
         motivo = "El entorno monta el mapa de usuarios como solo lectura."

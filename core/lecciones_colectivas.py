@@ -66,6 +66,37 @@ def _daras(respuesta, variante=0):
     return ejercicios[variante % len(ejercicios)] if ejercicios else None
 
 
+TEMA_CONTRASTE = "sensor quimera"
+FUENTES_CONTRASTE = (
+    ("https://manual.example/spec", "Manual del sensor quimera", "El límite indicado es 60 °C."),
+    ("https://ensayo.example/informe", "Ensayo del sensor quimera", "El límite indicado es 45 °C."),
+)
+PREGUNTA_CONTRASTE = (
+    "Para un mismo sensor y las mismas condiciones, el manual indica 60 °C y el ensayo 45 °C. "
+    "¿Coinciden las dos fuentes en su valor? Responde sí o no."
+)
+
+
+def _preparar_contraste(carpeta):
+    from contextlib import closing
+    import sqlite3
+
+    with closing(sqlite3.connect(carpeta / "biblioteca.sqlite3")) as db, db:
+        db.execute("""CREATE TABLE research_results (
+            url TEXT PRIMARY KEY, source TEXT NOT NULL, title TEXT NOT NULL,
+            extract TEXT NOT NULL, saved_at TEXT NOT NULL)""")
+        db.executemany("INSERT INTO research_results VALUES (?, 'Ejercicio sintético', ?, ?, '2000-01-01')",
+                       FUENTES_CONTRASTE)
+
+
+def _contraste(resultado):
+    evidencia = {(e.get("url"), e.get("titulo"), e.get("extracto"))
+                 for e in resultado.get("evidencia", ()) if isinstance(e, dict) and e.get("tipo") == "fuente"}
+    if evidencia == set(FUENTES_CONTRASTE) and resultado.get("red_autorizada") is False:
+        return PREGUNTA_CONTRASTE, "no", "Dos fuentes de prueba recuperadas y valores contrastados por PROFESOR"
+    return None
+
+
 def recopilar(cancelacion, indice_practica=0):
     from core.configuracion_especialistas import obtener
     from universe.especialidades import _consulta
@@ -76,6 +107,7 @@ def recopilar(cancelacion, indice_practica=0):
         if not origen or cancelacion.is_set():
             continue
         variante = indice_practica % len(list(muestras_cazel()))
+        contraste = region == "DARAS" and variante == 2
         with TemporaryDirectory(prefix="cerebro-practica-") as temporal:
             carpeta = Path(temporal)
             if region == "CAZEL":
@@ -91,10 +123,17 @@ def recopilar(cancelacion, indice_practica=0):
                         shutil.copyfile(fuente, carpeta / nombre)
                 except (OSError, ValueError):
                     continue
-            resultado = _consulta(region, accion, "practica.py" if region == "CAZEL" else
-                                  "Planificar un proyecto de ejemplo", cancelacion=cancelacion,
-                                  practica=carpeta)
-        if resultado["estado"] == "ok" and (ejercicio := evaluar(resultado, variante)):
+            if contraste:
+                _preparar_contraste(carpeta)
+                resultado = _consulta(region, "investigar", TEMA_CONTRASTE, cancelacion=cancelacion,
+                                      practica=carpeta)
+            else:
+                objetivo = "practica.py" if region == "CAZEL" else "Planificar un proyecto de ejemplo"
+                resultado = _consulta(region, accion, objetivo, cancelacion=cancelacion, practica=carpeta)
+        if resultado["estado"] == "ok":
+            ejercicio = _contraste(resultado) if contraste else evaluar(resultado, variante)
+            if not ejercicio:
+                continue
             pregunta, respuesta, criterio = ejercicio
             lecciones.append({"version": VERSION, "especialista": region, "pregunta": pregunta,
                               "respuesta": respuesta, "criterio": criterio,
@@ -123,7 +162,8 @@ def validar_lecciones(lecciones):
         elif region == "DARAS":
             dep = re.fullmatch(r"En un plan, la tarea T(\d{1,2}) depende directamente de T(\d{1,2})\. "
                                r"¿Qué tarea debe terminar antes que T\1\? Responde con su identificador\.", pregunta)
-            valida = dep and 1 <= int(dep[2]) < int(dep[1]) <= 12 and respuesta == "T" + dep[2]
+            valida = ((pregunta, respuesta) == (PREGUNTA_CONTRASTE, "no")
+                      or (dep and 1 <= int(dep[2]) < int(dep[1]) <= 12 and respuesta == "T" + dep[2]))
         else:
             valida = False
         if not valida or region in vistos:

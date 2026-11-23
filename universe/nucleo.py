@@ -391,6 +391,7 @@ class Nucleo:
         if accion == "generar":
             from core.generacion_proyecto import (
                 dependencias_externas, diferencias, generar_por_archivos, reparar_adicion_no_mutante,
+                revisar_importaciones_locales,
             )
 
             motor = self._modelo_codigo()
@@ -400,6 +401,7 @@ class Nucleo:
             if not isinstance(objetivo, str) or not 4 <= len(objetivo) <= 1600:
                 raise ValueError("Indica un objetivo y, opcionalmente, rutas de archivos planificadas.")
             archivos = generar_por_archivos(objetivo, motor.proponer_proyecto)
+            revisar_importaciones_locales(archivos)
             reparaciones = reparar_adicion_no_mutante(objetivo, archivos)
             identificador = os.urandom(12).hex()
             if len(self.generaciones_studio) >= 16:
@@ -817,9 +819,9 @@ class Nucleo:
             self._registrar_turno(pregunta, respuesta)
             return {"respuesta": respuesta, "vista": "robot", "robot": simulado}
         if not comando:
-            from core.matematicas_local import consultar as consultar_matematicas
+            from core.matematicas_local import consultar as consultar_matematicas, consultar_medidas
 
-            calculo = consultar_matematicas(intencion)
+            calculo = consultar_matematicas(intencion) or consultar_medidas(pregunta)
             if calculo is not None:
                 self._registrar_turno(pregunta, calculo)
                 return {"respuesta": calculo, "origen": "matematicas_local"}
@@ -1055,7 +1057,7 @@ class Nucleo:
             modelo_intentado = False
             if respuesta is None and not comando:
                 from core.comprension_conversacional import (
-                    conserva_contexto, consulta_referencia, pide_dato, pide_explicacion, pide_seguimiento, preparar,
+                    conserva_contexto, consulta_factual, consulta_referencia, pide_dato, pide_explicacion, pide_seguimiento, preparar,
                 )
                 from core.respuestas_con_fuentes import (
                     DEFINICIONES_BASE, concepto_definicion, responder_definicion, respuesta_clara,
@@ -1107,7 +1109,15 @@ class Nucleo:
                         origen = "conocimiento_local"
                     else:
                         aviso = "No tengo una respuesta fiable con mis datos locales."
-                        publica = alternativa_publica(self, consulta, aviso)
+                        concepto_publico = tema_publico(consulta_factual(pregunta_busqueda) or "")
+                        publica = alternativa_publica(self, pregunta_busqueda, aviso)
+                        if concepto_publico and self.investigar_auto and "\nFuente: " not in publica:
+                            from core.respuestas_con_fuentes import buscar_definicion_publica
+
+                            publicar("investigando", "consulta")
+                            dato = buscar_definicion_publica(concepto_publico)
+                            if dato:
+                                publica = dato[0] + "\nFuente: " + dato[1]
                         extracto, separador, fuente = publica.rpartition("\nFuente: ")
                         if separador and extracto.strip() and fuente.strip():
                             respuesta, origen = publica, "consulta_publica"
@@ -1120,9 +1130,8 @@ class Nucleo:
                                 respuesta += " Puedo investigar fuentes públicas si lo solicitas."
                             origen = "evidencia_insuficiente"
                             self._diagnostico_turno(clave_dialogo, "No encontré una referencia local o pública aplicable a la pregunta.")
-                    if origen != "evidencia_insuficiente":
-                        contexto = self._contexto_modelo(clave_dialogo)
-                        self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
+                    contexto = self._contexto_modelo(clave_dialogo)
+                    self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
                 elif (2 <= len(pregunta_busqueda) <= 700 and (pide_explicacion(pregunta_busqueda)
                            or pide_seguimiento(pregunta_busqueda))
                       and self.chat.pregunta_repaso is None
@@ -1131,7 +1140,11 @@ class Nucleo:
                       and hasattr(self.profesor, "conversar")):
                     modelo_intentado = True
                     contexto = self._contexto_modelo(clave_dialogo)
-                    if contexto or pide_explicacion(pregunta_busqueda):
+                    if (contexto and pide_seguimiento(pregunta_busqueda)
+                            and contexto[-1][1].startswith("No tengo evidencia suficiente")):
+                        respuesta = contexto[-1][1] + " ¿Puedes precisar el tema o aportar una referencia?"
+                        origen = "evidencia_insuficiente"
+                    elif contexto or pide_explicacion(pregunta_busqueda):
                         publicar("razonando", "consulta")
                         try:
                             referencia_anterior = (DEFINICIONES_BASE.get(concepto_definicion(consulta_referencia(contexto[-1][0])))

@@ -93,3 +93,92 @@ por Bubblewrap y PyTorch opcional.
 
 El aislamiento efectivo del equipo de destino, la cobertura factual
 y la validación física impiden recomendar 1.0 estable.
+
+## Ciclo de corrección posterior a `8edfcb6`
+
+### Conversación
+
+La mayor causa de abstención sigue siendo la falta de una referencia que
+responda a la pregunta. También se reproducen dos problemas de enrutamiento.
+Las conversiones y porcentajes iban al generador, que llegó a convertir
+mililitros en centímetros. Algunas peticiones coloquiales de definiciones no
+llegaban al buscador factual y recibían afirmaciones sin fuentes.
+
+El núcleo usa aritmética racional para porcentajes y conversiones de longitud,
+masa, volumen y tiempo. Reconoce abreviaturas, plurales y decimales con coma,
+y pide una unidad compatible si las dimensiones difieren. Las definiciones
+con fórmulas coloquiales se redirigen a las rutas de hechos. Con investigación
+automática autorizada, la búsqueda adicional en Wikipedia acepta un título
+coincidente o una corrección muy cercana y única, conserva la URL y descarta
+páginas de desambiguación. Se verificó una recuperación real de «máquina
+virtual». El extracto correcto recibió cero puntos en la rúbrica porque no
+incluía la palabra obligatoria «sistema». Se mantuvo la rúbrica predefinida
+para ambas versiones. Sin evidencia se conserva la abstención y el siguiente
+seguimiento ya no se desvía a un tema anterior.
+
+| Banco y sesión | Útiles | Cobertura | Precisión de respuestas por rúbrica | Abstenciones esperadas / otras | Mediana | P95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 101 sin red, `8edfcb6` | 34/101 | 34/101 | 34/34 | 11 / 56 | 0,3 ms | 0,6 ms |
+| 101 sin red, este ciclo | 34/101 | 34/101 | 34/34 | 11 / 56 | 0,3 ms | 0,8 ms |
+| 15 nuevos sin red, `8edfcb6` | 2/15 | 9/15 | 2/9 | 2 / 4 | 1944,6 ms | 3030,4 ms |
+| 15 nuevos sin red, este ciclo | 8/15 | 9/15 | 8/9 | 2 / 4 | 0,3 ms | 1453,4 ms |
+| 15 nuevos con red, `8edfcb6` | 3/15 | 11/15 | 3/11 | 2 / 2 | 1192,7 ms | 4431,2 ms |
+| 15 nuevos con red, este ciclo | 9/15 | 11/15 | 9/11 | 2 / 2 | 0,6 ms | 2846,1 ms |
+
+Cobertura es la proporción de turnos que reciben una respuesta o aclaración
+en vez de una abstención. La precisión usa la coincidencia de palabras y
+vetos entre respuestas emitidas. La utilidad penaliza también las abstenciones
+y usa todos los turnos como denominador. Cada sesión se ejecutó en CPU con
+Qwen2.5 0.5B Instruct GGUF y llama.cpp b7150. El muestreo y la red introducen
+variación. La cohorte nueva tiene seis peticiones de cálculo o unidades, cinco
+de conocimiento o programación, dos turnos de errata y seguimiento y dos
+hechos ficticios. No se utilizó para entrenar. Los resultados muestran mejoras
+en las medidas y la conversación contextual, sin aumento de cobertura. Quedan
+pendientes recuperación factual más amplia y evaluación semántica independiente.
+
+Para reproducir, usa `python -m benchmarks.conversacion_es` con
+`--motor`, `--modelo` y `--salida`. Usa `--ampliado` para los 101
+casos o `--ciclo-correccion` para los 15 adicionales. La opción
+`--investigacion-publica` envía los temas del banco a las fuentes públicas.
+Para reproducir el control, usa el mismo banco y evaluador con el núcleo de
+`8edfcb6`. Los JSON incluyen cada respuesta, origen y latencia.
+
+### Studio, aprendizaje y aceptación
+
+| Área | Causa y cambio | Prueba y estado |
+| --- | --- | --- |
+| Studio, importaciones | Parsear módulos de forma aislada aceptaba rutas internas inexistentes. Ahora se contrasta el árbol completo y se señala archivo y línea. | Regresiones para importaciones absolutas y relativas. **Corregido y probado** para rutas del árbol propuesto. |
+| Studio, comportamiento | El AST aceptaba una función que mutaba la lista y devolvía `None`. La reparación acotada se aplica a una firma explícita, con contrato de lista nueva y una única llamada a `append`. | Tres módulos de prueba escritos para la suite. `unittest` observa el fallo y pasa después de aplicar la reparación real, incluyendo la comprobación de la lista original. La confirmación previa a publicar sigue cubierta. Los proyectos generados continúan **bloqueados por el entorno** para pruebas dinámicas. |
+| Aislamiento | La sonda Bubblewrap comprobaba el arranque, no los controles. Ahora verifica montaje de solo lectura, UID no privilegiado, ausencia de la carpeta personal, interfaces y límites por proceso. | El host devolvió `uid map: Read-only file system` con loopback habilitado. No hay daemon Docker rootless listo. **Bloqueado por el entorno**. CPU, RAM y procesos agregados requieren el perfil con cgroups y se mantienen pendientes de una comprobación real. |
+| Especialistas | El ejercicio DARAS solo cubría dependencias. Una práctica rotativa añade recuperación y contraste de dos fuentes sintéticas discrepantes, en una base efímera. | CAZEL real analizó AST y error de sintaxis. DARAS real devolvió las dos fuentes y PROFESOR comprobó el contraste y el contrato. La prueba rechaza una sola fuente. **Mejorado parcialmente**. Corrección de errores por CAZEL e investigación contrastada de fuentes externas siguen pendientes. |
+| Memoria, permisos, Universe y Acompañante | El contexto conversacional omitía el último turno sin evidencia. Se añade al diálogo y el seguimiento pide precisar o aportar fuente. | Regresión sobre cambio de tema y suite de persistencia, autorización, eventos y hábitos. **Corregido y probado** para este seguimiento. Sin cambios adicionales en Universe y Acompañante. |
+| Instalación, cámara y gestos | No hay cámara física ni sesión ASUS XFCE/X11 conectada. | Se ejecutaron las pruebas automatizadas de instalación, diagnóstico gestual y controles. La prueba física sigue **pendiente**. |
+
+El diagnóstico neuronal `OPENBLAS_NUM_THREADS=1 python -m benchmarks.diagnostico_neuronal`
+compara cuatro entrenamientos desde cero de 24 pasos, semilla 29, lote 2
+y tasa 0,001. Usa diálogos de entrenamiento distintos de los prompts exactos
+reservados. Se compara un control BPE de 384 con una ventana mayor, un
+vocabulario de 260 sin fusiones y la mitad de los diálogos. Cada ejecución
+consumió 1,5–2,4 s de CPU. Los pesos activos permanecieron intactos.
+
+| Configuración | Diálogos | Ventana | Bits/byte generalización | Bits/byte test | Exactas generalización / test |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Checkpoint activo, 190 528 parámetros | — | 112 | 4,510 | 3,732 | 0/26 · 0/6 |
+| Control BPE | 96 | 96 | 4,348 | 4,141 | 0/26 · 0/6 |
+| Ventana mayor | 96 | 144 | 4,344 | 4,135 | 0/26 · 0/6 |
+| Bytes sin fusiones | 96 | 96 | 7,045 | 7,042 | 0/26 · 0/6 |
+| Mitad de los datos | 48 | 96 | 4,424 | 4,406 | 0/26 · 0/6 |
+
+Los prompts reservados caben en el checkpoint activo. La similitud textual
+media de ese checkpoint fue 0,301 y 0,418 en los dos bancos, con 0 coincidencias
+exactas. Ni ampliar la ventana ni reducir el vocabulario resolvió el fallo
+con ese presupuesto. Una pequeña mejora de pérdida tampoco se tradujo en
+respuestas correctas. La alternativa implementable es usar el modelo propio
+para competencias que superen un banco reservado de comportamiento y
+combinarlo con recuperación, herramientas y un generador local para consultas
+abiertas. El umbral de promoción sigue intacto. Queda pendiente ensayar un
+objetivo supervisado por competencia con más pares verificados y varias semillas.
+
+Suite completa con loopback habilitado: **524 aprobadas, 6 omitidas y 3 subpruebas**.
+Las omisiones corresponden a Bubblewrap y PyTorch opcional. El PR continúa
+como candidato a revisión.

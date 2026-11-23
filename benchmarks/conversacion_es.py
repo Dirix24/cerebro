@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from statistics import median
+from statistics import median, quantiles
 from tempfile import TemporaryDirectory
 from time import perf_counter, process_time
 
@@ -46,12 +46,22 @@ def evaluar(nucleo, banco=BANCO):
                       "precision_rubrica": precisa, "utilidad_rubrica": precisa and bool(claves),
                       "abstencion": abstencion, "origen": salida.get("origen", ""),
                       "latencia_ms": round(latencia, 1), "cpu_nucleo_ms": round(cpu_ms, 1)})
-    return {"abstenciones_esperadas": sum(f["abstencion"] for f in filas if f["categoria"] == "sin referencia"),
+    if not filas:
+        raise ValueError("El banco de conversación no contiene casos.")
+    latencias = [f["latencia_ms"] for f in filas]
+    respondidas = sum(not f["abstencion"] for f in filas)
+    utiles = sum(f["utilidad_rubrica"] for f in filas)
+    return {"cobertura_respuestas": respondidas / len(filas),
+            "precision_respuestas_rubrica": utiles / respondidas if respondidas else None,
+            "utilidad_rubrica": utiles / len(filas),
+            "abstenciones_esperadas": sum(f["abstencion"] for f in filas if f["categoria"] == "sin referencia"),
             "abstenciones_otras": sum(f["abstencion"] for f in filas if f["categoria"] != "sin referencia"),
             "correctas_rubrica": sum(f["precision_rubrica"] for f in filas),
-            "utiles_rubrica": sum(f["utilidad_rubrica"] for f in filas),
+            "utiles_rubrica": utiles,
             "abstenciones": sum(f["abstencion"] for f in filas),
-            "latencia_mediana_ms": median(f["latencia_ms"] for f in filas), "casos": filas}
+            "latencia_mediana_ms": median(latencias),
+            "latencia_p95_ms": round(quantiles(latencias, n=20, method="inclusive")[-1], 1)
+            if len(latencias) > 1 else latencias[0], "casos": filas}
 
 
 def main():
@@ -63,24 +73,34 @@ def main():
     parser.add_argument("--motor", required=True)
     parser.add_argument("--modelo", required=True)
     parser.add_argument("--ampliado", action="store_true")
+    parser.add_argument("--ciclo-correccion", action="store_true", help="Evalúa las 15 preguntas adicionales.")
+    parser.add_argument("--investigacion-publica", action="store_true",
+                        help="Autoriza consultas públicas automáticas únicamente con los casos del banco.")
     parser.add_argument("--salida", type=Path, required=True)
     args = parser.parse_args()
+    if args.ampliado and args.ciclo_correccion:
+        parser.error("Evalúa ambos bancos en ejecuciones separadas.")
     with TemporaryDirectory(prefix="cerebro-banco-es-") as temporal:
         config.raiz_datos = lambda: temporal
         config.CEREBRO_HOME = temporal
         config.MEMORY_FILE = str(Path(temporal) / "memoria.json")
         motor = ProfesorBajoDemanda(args.motor, args.modelo)
-        nucleo = Nucleo("local", profesor=motor, internet=False)
+        nucleo = Nucleo("local", profesor=motor, internet=args.investigacion_publica,
+                        investigar_auto=args.investigacion_publica)
         try:
             banco = BANCO
             if args.ampliado:
                 from benchmarks.banco_es_reservado import casos
                 banco += tuple(casos())
+            if args.ciclo_correccion:
+                from benchmarks.ciclo_correccion import CASOS
+                banco = CASOS
             informe = evaluar(nucleo, banco)
         finally:
             motor.cerrar()
             nucleo.ejecutor.shutdown()
-        informe.update(modelo=Path(args.modelo).name, motor=Path(args.motor).name)
+        informe.update(modelo=Path(args.modelo).name, motor=Path(args.motor).name,
+                       investigacion_publica=args.investigacion_publica)
     with args.salida.open("x", encoding="utf-8") as archivo:
         json.dump(informe, archivo, ensure_ascii=False, indent=2)
 

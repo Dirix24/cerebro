@@ -46,6 +46,8 @@ def conserva_contexto(respuesta, referencia):
 
 
 def pide_dato(pregunta):
+    if consulta_factual(pregunta):
+        return True
     texto = normalizar(pregunta)
     return bool(re.match(r"^(?:que (?:es|son|hace|significa|paso|ocurrio)|"
                          r"quien(?:es)?|cuando|donde|cual(?:es)?|cuanto(?:s|a|as)?|"
@@ -54,13 +56,8 @@ def pide_dato(pregunta):
 
 def consulta_referencia(pregunta):
     """Equivalencias acotadas para buscar un tema, conservando la consulta exacta aparte."""
-    if concepto_definicion(pregunta):
-        return pregunta
-    texto = normalizar(pregunta)
-    tema = re.fullmatch(r"(?:como funciona|para que sirve|explicame|explica) (.{2,100})", texto)
-    if tema:
-        return "¿Qué es " + tema[1] + "?"
-    return pregunta
+    tema = consulta_factual(pregunta)
+    return f"¿Qué es {tema}?" if tema else pregunta
 
 
 def consulta_python_literal(pregunta):
@@ -81,3 +78,20 @@ def consulta_python_literal(pregunta):
     if type(valor) in (str, bytes, list, tuple, dict, set):
         return f"Python devuelve {len(valor)}."
     return None
+
+
+def consulta_factual(pregunta):
+    """Separa el tema de la forma conversacional sin borrar sus calificadores."""
+    texto = normalizar(pregunta)
+    tema = re.fullmatch(
+        r"(?:(?:dime |me puedes decir |sabes )?(?:que (?:es|son|significa)|"
+        r"como funciona|para que sirve)|(?:me puedes )?explica(?:r|me)?) (.{2,110})",
+        texto,
+    )
+    if not tema:
+        return None
+    asunto = re.sub(r"^(?:el|la|los|las|un|una|unos|unas) ", "", tema[1])
+    asunto = re.sub(r" (?:por favor|en pocas palabras|en palabras sencillas)$", "", asunto)
+    if not asunto or re.search(r"\b(?:no|sin|frente|versus|diferencia|entre)\b", asunto):
+        return None
+    return asunto

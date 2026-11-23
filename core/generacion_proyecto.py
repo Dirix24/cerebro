@@ -147,23 +147,40 @@ def reparar_adicion_no_mutante(objetivo, archivos):
     pedido = normalizar(objetivo)
     if "lista nueva" not in pedido and "sin mutar" not in pedido and "lista de entrada debe quedar intacta" not in pedido:
         return []
-    if "agregar tareas titulo" not in pedido:
+    firmas = re.findall(r"(?<![.\w])([A-Za-z_]\w*)\(\s*([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s*\)", objetivo)
+    if len(firmas) != 1:
+        return []
+    funcion, lista, elemento = firmas[0]
+    if not all(campo.isidentifier() for campo in firmas[0]):
         return []
     reparaciones = []
     for nombre, texto in archivos.items():
         if not nombre.endswith(".py"):
             continue
         arbol = ast.parse(texto)
-        referencia = ast.parse("def agregar(tareas, titulo): tareas.append(titulo)").body[0]
-        candidatos = [nodo for nodo in arbol.body if isinstance(nodo, ast.FunctionDef) and nodo.name == "agregar"]
+        candidatos = [nodo for nodo in arbol.body if isinstance(nodo, ast.FunctionDef) and nodo.name == funcion]
         if len(candidatos) != 1:
             continue
         nodo = candidatos[0]
+        referencia = ast.parse("def muestra(lista, elemento): pass").body[0]
+        referencia.name = funcion
+        referencia.args.args[0].arg = lista
+        referencia.args.args[1].arg = elemento
+        if len(nodo.body) != 1 or not isinstance(nodo.body[0], ast.Expr):
+            continue
+        llamada = nodo.body[0].value
+        if (not isinstance(llamada, ast.Call) or not isinstance(llamada.func, ast.Attribute)
+                or llamada.func.attr != "append" or not isinstance(llamada.func.value, ast.Name)
+                or llamada.func.value.id != lista or len(llamada.args) != 1 or llamada.keywords
+                or isinstance(llamada.args[0], ast.Starred)):
+            continue
+        referencia.body = nodo.body
         if ast.dump(nodo) != ast.dump(referencia):
             continue
+        valor = ast.unparse(llamada.args[0])
         lineas = texto.splitlines(keepends=True)
-        lineas[nodo.lineno - 1:nodo.end_lineno] = ["def agregar(tareas, titulo):\n",
-                                                    "    return tareas + [titulo]\n"]
+        lineas[nodo.lineno - 1:nodo.end_lineno] = [f"def {funcion}({lista}, {elemento}):\n",
+                                                   f"    return {lista} + [{valor}]\n"]
         archivos[nombre] = "".join(lineas)
         reparaciones.append(f"{nombre}: se reemplazó la mutación por una lista nueva con retorno.")
     return reparaciones
@@ -185,3 +202,51 @@ def dependencias_externas(archivos):
             elif isinstance(nodo, ast.ImportFrom) and nodo.level == 0 and nodo.module:
                 externas.add(nodo.module.split(".")[0])
     return sorted(externas - modulos - sys.stdlib_module_names)
+
+
+def revisar_importaciones_locales(archivos):
+    """Detecta rutas de importación incompatibles con el árbol Python propuesto."""
+    from pathlib import PurePosixPath
+
+    modulos = {}
+    paquetes = set()
+    for nombre, texto in archivos.items():
+        ruta = PurePosixPath(nombre)
+        if ruta.suffix != ".py":
+            continue
+        partes = ruta.with_suffix("").parts
+        if not all(parte.isidentifier() for parte in partes):
+            continue
+        es_paquete = partes[-1] == "__init__"
+        modulo = partes[:-1] if es_paquete else partes
+        modulos[modulo] = (nombre, texto, modulo if es_paquete else modulo[:-1])
+        paquetes.update(modulo[:nivel] for nivel in range(1, len(modulo) + int(es_paquete)))
+    conocidos = modulos.keys() | paquetes
+    raices = {modulo[0] for modulo in conocidos if modulo}
+    errores = []
+    for nombre, texto, paquete in modulos.values():
+        for nodo in ast.walk(ast.parse(texto, filename=nombre)):
+            if isinstance(nodo, ast.Import):
+                objetivos = [tuple(alias.name.split(".")) for alias in nodo.names]
+                objetivos = [objetivo for objetivo in objetivos if objetivo[0] in raices]
+            elif isinstance(nodo, ast.ImportFrom):
+                partes = tuple(nodo.module.split(".")) if nodo.module else ()
+                if nodo.level:
+                    if nodo.level > len(paquete):
+                        errores.append(f"{nombre}:{nodo.lineno}: importación relativa fuera del paquete.")
+                        continue
+                    objetivos = [paquete[:len(paquete) + 1 - nodo.level] + partes]
+                else:
+                    objetivos = [partes] if partes and partes[0] in raices else []
+            else:
+                continue
+            for objetivo in objetivos:
+                if objetivo not in conocidos:
+                    errores.append(f"{nombre}:{nodo.lineno}: falta el módulo local {'.'.join(objetivo)}.")
+                elif (isinstance(nodo, ast.ImportFrom) and objetivo in paquetes
+                      and objetivo not in modulos):
+                    for alias in nodo.names:
+                        if alias.name != "*" and (*objetivo, alias.name) not in conocidos:
+                            errores.append(f"{nombre}:{nodo.lineno}: falta {'.'.join((*objetivo, alias.name))}.")
+    if errores:
+        raise ValueError("Importaciones locales incompletas en la propuesta. " + " ".join(errores[:8]))
