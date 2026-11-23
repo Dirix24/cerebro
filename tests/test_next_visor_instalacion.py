@@ -10,7 +10,7 @@ from universe.nucleo import Nucleo
 
 def test_gestos_solo_en_interprete_actual(monkeypatch):
     llamadas = []
-    monkeypatch.setattr(diagnostico_instalacion.subprocess, "call", lambda args: llamadas.append(args) or 0)
+    monkeypatch.setattr(diagnostico_instalacion.subprocess, "call", lambda args, **_: llamadas.append(args) or 0)
     monkeypatch.setattr(diagnostico_instalacion, "probar_importacion", lambda _: True)
     assert diagnostico_instalacion.instalar_gestos("marcador")
     assert llamadas == [[diagnostico_instalacion.sys.executable, "-m", "pip", "install",
@@ -86,3 +86,29 @@ def test_modelo_de_manos_persistente(tmp_path, monkeypatch):
     assert diagnostico_instalacion.modelo_manos() == str(archivo)
     monkeypatch.setenv("CEREBRO_MODELO_MANOS", "/otro/modelo.task")
     assert diagnostico_instalacion.modelo_manos() == "/otro/modelo.task"
+
+
+def test_auto_reutiliza_dependencias_y_descarga_modelo(tmp_path, monkeypatch):
+    monkeypatch.setattr(diagnostico_instalacion.sys, "prefix", str(tmp_path))
+    monkeypatch.setattr(diagnostico_instalacion, "probar_importacion", lambda _: True)
+    llamadas = []
+    modelo = tmp_path / "manos.task"
+    modelo.write_bytes(b"fixture")
+    monkeypatch.setattr(diagnostico_instalacion, "modelo_manos", lambda: modelo if llamadas else None)
+    monkeypatch.setattr(diagnostico_instalacion, "instalar_modelo_oficial", lambda: llamadas.append(True))
+    monkeypatch.setattr(diagnostico_instalacion, "fallo_detector_manos", lambda _: None)
+    assert "preparados" in diagnostico_instalacion.preparar_gestos_automaticos()
+    assert llamadas == [True]
+
+
+def test_presentacion_con_errata_no_guarda_edad(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
+    cerebro = Nucleo("local")
+    try:
+        mensaje = cerebro.conversar("me lalmo danny tengo 17 años")["respuesta"]
+        assert "Danny" in mensaje and "17 años" in mensaje
+        assert "Danny" in cerebro.conversar("¿Cómo me llamo?")["respuesta"]
+        assert cerebro.memoria.recuperar_largo_plazo("edad") is None
+    finally:
+        cerebro.ejecutor.shutdown()

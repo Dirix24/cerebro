@@ -310,13 +310,18 @@ class Conversacion:
             nombre = self.memoria.recuperar_largo_plazo("nombre")
             return (f"Te llamas {nombre}." if nombre
                     else "Todavía no sé tu nombre. Dímelo con «me llamo ...»."), False
-        m = _NOMBRE.search(entrada)
+        presentacion = re.fullmatch(
+            r"(?:hola[, ]+)?me\s+(?:llamo|lalmo|lamo)\s+([a-záéíóúñ]{2,20})"
+            r"(?:[, ]+y)?[, ]+tengo\s+([0-9]{1,3})\s+a[nñ]os[.!]?", entrada, re.I)
+        m = presentacion or _NOMBRE.search(entrada)
         if m and m.group(1).lower() not in _NO_SON_NOMBRES:
             if not self.agente.tiene_permisos("WRITE"):
                 return "Permiso WRITE requerido.", False
             nombre = m.group(1).capitalize()
             self.memoria.guardar_largo_plazo("nombre", nombre, categoria="usuario", importancia=3)
             _registrar_actividad("aprendido", "memoria")
+            if presentacion and 0 < int(presentacion[2]) <= 125:
+                return f"Mucho gusto, {nombre}. Entendí que tienes {int(presentacion[2])} años. Guardé tu nombre.", False
             return f"Mucho gusto, {nombre}. Lo guardé en mi memoria. ¿En qué te puedo ayudar?", False
 
         # Consultar documentos privados solo si el usuario lo pide explícitamente.
