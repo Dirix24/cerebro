@@ -693,3 +693,17 @@ El instalador informa el perfil de cámara recomendado. El control
 gestual elige el perfil ligero con menos de 4 GiB de RAM disponible o
 menos de cuatro CPU lógicas. Puedes fijarlo con
 `CEREBRO_CAMARA_PERFIL=ligero` o `CEREBRO_CAMARA_PERFIL=normal`.
+
+En el Acompañante, **Accesos → Rutinas de escritorio** permite elegir
+una ventana para enseñar, autorizar la observación, revisar y aprobar
+los pasos, y repetir una rutina guardada. La observación dura hasta
+90 segundos y registra estados compatibles de la ventana elegida
+con un indicador visible. Funciona con permisos de escritorio y
+herramientas X11/GTK. El menú no activa la observación al abrirse.
+
+Universe enlaza las lecciones aprobadas con el banco de PROFESOR.
+Cada nodo representa un ejemplo comprobado con su referencia.
+Cuando falta una respuesta local y la investigación automática está
+habilitada, las consultas de definición pública admitidas pueden
+aportar una fuente a la explicación de PROFESOR. La fuente se
+muestra junto a la respuesta.

@@ -88,3 +88,45 @@ def test_perfil_se_adapta_a_recursos(monkeypatch):
     assert recursos_locales.perfil_equipo(".") == "ligero"
     recursos["memoria_mib"]["MemAvailable"] = 8192
     assert recursos_locales.perfil_equipo(".") == "normal"
+
+
+def test_universe_enlaza_leccion_aprobada(tmp_path, monkeypatch):
+    import config
+    from core.ejemplos_aprobados import aprobar
+    from universe.nucleo import Nucleo
+
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
+    cerebro = Nucleo("local")
+    try:
+        aprobar(tmp_path / "data" / "ejemplos_aprobados.jsonl", "¿Cuánto es 2+2?", "4",
+                procedencia={"verificado": True, "origen": "PROFESOR"})
+        nodos = cerebro.nodos()["nodos"]
+        leccion = next(n for n in nodos if n["id"].startswith("leccion:"))
+        assert leccion["detalle"] == "4"
+        assert leccion["vinculos"] == ["aprendizaje:profesor"]
+        assert any(n["id"] == leccion["vinculos"][0] for n in nodos)
+    finally:
+        cerebro.ejecutor.shutdown()
+
+
+def test_profesor_conserva_la_fuente_publica(tmp_path, monkeypatch):
+    import config
+    from universe.nucleo import Nucleo
+
+    monkeypatch.setattr(config, "raiz_datos", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "MEMORY_FILE", str(tmp_path / "memoria.json"))
+    monkeypatch.setattr("universe.consultas.consulta_directa", lambda *args, **kwargs: None)
+    monkeypatch.setattr("universe.consultas.alternativa_publica",
+                        lambda n, pregunta, respuesta: "Fuente pública https://ejemplo.test" if n.investigar_auto else respuesta)
+    fuentes = []
+    profesor = SimpleNamespace(configurado=True,
+                               explicar_fragmentos=lambda pregunta, pasajes: fuentes.extend(pasajes) or "Síntesis")
+    cerebro = Nucleo("local", internet=True, investigar_auto=True, profesor=profesor)
+    try:
+        monkeypatch.setattr(cerebro.chat, "procesar", lambda _: ("No tengo una respuesta fiable.", False))
+        resultado = cerebro.conversar("Qué es una simbiosis")
+        assert fuentes and "https://ejemplo.test" in fuentes[0]["texto"]
+        assert "Síntesis" in resultado["respuesta"] and "https://ejemplo.test" in resultado["respuesta"]
+    finally:
+        cerebro.ejecutor.shutdown()

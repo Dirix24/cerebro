@@ -19,6 +19,10 @@ def nucleo(monkeypatch, tmp_path):
 
 
 def test_observacion_autorizada_limitada_revisada_y_cancelable(nucleo, monkeypatch):
+    from types import SimpleNamespace
+
+    indicador = SimpleNamespace(poll=lambda: None, terminate=lambda: None, wait=lambda: 0)
+    monkeypatch.setattr("agent.observacion_escritorio.controles_accesibles.indicador", lambda: indicador)
     cliente = "a" * 24
     ventana = {"id": "0x120", "pid": "315", "clase": "editor.Editor", "titulo": "Editor"}
     llamadas = []

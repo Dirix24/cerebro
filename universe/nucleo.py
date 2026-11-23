@@ -904,12 +904,20 @@ class Nucleo:
                                 and not re.match(r"^(?:abre|cierra|borra|elimina|instala|ejecuta|apaga|reinicia)\b",
                                                  intencion))
                 explicita = bool(re.match(r"^(?:cuentame |conversa conmigo sobre |dialoga conmigo sobre )", intencion))
+                evidencia_publica = None
+                if not comando:
+                    alternativa = alternativa_publica(self, pregunta, respuesta)
+                    if alternativa != respuesta:
+                        evidencia_publica = alternativa
                 if (falta_respuesta or explicita) and self.profesor.configurado and (tema or conversacion):
                     self.exigir_permisos("READ")
                     publicar("razonando", "profesor_local")
                     clave_dialogo = (cliente, self.conversaciones.activa())
                     try:
-                        if tema:
+                        if evidencia_publica and hasattr(self.profesor, "explicar_fragmentos"):
+                            explicada = self.profesor.explicar_fragmentos(pregunta, [
+                                {"referencia": "Consulta pública", "texto": evidencia_publica[:900]}])
+                        elif tema:
                             explicada = self.profesor.explicar(tema)
                         else:
                             with self.cerrojo:
@@ -926,11 +934,12 @@ class Nucleo:
                     else:
                         respuesta = "Profesor local: " + explicada
                         origen = "profesor_local"
-                if origen != "profesor_local":
-                    alternativa = alternativa_publica(self, pregunta, respuesta)
-                    if alternativa != respuesta:
+                if evidencia_publica:
+                    if origen == "profesor_local":
+                        respuesta += "\n\nConsulta pública\n" + evidencia_publica
+                    else:
                         origen = "consulta_publica"
-                    respuesta = alternativa
+                        respuesta = evidencia_publica
         self.latencias.append((perf_counter() - inicio) * 1000)
         self._registrar_turno(pregunta, respuesta)
         from universe.consultas import desea_studio
@@ -1203,6 +1212,24 @@ class Nucleo:
         from universe.especialidades import Experiencias
 
         nodos.extend(Experiencias(self.estudio / "experiencias-v1.sqlite3").nodos())
+        from core.ejemplos_aprobados import listar as ejemplos_aprobados
+
+        banco = self.raiz / "data" / "ejemplos_aprobados.jsonl"
+        if not banco.is_symlink() and not banco.parent.is_symlink():
+            lecciones = []
+            for ejemplo in ejemplos_aprobados(banco):
+                procedencia = ejemplo.get("procedencia")
+                if not isinstance(procedencia, dict) or procedencia.get("verificado") is not True:
+                    continue
+                huella = sha256(ejemplo["pregunta"].encode()).hexdigest()[:16]
+                lecciones.append({"id": "leccion:" + huella, "tipo": "conocimiento",
+                                  "titulo": ejemplo["pregunta"], "detalle": ejemplo["respuesta"],
+                                  "origen": "Profesor · comprobación independiente", "grupo": "PROFESOR",
+                                  "vinculos": ["aprendizaje:profesor"]})
+            if lecciones:
+                nodos.append({"id": "aprendizaje:profesor", "tipo": "relaciones", "titulo": "Lecciones aprobadas",
+                              "detalle": "Banco de ejemplos con referencia independiente.", "grupo": "PROFESOR"})
+                nodos.extend({l["id"]: l for l in lecciones}.values())
         return {"nodos": nodos}
 
     def respaldo(self, datos=None):
