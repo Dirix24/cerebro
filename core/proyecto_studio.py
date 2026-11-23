@@ -261,10 +261,27 @@ class ProyectoStudio:
             try:
                 destino = os.open(temporal, opciones, dir_fd=raiz)
                 try:
+                    from core.generacion_proyecto import ruta_planificada
+
                     for nombre, texto in archivos.items():
-                        if len(self._partes(nombre)) != 1 or Path(nombre).suffix.lower() not in FORMATOS:
-                            raise ValueError("Selecciona archivos de texto de primer nivel.")
-                        self._publicar_nuevo(destino, nombre, texto.encode("utf-8"), 0o600)
+                        partes_archivo = self._partes(nombre)
+                        if len(partes_archivo) > 1:
+                            ruta_planificada(nombre)
+                        if Path(nombre).suffix.lower() not in FORMATOS:
+                            raise ValueError("Selecciona archivos de texto compatibles.")
+                        padre = os.dup(destino)
+                        try:
+                            for nivel in partes_archivo[:-1]:
+                                try:
+                                    os.mkdir(nivel, 0o700, dir_fd=padre)
+                                except FileExistsError:
+                                    pass
+                                siguiente = os.open(nivel, opciones, dir_fd=padre)
+                                os.close(padre)
+                                padre = siguiente
+                            self._publicar_nuevo(padre, partes_archivo[-1], texto.encode("utf-8"), 0o600)
+                        finally:
+                            os.close(padre)
                     _renombrar_sin_reemplazar(raiz, temporal, raiz, carpeta)
                 finally:
                     os.close(destino)

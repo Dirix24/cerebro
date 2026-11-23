@@ -13,6 +13,8 @@ PREGUNTA_CAZEL = "En Python: def area(x, y): return x*y; def doble(x): return x+
 
 def muestras_cazel():
     yield MUESTRA, PREGUNTA_CAZEL, "2"
+    yield ("valor = 1\ndef incompleta(\n",
+           "En Python, la línea 1 es valor = 1 y la línea 2 es def incompleta(. ¿En qué línea empieza el error de sintaxis? Responde con un número.", "2")
     for cantidad in (1, 3, 4):
         lineas = [f"def paso_{i}(x): return x + {i}" for i in range(1, cantidad + 1)]
         muestra = "\n".join(lineas) + "\n"
@@ -22,11 +24,21 @@ def muestras_cazel():
 
 def _cazel(respuesta, variante=0):
     muestra, pregunta, referencia = list(muestras_cazel())[variante]
-    simbolos = [{"name": nodo.name, "line": nodo.lineno} for nodo in ast.parse(muestra).body
-                if isinstance(nodo, ast.FunctionDef)]
     evidencia = next((item for item in respuesta.get("evidencia", ())
                       if item.get("path") == "practica.py" and item.get("language") == "Python"), None)
-    if not evidencia or evidencia.get("errores") != [] or evidencia.get("simbolos") != simbolos:
+    if not evidencia:
+        return None
+    try:
+        arbol = ast.parse(muestra)
+    except SyntaxError as fallo:
+        errores = evidencia.get("errores")
+        if (isinstance(errores, list) and len(errores) == 1 and isinstance(errores[0], dict)
+                and errores[0].get("line") == fallo.lineno and str(fallo.lineno) == referencia):
+            return pregunta, referencia, "Línea del error comprobada con el analizador Python"
+        return None
+    simbolos = [{"name": nodo.name, "line": nodo.lineno} for nodo in arbol.body
+                if isinstance(nodo, ast.FunctionDef)]
+    if evidencia.get("errores") != [] or evidencia.get("simbolos") != simbolos:
         return None
     return pregunta, referencia, "AST de la muestra pública"
 

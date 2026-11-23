@@ -22,11 +22,11 @@ BANCO = (
 )
 
 
-def evaluar(nucleo):
+def evaluar(nucleo, banco=BANCO):
     from core.respuestas_con_fuentes import normalizar
 
     filas = []
-    for categoria, pregunta, claves, vetos in BANCO:
+    for categoria, pregunta, claves, vetos in banco:
         inicio = perf_counter()
         cpu = process_time()
         salida = nucleo.conversar(pregunta)
@@ -35,13 +35,20 @@ def evaluar(nucleo):
         texto = normalizar(salida["respuesta"])
         abstencion = any(x in texto for x in ("no tengo evidencia", "no tengo una respuesta fiable",
                                              "no encontre una definicion fiable"))
-        precisa = (all(clave in texto for clave in claves) and not any(veto in texto for veto in vetos)
+        def coincide(clave):
+            if clave.isdecimal() or clave == "si":
+                return clave in texto.split()
+            return clave in texto
+
+        precisa = (all(coincide(clave) for clave in claves) and not any(veto in texto for veto in vetos)
                    and not abstencion) if claves else abstencion
         filas.append({"categoria": categoria, "pregunta": pregunta, "respuesta": salida["respuesta"],
                       "precision_rubrica": precisa, "utilidad_rubrica": precisa and bool(claves),
                       "abstencion": abstencion, "origen": salida.get("origen", ""),
                       "latencia_ms": round(latencia, 1), "cpu_nucleo_ms": round(cpu_ms, 1)})
-    return {"correctas_rubrica": sum(f["precision_rubrica"] for f in filas),
+    return {"abstenciones_esperadas": sum(f["abstencion"] for f in filas if f["categoria"] == "sin referencia"),
+            "abstenciones_otras": sum(f["abstencion"] for f in filas if f["categoria"] != "sin referencia"),
+            "correctas_rubrica": sum(f["precision_rubrica"] for f in filas),
             "utiles_rubrica": sum(f["utilidad_rubrica"] for f in filas),
             "abstenciones": sum(f["abstencion"] for f in filas),
             "latencia_mediana_ms": median(f["latencia_ms"] for f in filas), "casos": filas}
@@ -55,6 +62,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--motor", required=True)
     parser.add_argument("--modelo", required=True)
+    parser.add_argument("--ampliado", action="store_true")
     parser.add_argument("--salida", type=Path, required=True)
     args = parser.parse_args()
     with TemporaryDirectory(prefix="cerebro-banco-es-") as temporal:
@@ -64,7 +72,11 @@ def main():
         motor = ProfesorBajoDemanda(args.motor, args.modelo)
         nucleo = Nucleo("local", profesor=motor, internet=False)
         try:
-            informe = evaluar(nucleo)
+            banco = BANCO
+            if args.ampliado:
+                from benchmarks.banco_es_reservado import casos
+                banco += tuple(casos())
+            informe = evaluar(nucleo, banco)
         finally:
             motor.cerrar()
             nucleo.ejecutor.shutdown()

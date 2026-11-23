@@ -1,5 +1,7 @@
 # CEREBRO, candidato a estabilización
 
+La [auditoría final](AUDITORIA_FINAL_1_0.md) documenta la continuación, el banco ampliado y la generación modular.
+
 Comparación con `13c1afb`, en Debian Linux x86-64 sobre AMD EPYC con
 3 CPU lógicas y aproximadamente 10 GiB de RAM visible. El ASUS X550LC
 sigue pendiente de validación.

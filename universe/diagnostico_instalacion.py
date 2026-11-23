@@ -15,6 +15,43 @@ def probar_importacion(modulo):
     return salida.returncode == 0
 
 
+def probar_nucleo():
+    """Prueba el servicio HTTP local sin abrir sesiones ni datos reales del usuario."""
+    from tempfile import TemporaryDirectory
+
+    receta = """
+from threading import Thread
+from types import SimpleNamespace
+from universe.lanzador import api
+from universe.nucleo import Nucleo
+from universe.servidor import crear_servidor
+n = Nucleo("local", profesor=SimpleNamespace(configurado=False))
+try:
+    with crear_servidor(0, n, "sonda-local") as servidor:
+        hilo = Thread(target=servidor.serve_forever, daemon=True)
+        hilo.start()
+        try:
+            s = {"url": f"http://127.0.0.1:{servidor.server_port}", "token": "sonda-local"}
+            respuesta = api(s, "chat", {"mensaje": "Calcula 23 * 14"}, tiempo=4)
+            assert "322" in respuesta["respuesta"]
+            assert api(s, "historial", tiempo=4)["turnos"]
+        finally:
+            servidor.shutdown()
+            hilo.join(timeout=2)
+finally:
+    n.ejecutor.shutdown()
+print("CEREBRO_NUCLEO_OK")
+"""
+    try:
+        with TemporaryDirectory(prefix="cerebro-diagnostico-") as temporal:
+            resultado = subprocess.run([sys.executable, "-c", receta], timeout=12, capture_output=True, text=True,
+                                       cwd=Path(__file__).resolve().parent.parent, stdin=subprocess.DEVNULL,
+                                       env={**os.environ, "CEREBRO_HOME": temporal})
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return resultado.returncode == 0 and resultado.stdout.strip() == "CEREBRO_NUCLEO_OK"
+
+
 def diagnosticar(raiz):
     from core.aislamiento_proyecto import perfil_pruebas
     from core.local_voice import dispositivos_audio
@@ -71,6 +108,8 @@ def diagnosticar(raiz):
         print(f"Configuración de motores: {error}")
     _, aislamiento, _ = perfil_pruebas()
     print(aislamiento)
+    print("Servicio local: " + ("arranque, consulta HTTP, historial y cierre comprobados."
+                               if probar_nucleo() else "no superó la prueba de arranque o de loopback."))
     print("El diagnóstico no abre cámaras, micrófonos ni ventanas.")
 
 

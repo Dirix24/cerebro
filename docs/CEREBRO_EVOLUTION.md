@@ -1,5 +1,7 @@
 # CEREBRO Evolution y verificación para 1.0
 
+La [auditoría final](AUDITORIA_FINAL_1_0.md) documenta la continuación, el banco ampliado y la generación modular.
+
 El PR #43 sigue siendo un candidato a estabilización. Los controles del
 núcleo, los checkpoints originales y el acceso local se conservan.
 La evaluación de esta entrega detectó respuestas factuales erróneas del

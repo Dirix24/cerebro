@@ -872,3 +872,10 @@ la [guía de CEREBRO Evolution](docs/CEREBRO_EVOLUTION.md).
 Consulta la [verificación para 1.0](docs/ESTABILIZACION_1_0.md) para ver
 el banco de conversación, los experimentos de retención, el diagnóstico
 de Bubblewrap y la alternativa optativa con Docker rootless.
+
+Para una propuesta modular, indica el objetivo y termina con
+`Archivos planificados: src/modulo.py, principal.py`. Studio genera
+un módulo cada vez, señala importaciones externas y muestra el diff
+antes de publicar en una carpeta nueva. Consulta la
+[auditoría y el banco ampliado](docs/AUDITORIA_FINAL_1_0.md) para
+los resultados y límites de la preparación para 1.0.

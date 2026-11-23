@@ -61,3 +61,23 @@ def consulta_referencia(pregunta):
     if tema:
         return "¿Qué es " + tema[1] + "?"
     return pregunta
+
+
+def consulta_python_literal(pregunta):
+    """Resuelve len de literales sencillos, sin evaluar expresiones ni ejecutar código."""
+    import ast
+
+    solicitud = re.fullmatch(r"\s*¿?(?:qué|que)\s+(?:devuelve|retorna|da)\s+\x60?(len\(.+\))\x60?\??\s*",
+                             pregunta, re.I)
+    if not solicitud or len(solicitud[1]) > 256:
+        return None
+    try:
+        nodo = ast.parse(solicitud[1], mode="eval").body
+        if not isinstance(nodo, ast.Call) or nodo.keywords or len(nodo.args) != 1:
+            return None
+        valor = ast.literal_eval(nodo.args[0])
+    except (SyntaxError, ValueError, TypeError, RecursionError):
+        return None
+    if type(valor) in (str, bytes, list, tuple, dict, set):
+        return f"Python devuelve {len(valor)}."
+    return None

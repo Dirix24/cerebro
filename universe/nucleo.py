@@ -389,17 +389,24 @@ class Nucleo:
                     observaciones += " El modelo local de revisión no está disponible."
             return {"respuesta": observaciones}
         if accion == "generar":
-            from core.generacion_proyecto import diferencias, validar
+            from core.generacion_proyecto import (
+                dependencias_externas, diferencias, generar_por_archivos, reparar_adicion_no_mutante,
+            )
 
             motor = self._modelo_codigo()
             if not motor.configurado:
                 raise ValueError("Configura un modelo local de código con Ollama o llama.cpp.")
-            archivos = validar(motor.proponer_proyecto(datos.get("objetivo")))
+            objetivo = datos.get("objetivo")
+            if not isinstance(objetivo, str) or not 4 <= len(objetivo) <= 1600:
+                raise ValueError("Indica un objetivo y, opcionalmente, rutas de archivos planificadas.")
+            archivos = generar_por_archivos(objetivo, motor.proponer_proyecto)
+            reparaciones = reparar_adicion_no_mutante(objetivo, archivos)
             identificador = os.urandom(12).hex()
             if len(self.generaciones_studio) >= 16:
                 self.generaciones_studio.popitem(last=False)
             self.generaciones_studio[identificador] = (cliente, proyecto, archivos)
-            return {"id": identificador, "archivos": list(archivos), "diff": diferencias(archivos)}
+            return {"id": identificador, "archivos": list(archivos), "diff": diferencias(archivos),
+                    "reparaciones": reparaciones, "dependencias": dependencias_externas(archivos)}
         if accion == "publicar_generado":
             self.exigir_permisos("WRITE")
             if datos.get("confirmar") is not True:
@@ -767,6 +774,10 @@ class Nucleo:
                         generacion = self.operar_proyecto({"accion": "generar", "cliente": cliente,
                             "carpeta_esperada": str(proyecto.raiz), "objetivo": pregunta})
                         respuesta = "Preparé una propuesta. Revisa las diferencias antes de crear los archivos."
+                        if generacion["reparaciones"]:
+                            respuesta += "\n" + "\n".join(generacion["reparaciones"])
+                        if generacion["dependencias"]:
+                            respuesta += "\nImportaciones externas para revisar: " + ", ".join(generacion["dependencias"])
                     except (RuntimeError, ValueError) as error:
                         respuesta = f"No pude preparar una propuesta válida: {error}"
                         self._diagnostico_turno(clave_dialogo,
@@ -812,6 +823,14 @@ class Nucleo:
             if calculo is not None:
                 self._registrar_turno(pregunta, calculo)
                 return {"respuesta": calculo, "origen": "matematicas_local"}
+
+            from core.comprension_conversacional import consulta_python_literal
+
+            literal = consulta_python_literal(pregunta)
+            if literal is not None:
+                self.exigir_permisos("READ")
+                self._registrar_turno(pregunta, literal)
+                return {"respuesta": literal, "origen": "python_literal"}
 
             from universe.especialidades import consultar as consultar_especialidades
             from universe.herramientas import resolver
