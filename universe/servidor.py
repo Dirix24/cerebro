@@ -211,6 +211,7 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                         "/api/archivo": lambda: nucleo.guardar(datos.get("nombre"), datos.get("texto")),
                         "/api/tarea": lambda: nucleo.crear_tarea(datos.get("accion"), datos.get("nombre")),
                         "/api/canvas": lambda: nucleo.guardar_canvas(datos),
+                        "/api/nodos": lambda: nucleo.eliminar_nodo(datos.get("id"), datos.get("confirmar")),
                         "/api/memoria": lambda: nucleo.respaldo(datos),
                         "/api/cache": nucleo.limpiar_cache,
                     }

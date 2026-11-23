@@ -727,3 +727,24 @@ Si el diagnóstico de manos menciona `libGLESv2.so.2` en MX Linux,
 instala la biblioteca del sistema con `sudo apt install libgles2`.
 Si falta `xdotool`, usa `sudo apt install xdotool`. El instalador
 de Cerebro prepara los paquetes Python dentro del entorno virtual.
+
+### Studio y Universe contextual
+
+- «Quiero hacer electrónica» o «Quiero hacer algo de eletronica»
+  distingue entre simulación, Arduino y diseño de placas antes de
+  abrir una herramienta. «Hazme una calculadora» usa el flujo de
+  propuesta revisable si hay un modelo configurado.
+- En Studio nativo, arrastra una carpeta al centro para autorizarla
+  como proyecto. Si arrastras código desde fuera del proyecto,
+  puedes autorizar su carpeta y abrirlo en el editor.
+- En Universe, selecciona un nodo para ver su tipo, origen y fecha y
+  hora local si se guardó. Los nodos que representan recuerdos
+  individuales ofrecen **Eliminar recuerdo** con confirmación.
+- Abre el modo gestual y pulsa **Control con las manos**. Cerebro
+  comprueba el detector y elige automáticamente. Si solo funciona
+  OpenCV, aparece **Control con marcador** y la guía explica que
+  debes mover un objeto verde. En ese modo la cámara no cuenta manos.
+- Con Internet habilitado, prueba «Muestra commits de GitHub
+  Dirix24/cerebro». También puedes pedir ramas, issues o pull requests.
+
+Ver [alcance y validación](docs/STUDIO_CONTEXTO_UNIVERSE.md).

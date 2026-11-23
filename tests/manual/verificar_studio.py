@@ -46,6 +46,7 @@ with TemporaryDirectory() as temporal:
                       CEREBRO_CAZEL_RAIZ=os.environ.get("CEREBRO_CAZEL_RAIZ", str(base_repos / "CAZEL_IA")),
                       CEREBRO_CAZEL_DATOS=str(datos / "cazel"), CEREBRO_CAZEL_PROYECTO=str(carpeta))
     n = Nucleo("local")
+    n.memoria.guardar_largo_plazo("recuerdo de prueba", "valor descartable", categoria="usuario")
     token = "test-studio-frontend-key-control"
     with crear_servidor(0, n, token, abrir_estudio=lambda: True) as server:
         worker = Thread(target=server.serve_forever, daemon=True)
@@ -183,6 +184,12 @@ with TemporaryDirectory() as temporal:
                 expect(candidato).to_be_visible()
                 candidato.click()
                 expect(page.locator("#detalle")).to_contain_text("robot.py")
+                page.get_by_label("Región de especialista").select_option("")
+                page.locator("#nodos").get_by_role("button", name="recuerdo de prueba", exact=True).click()
+                expect(page.locator("#detalle")).to_contain_text("Fecha y hora")
+                expect(page.locator("#detalle")).not_to_contain_text("Fecha y hora: Sin registrar")
+                btn("Eliminar recuerdo").click()
+                expect(page.locator("#nodos").get_by_role("button", name="recuerdo de prueba", exact=True)).to_have_count(0)
                 assert not errores, errores
                 browser.close()
                 print("Chromium: creación, edición, renombrado, búsqueda, imagen con rueda anclada y arrastre, navegación PDF, zoom renderizado, búsqueda PDF, consulta con página, documento, CSV, HTML inerte, "

@@ -933,11 +933,28 @@ $("limpiar-tareas").addEventListener("click", () => ejecutar($("limpiar-tareas")
   await actualizarTareas();
 }));
 
+let nodoInspeccionado = null;
+
 function inspeccionar(nodo) {
   grafico.seleccionar(nodo.id);
-  $("detalle").textContent = [nodo.titulo, nodo.grupo || nodo.tipo, nodo.detalle, nodo.origen, nodo.fecha]
+  nodoInspeccionado = nodo;
+  const fecha = nodo.fecha ? new Date(nodo.fecha) : null;
+  const detalleFecha = fecha && Number.isFinite(fecha.getTime()) ? fecha.toLocaleString("es") : nodo.fecha;
+  $("detalle").textContent = [nodo.titulo, "Tipo: " + nodo.tipo,
+    "Origen: " + (nodo.origen || "Sin registrar"), "Fecha y hora: " + (detalleFecha || "Sin registrar"), nodo.detalle]
     .filter(Boolean).join("\n");
+  $("eliminar-recuerdo").hidden = !nodo.eliminable;
 }
+
+$("eliminar-recuerdo").addEventListener("click", () => ejecutar($("eliminar-recuerdo"), async () => {
+  const nodo = nodoInspeccionado;
+  if (!nodo?.eliminable || !confirm("¿Eliminar este recuerdo? " + nodo.titulo)) return;
+  await api("nodos", {id: nodo.id, confirmar: true});
+  nodoInspeccionado = null;
+  $("eliminar-recuerdo").hidden = true;
+  $("detalle").textContent = "Recuerdo eliminado.";
+  await mostrar("universe");
+}));
 
 const grafico = escena($("cerebro-3d"), inspeccionar);
 grafico.rotar($("orbita").checked);

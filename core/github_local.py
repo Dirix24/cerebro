@@ -144,3 +144,35 @@ def repositorios_cuenta():
         return [identificar_repositorio(nombre) for nombre in datos[:20] if isinstance(nombre, str)]
     except (OSError, ValueError, subprocess.SubprocessError):
         raise RuntimeError("No pude consultar tu cuenta de GitHub. Comprueba gh auth status.") from None
+
+
+def actividad_publica(repositorio, recurso, *, abrir=None):
+    rutas = {"ramas": "branches", "commits": "commits", "issues": "issues",
+             "pull requests": "pulls"}
+    if recurso not in rutas:
+        raise ValueError("Recurso de GitHub desconocido.")
+    datos = _datos_publicos(repositorio, "/" + rutas[recurso] + "?per_page=10", abrir=abrir)
+    if not isinstance(datos, list):
+        raise ValueError("GitHub devolvió una lista inválida.")
+    filas = []
+    for objeto in datos[:10]:
+        if not isinstance(objeto, dict):
+            continue
+        if recurso == "ramas":
+            titulo = objeto.get("name")
+        elif recurso == "commits":
+            commit = objeto.get("commit")
+            mensaje = commit.get("message") if isinstance(commit, dict) else None
+            sha = objeto.get("sha")
+            titulo = (sha[:8] + " · " + mensaje.split("\n", 1)[0]
+                      if isinstance(sha, str) and isinstance(mensaje, str) else None)
+        else:
+            if recurso == "issues" and "pull_request" in objeto:
+                continue
+            titulo = objeto.get("title")
+            numero = objeto.get("number")
+            if isinstance(titulo, str) and isinstance(numero, int):
+                titulo = f"#{numero} · {titulo}"
+        if isinstance(titulo, str):
+            filas.append(titulo[:160])
+    return filas

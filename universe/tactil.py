@@ -44,6 +44,14 @@ def tecnologias():
             "modelo": modelo if modelo and Path(modelo).expanduser().is_file() else None}
 
 
+def elegir_detector(ficha):
+    fallo = None
+    if ficha["opencv"] and ficha["mediapipe"] and ficha["modelo"]:
+        fallo = fallo_detector_manos(ficha["modelo"])
+    marcador = bool(ficha["opencv"] and (fallo or not (ficha["mediapipe"] and ficha["modelo"])))
+    return marcador, fallo
+
+
 def _requisitos(marcador=False):
     ficha = tecnologias()
     if not ficha["x11"]:
@@ -167,7 +175,7 @@ def _capturar(indice, modelo, detener, avisos, ancho, alto, ver, dibujar, reinic
             camara.set(cv2.CAP_PROP_FRAME_WIDTH, ancho_cuadro)
             camara.set(cv2.CAP_PROP_FRAME_HEIGHT, alto_cuadro)
             camara.set(cv2.CAP_PROP_FPS, fps)
-            avisos.put("Cámara activa")
+            avisos.put("Cámara activa · " + ("control con manos" if detector else "marcador verde · solo puntero"))
             anterior = -1
             trazo = None
             ultimo_estado = None
@@ -260,14 +268,7 @@ def abrir():
     tk.Label(raiz, text="Modo gestual por cámara", bg=FONDO, fg=ACENTO, font=("TkDefaultFont", 15, "bold")).pack(padx=18, pady=10)
     lista = ttk.Combobox(raiz, state="readonly", values=[f"video{i} · {nombre}" for i, nombre in opciones], width=40)
     lista.pack(padx=18, pady=(0, 8))
-    motor = ttk.Combobox(raiz, state="readonly", values=("Manos · MediaPipe", "Marcador verde · solo puntero"), width=40)
-    motor.pack(padx=18, pady=(0, 8))
-    ficha = tecnologias()
-    fallo_manos = None
-    if ficha["opencv"] and ficha["mediapipe"] and ficha["modelo"]:
-        fallo_manos = fallo_detector_manos(ficha["modelo"])
-    alternativas = ficha["opencv"] and (fallo_manos or not (ficha["mediapipe"] and ficha["modelo"]))
-    motor.current(1 if alternativas else 0)
+    usar_marcador, fallo_manos = elegir_detector(tecnologias())
     if fallo_manos:
         valor.set("Marcador verde disponible. MediaPipe: " + fallo_manos)
 
@@ -401,14 +402,13 @@ def abrir():
         if indice < 0 or activo:
             return
         try:
-            modelo = _requisitos(marcador=motor.current() == 1)
+            modelo = _requisitos(marcador=usar_marcador)
         except RuntimeError as exc:
             valor.set(str(exc))
             return
         if not messagebox.askyesno("Activar cámara", "¿Permitir la cámara seleccionada y el control del puntero?", parent=raiz):
             return
         activo = True
-        motor.configure(state="disabled")
         boton_trazo.configure(state="normal" if modelo else "disabled")
         dibujar.clear()
         detener = Event()
@@ -438,8 +438,7 @@ def abrir():
                 activo = False
                 boton.configure(state="normal" if opciones else "disabled")
                 lista.configure(state="readonly")
-                motor.configure(state="readonly")
-                if valor.get() in {"Pausando…", "Cámara activa"}:
+                if valor.get() == "Pausando…" or valor.get().startswith("Cámara activa"):
                     valor.set("Cámara apagada")
                 foto = None
                 pantalla.configure(image="", text="La cámara está apagada.")
@@ -465,7 +464,10 @@ def abrir():
             if activo and not detener.is_set() and ver.is_set():
                 foto = tk.PhotoImage(data=imagen, format="ppm")
                 pantalla.configure(image=foto, text="")
-                vista.set(f"Manos detectadas: {manos} · Azul: derecha · Verde: izquierda")
+                if usar_marcador:
+                    vista.set("Modo marcador: mueve un objeto verde para controlar el puntero.")
+                else:
+                    vista.set(f"Manos detectadas: {manos} · Azul: derecha · Verde: izquierda")
         raiz.after(60, actualizar)
 
     def diagnosticar():
@@ -480,7 +482,7 @@ def abrir():
         lineas.append("La apertura se comprueba al activar la cámara.")
         messagebox.showinfo("Diagnóstico de cámara", "\n".join(lineas), parent=raiz)
 
-    boton = ttk.Button(controles, text="Activar cámara", command=iniciar, state="normal" if opciones else "disabled")
+    boton = ttk.Button(controles, text="Control con las manos" if not usar_marcador else "Control con marcador", command=iniciar, state="normal" if opciones else "disabled")
     boton.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
     ttk.Button(controles, text="Pausar", command=pausar).grid(row=0, column=1, padx=2, pady=2, sticky="ew")
     boton_ver = ttk.Button(controles, text="Ver cámara", command=alternar_vista)

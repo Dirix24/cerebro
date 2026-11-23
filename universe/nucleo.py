@@ -629,6 +629,12 @@ class Nucleo:
         from core.documentos_usuario import _normalizar
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
+        if re.fullmatch(r"(?:quiero (?:hacer|aprender|practicar) (?:algo de )?|ayudame con (?:la )?)"
+                        r"(?:electronica|electroncia|eletronica)", intencion):
+            self.exigir_permisos("READ")
+            return {"respuesta": "¿Quieres simular un circuito, programar Arduino o diseñar una placa? "
+                    "Para circuitos, usa Falstad; para Arduino, Wokwi o Tinkercad; para placas, KiCad. "
+                    "Cuéntame qué quieres construir y te ayudo a elegir."}
         simulador = re.fullmatch(
             r"(?:abre (?:el simulador )?(tinkercad|wokwi|falstad)|(?:quiero )?simular (?:circuitos|electronica))",
             intencion)
@@ -645,7 +651,7 @@ class Nucleo:
             return {"respuesta": f"Simulador de electrónica: {nombre} · {url}", "abrir_url": url}
         if modo == "studio" and not comando:
             orden_generar = re.fullmatch(
-                r"(?:haz|crea|disena|programa|genera) (?:una? |el |la )?"
+                r"(?:haz(?:me)?|crea(?:me)?|disena(?:me)?|programa(?:me)?|genera(?:me)?) (?:una? |el |la )?"
                 r"(?:calculadora|web|pagina web|programa|proyecto|script)(?: .*)?", intencion)
             if orden_generar and intencion not in {"crea una pagina web", "crea pagina web"}:
                 proyecto = self.proyectos_studio.get(cliente)
@@ -747,6 +753,20 @@ class Nucleo:
                 return {"respuesta": str(error)}
             return {"respuesta": "Repositorios accesibles (hasta 20):\n" + "\n".join(repositorios)
                     if repositorios else "GitHub no devolvió repositorios accesibles.", "repositorios": repositorios}
+        actividad = re.fullmatch(
+            r"(?:muestra|muestrame|lista|consulta) (?:las |los )?(ramas|commits|issues|pull requests) "
+            r"(?:de github|en github) ([^ ]+)", intencion)
+        if actividad:
+            from core.github_local import actividad_publica
+
+            self.exigir_permisos("READ")
+            if not self.internet:
+                raise PermissionError("Activa Internet para consultar GitHub.")
+            try:
+                filas = actividad_publica(actividad[2], actividad[1])
+            except (OSError, ValueError) as error:
+                return {"respuesta": f"No pude consultar GitHub: {error}"}
+            return {"respuesta": "\n".join(filas) if filas else "GitHub no devolvió resultados.", "actividad": filas}
         comparacion = re.fullmatch(r"(?:compara|comparar) github ([^ ]+) ([^ ]+) (?:con )?([^ ]+)", pregunta, re.I)
         if comparacion:
             from core.github_local import comparar_publico
@@ -1150,7 +1170,9 @@ class Nucleo:
                                   "fecha": entrada.get("fecha")})
                     continue
                 nodos.append({"id": "memoria:" + clave, "tipo": "memoria", "titulo": clave,
-                              "detalle": str(entrada.get("valor", ""))[:500], "origen": "Memoria de largo plazo"})
+                              "detalle": str(entrada.get("valor", ""))[:500], "origen": "Memoria de largo plazo",
+                              "fecha": entrada.get("fecha"), "eliminable": not self.solo_lectura and
+                              self.agente.tiene_permisos("WRITE")})
                 if isinstance(categoria, str):
                     categorias.setdefault(categoria, []).append("memoria:" + clave)
                 valor = entrada.get("valor")
@@ -1242,12 +1264,25 @@ class Nucleo:
                 lecciones.append({"id": "leccion:" + huella, "tipo": "conocimiento",
                                   "titulo": ejemplo["pregunta"], "detalle": ejemplo["respuesta"],
                                   "origen": "Profesor · comprobación independiente", "grupo": "PROFESOR",
+                                  "fecha": ejemplo.get("fecha"),
                                   "vinculos": ["aprendizaje:profesor"]})
             if lecciones:
                 nodos.append({"id": "aprendizaje:profesor", "tipo": "relaciones", "titulo": "Lecciones aprobadas",
                               "detalle": "Banco de ejemplos con referencia independiente.", "grupo": "PROFESOR"})
                 nodos.extend({l["id"]: l for l in lecciones}.values())
         return {"nodos": nodos}
+
+    def eliminar_nodo(self, identificador, confirmar):
+        self.exigir_permisos("READ", "WRITE")
+        if self.solo_lectura or confirmar is not True:
+            raise PermissionError("Confirma la eliminación del recuerdo.")
+        if not isinstance(identificador, str) or not identificador.startswith("memoria:"):
+            raise ValueError("Solo se pueden eliminar recuerdos individuales desde Universe.")
+        with self.cerrojo:
+            if not any(n["id"] == identificador and n.get("eliminable") for n in self.nodos()["nodos"]):
+                raise ValueError("El recuerdo no está disponible para eliminar.")
+            eliminado = self.memoria.eliminar_largo_plazo(identificador.removeprefix("memoria:"))
+        return {"eliminado": eliminado}
 
     def respaldo(self, datos=None):
         self.exigir_permisos("READ" if datos is None else "WRITE")
