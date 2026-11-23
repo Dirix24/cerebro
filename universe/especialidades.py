@@ -74,20 +74,20 @@ def _ejecutar(comando, raiz, entrada, entorno, timeout, cancelacion):
                 entrada = None
 
 
-def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
+def _consulta(region, accion, objetivo, *, red=False, cancelacion=None, practica=None):
     from core.configuracion_especialistas import obtener
 
     carpeta = obtener(region + "_RAIZ")
     if not carpeta:
         return _resultado(region, "no_disponible", "Falta configurar el repositorio local.")
     modulo = "especialista" if region == "DARAS" else "cazel.especialista"
-    raiz = Path(carpeta).expanduser().resolve()
+    raiz = practica if practica and region == "DARAS" else Path(carpeta).expanduser().resolve()
     punto = raiz.joinpath(*modulo.split(".")).with_suffix(".py")
     if not punto.is_file():
         return _resultado(region, "no_disponible", "El adaptador v1 no existe en la carpeta configurada.")
     comando = [sys.executable, "-E", "-s", "-B", "-m", modulo]
     if region == "CAZEL":
-        proyecto = obtener("CAZEL_PROYECTO")
+        proyecto = practica or obtener("CAZEL_PROYECTO")
         if not proyecto:
             return _resultado(region, "no_disponible", "Falta seleccionar el proyecto CAZEL.")
         comando += ["--proyecto", str(Path(proyecto).expanduser().resolve())]
@@ -95,7 +95,7 @@ def _consulta(region, accion, objetivo, *, red=False, cancelacion=None):
             comando.append("--permitir-pruebas")
         if accion == "proponer" and os.environ.get("CEREBRO_CAZEL_PROPUESTAS") == "1":
             comando.append("--permitir-propuestas")
-        if datos := os.environ.get("CEREBRO_CAZEL_DATOS"):
+        if datos := (practica / ".datos" if practica else os.environ.get("CEREBRO_CAZEL_DATOS")):
             comando += ["--datos", str(Path(datos).expanduser().resolve())]
     entrada = json.dumps({"version": VERSION, "accion": accion, "objetivo": objetivo, "red": red},
                          ensure_ascii=True).encode("ascii")

@@ -70,7 +70,9 @@ def api(sesion, ruta, datos=None, tiempo=25):
 def version_local():
     raiz = Path(__file__).resolve().parent.parent
     fuentes = sorted(raiz.glob("universe/*.py")) + sorted(raiz.glob("universe/web/*"))
-    fuentes += [raiz / "chat.py", raiz / "config.py"]
+    fuentes += sorted(raiz.glob("core/**/*.py")) + sorted(raiz.glob("agent/**/*.py"))
+    fuentes += [raiz / nombre for nombre in ("chat.py", "config.py", "main.py", "entrenar_competencias.py",
+                                               "trainer_engine.py")]
     firma = sha256()
     for fuente in fuentes:
         if fuente.is_file():
@@ -86,12 +88,17 @@ def conectar():
         try:
             sesion = json.loads(registro.read_text())
             api(sesion, "interfaz", tiempo=1)
-            if sesion.get("version") == version_local():
-                return sesion
-            api(sesion, "apagar", {}, tiempo=2)
-            registro.unlink(missing_ok=True)
         except (OSError, ValueError, RuntimeError, KeyError):
             registro.unlink(missing_ok=True)
+        else:
+            if sesion.get("version") == version_local():
+                return sesion
+            try:
+                api(sesion, "apagar", {}, tiempo=2)
+            except ConnectionError:
+                # El servidor puede empezar a cerrar antes de completar la respuesta.
+                pass
+            _esperar_cierre(registro)
         with (ruta / "nucleo.log").open("ab") as log:
             proceso = subprocess.Popen([sys.executable, "-m", "universe.lanzador", "_nucleo"],
                                        stdin=subprocess.DEVNULL, stdout=log, stderr=log,
@@ -140,6 +147,8 @@ def nucleo():
                     ultimo_aviso = ahora
                     with contextlib.suppress(OSError, ValueError, KeyError):
                         notificar_locales()
+                    with contextlib.suppress(OSError, ValueError, RuntimeError):
+                        motor.aprendizaje.revisar_programacion(motor)
                 with contextlib.suppress(OSError, RuntimeError):
                     relevo.revisar(motor.interfaz()["activa"])
 
@@ -1009,6 +1018,14 @@ def studio_activo():
     return False
 
 
+def _esperar_cierre(registro):
+    limite = monotonic() + 55
+    while registro.exists() and monotonic() < limite:
+        sleep(.1)
+    if registro.exists():
+        raise RuntimeError("Cerebro sigue terminando tareas. Consulta su estado en unos segundos.")
+
+
 def apagar():
     ruta = carpeta()
     registro = ruta / "sesion.json"
@@ -1023,11 +1040,7 @@ def apagar():
             if registro.exists():
                 raise RuntimeError("El núcleo no responde al apagado. Puedes iniciarlo para recuperar la sesión.")
             return
-        limite = monotonic() + 55
-        while registro.exists() and monotonic() < limite:
-            sleep(.1)
-        if registro.exists():
-            raise RuntimeError("Cerebro sigue terminando tareas. Consulta su estado en unos segundos.")
+        _esperar_cierre(registro)
 
 
 def estado_servicio():

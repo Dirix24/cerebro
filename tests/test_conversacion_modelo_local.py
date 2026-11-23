@@ -172,3 +172,17 @@ def test_recuerdo_portable_requiere_confirmacion_y_se_consulta_como_cita(prepara
         assert reiniciado.memoria.recuperar_largo_plazo("ejecutar") is None
     finally:
         reiniciado.ejecutor.shutdown()
+
+
+def test_esquema_codigo_usa_nombre_solicitado_sin_tomar_rutas():
+    from core.generacion_proyecto import esquema_para
+
+    def archivos(objetivo):
+        return esquema_para(objetivo)["properties"]["archivos"]
+
+    prueba = archivos("Crea una calculadora. Archivo calculadora.py.")
+    assert prueba["maxItems"] == 1
+    assert prueba["items"]["properties"]["nombre"]["enum"] == ["calculadora.py"]
+    prueba = archivos("Crea una página en carpeta/index.html.")
+    assert prueba["maxItems"] == 6
+    assert "pattern" in prueba["items"]["properties"]["nombre"]

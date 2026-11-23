@@ -3,6 +3,7 @@ import ast
 from collections import OrderedDict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from datetime import datetime
 from hashlib import sha256
 import json
 import math
@@ -14,7 +15,7 @@ import sqlite3
 from statistics import median
 from tempfile import NamedTemporaryFile
 from threading import RLock
-from time import monotonic, perf_counter
+from time import monotonic, perf_counter, process_time
 
 import config
 from agent.controlled_agent import ControlledAgent
@@ -97,6 +98,7 @@ class Nucleo:
         self.ejercicios_studio = {}
         self.ejercicios_recientes = OrderedDict()
         self.dialogos_profesor = OrderedDict()
+        self.diagnosticos_conversacion = OrderedDict()
         self.conversaciones = Conversaciones(conversaciones_dir or self.raiz / "data")
         if self.agente.tiene_permisos("READ"):
             self._recuperar_contexto(self.historial()["turnos"])
@@ -188,6 +190,8 @@ class Nucleo:
             raise ValueError("Identificador de Studio inválido.")
         self.exigir_permisos("READ")
         accion = datos.get("accion")
+        if accion not in {"estado_archivo", "estado_suelto", "listar", "escritorio", "recordado"}:
+            self.aprendizaje.actividad()
         from core.escritorio_studio import (HERRAMIENTAS, abrir_carpeta, analizar_texto, archivo_soltado,
                                             cargar_preferencias, carpetas_personales, guardar_preferencias,
                                             validar_archivo)
@@ -638,6 +642,7 @@ class Nucleo:
         self.chat.pregunta_repaso = None
         with self.cerrojo:
             self.dialogos_profesor.clear()
+            self.diagnosticos_conversacion.clear()
         self.escritorio.limpiar()
         self.archivo_en_contexto = None
 
@@ -673,6 +678,13 @@ class Nucleo:
             if len(self.dialogos_profesor) > 64:
                 self.dialogos_profesor.popitem(last=False)
 
+    def _diagnostico_turno(self, clave, detalle):
+        with self.cerrojo:
+            self.diagnosticos_conversacion[clave] = detalle
+            self.diagnosticos_conversacion.move_to_end(clave)
+            if len(self.diagnosticos_conversacion) > 64:
+                self.diagnosticos_conversacion.popitem(last=False)
+
     def conversar(self, pregunta, modo=None, cliente=None, documento=None):
         if not isinstance(pregunta, str) or not pregunta.strip() or len(pregunta) > 24000:
             raise ValueError("Escribe un mensaje de hasta 24 000 caracteres.")
@@ -693,6 +705,14 @@ class Nucleo:
 
         intencion = re.sub(r"^cerebro[, ]+", "", _normalizar(pregunta)).strip(" ¿?¡!.")
         intencion = intencion_comun(intencion)
+        self.aprendizaje.actividad()
+        clave_dialogo = (cliente, self.conversaciones.activa())
+        if intencion == "por que fallaste esta pregunta":
+            self.exigir_permisos("READ")
+            with self.cerrojo:
+                detalle = self.diagnosticos_conversacion.get(clave_dialogo)
+            return {"respuesta": detalle or "No hay un fallo verificado para el último turno de este chat."}
+        self._diagnostico_turno(clave_dialogo, None)
         if re.fullmatch(r"(?:quiero (?:hacer|aprender|practicar) (?:algo de )?|ayudame con (?:la )?)"
                         r"(?:electronica|electroncia|eletronica)", intencion):
             self.exigir_permisos("READ")
@@ -719,8 +739,8 @@ class Nucleo:
             return {"respuesta": f"Simulador de electrónica: {nombre} · {url}", "abrir_url": url}
         if modo == "studio" and not comando:
             orden_generar = re.fullmatch(
-                r"(?:quiero crear|haz(?:me)?|crea(?:me)?|disena(?:me)?|programa(?:me)?|genera(?:me)?) (?:una? |el |la )?"
-                r"(?:calculadora|web|pagina web|programa|proyecto|script)(?: .*)?", intencion)
+                r"(?:quiero (?:crear|hacer)|haz(?:me)?|crea(?:me)?|disena(?:me)?|programa(?:me)?|genera(?:me)?) (?:una? |el |la )?"
+                r"(?:calculadora|web|pagina web|aplicacion|programa|proyecto|script)(?: .*)?", intencion)
             if orden_generar and intencion not in {"crea una pagina web", "crea pagina web"}:
                 proyecto = self.proyectos_studio.get(cliente)
                 generacion = None
@@ -733,6 +753,8 @@ class Nucleo:
                         respuesta = "Preparé una propuesta. Revisa las diferencias antes de crear los archivos."
                     except (RuntimeError, ValueError) as error:
                         respuesta = f"No pude preparar una propuesta válida: {error}"
+                        self._diagnostico_turno(clave_dialogo,
+                            "La propuesta no superó la generación o validación de archivos. La escritura requiere una propuesta válida.")
                 self._registrar_turno(pregunta, respuesta)
                 return {"respuesta": respuesta, "generacion": generacion}
         if modo == "studio" and isinstance(documento, dict) and cliente:
@@ -996,12 +1018,19 @@ class Nucleo:
                 return {"respuesta": respuesta, "compartir_temporal": True}
             pregunta_busqueda = pregunta
             modelo_intentado = False
-            clave_dialogo = (cliente, self.conversaciones.activa())
             if respuesta is None and not comando:
-                from core.comprension_conversacional import pide_explicacion, pide_seguimiento, preparar
+                from core.comprension_conversacional import conserva_contexto, pide_explicacion, pide_seguimiento, preparar
+
+                from core.respuestas_con_fuentes import DEFINICIONES_BASE, concepto_definicion
 
                 pregunta_busqueda, aclaracion = preparar(pregunta)
-                if aclaracion:
+                referencia = DEFINICIONES_BASE.get(concepto_definicion(pregunta_busqueda))
+                if referencia and self.agente.tiene_permisos("READ") and self.chat.pregunta_repaso is None:
+                    respuesta = referencia
+                    origen = "glosario_local"
+                    contexto = self._contexto_modelo(clave_dialogo)
+                    self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
+                elif aclaracion:
                     respuesta = aclaracion
                     origen = "aclaracion"
                 elif (2 <= len(pregunta_busqueda) <= 700 and (pide_explicacion(pregunta_busqueda)
@@ -1015,12 +1044,23 @@ class Nucleo:
                     if contexto or pide_explicacion(pregunta_busqueda):
                         publicar("razonando", "consulta")
                         try:
-                            respuesta = self.profesor.conversar(pregunta_busqueda, contexto)
+                            referencia_anterior = (DEFINICIONES_BASE.get(concepto_definicion(contexto[-1][0]))
+                                                   if contexto and pide_seguimiento(pregunta_busqueda) else None)
+                            origen = "profesor_local"
+                            if referencia_anterior and hasattr(self.profesor, "explicar_fragmentos"):
+                                respuesta = self.profesor.explicar_fragmentos(pregunta_busqueda, [
+                                    {"referencia": "Glosario local", "texto": referencia_anterior}])
+                                if not conserva_contexto(respuesta, referencia_anterior):
+                                    respuesta, origen = referencia_anterior, "glosario_local"
+                            else:
+                                respuesta = self.profesor.conversar(pregunta_busqueda, contexto)
                         except (RuntimeError, ValueError):
                             publicar("error", "fallo")
+                            origen = None
+                            self._diagnostico_turno(clave_dialogo,
+                                "El motor conversacional local no entregó una respuesta válida. Se activó la ruta de respaldo.")
                         else:
                             self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta, respuesta)
-                            origen = "profesor_local"
                     else:
                         modelo_intentado = False
             if respuesta is None:
@@ -1096,6 +1136,24 @@ class Nucleo:
                 "origen": "alumno_especialista", "intencion": etiqueta, "permisos": list(permisos)}
 
     def _consultar_competencias(self, intencion, cliente):
+        if intencion == "que has aprendido hoy":
+            self.exigir_permisos("READ")
+            hoy = datetime.now().astimezone().date()
+            informes = []
+            for informe in competencias.historial(self.raiz):
+                try:
+                    if datetime.fromisoformat(informe["fecha"]).astimezone().date() == hoy:
+                        informes.append(informe)
+                except (KeyError, ValueError, TypeError):
+                    continue
+            candidatos = [informe for informe in informes if informe.get("tipo") == "candidato"]
+            lecciones = {(leccion["especialista"], leccion["pregunta"], leccion["respuesta"])
+                         for informe in candidatos for leccion in informe.get("lecciones_colectivas", [])}
+            elegibles = sum(informe.get("elegible_para_revision") is True for informe in candidatos)
+            return {"respuesta": f"Hoy constan {len(informes)} informes de evaluación, "
+                    f"{len(candidatos)} candidatos y {len(lecciones)} lecciones verificadas. "
+                    f"{elegibles} candidatos quedaron elegibles para revisión. "
+                    "Consulta Universe para ver las métricas y procedencia."}
         tema = re.fullmatch(r"(ejercicio de|explica ejercicio de|revisa al alumno en) (.+)", intencion)
         if intencion in {"competencias del alumno", "progreso del alumno"}:
             self.exigir_permisos("READ")
@@ -1207,6 +1265,16 @@ class Nucleo:
         self.exigir_permisos("READ")
         self.memoria.cargar_memoria()
         nodos = []
+        try:
+            estado_proceso = Path("/proc/self/status").read_text()
+            rss = re.search(r"^VmRSS:\s+(\d+) kB", estado_proceso, re.M)
+        except OSError:
+            rss = None
+        if rss:
+            nodos.append({"id": "proceso:nucleo", "tipo": "procesamiento", "grupo": "CEREBRO",
+                          "titulo": "Recursos del núcleo", "accion": "servicio",
+                          "detalle": f"RAM residente {int(rss[1]) / 1024:.1f} MiB · CPU acumulada {process_time():.1f} s.",
+                          "origen": "Medición del proceso local"})
         if self.profesor.configurado:
             gguf = getattr(self.profesor, "modelo", None)
             nombre = getattr(self.profesor, "ollama", None) or (Path(gguf).name if gguf else None)
@@ -1336,6 +1404,13 @@ class Nucleo:
                           + " · regresiones en competencias: " + (", ".join(resultado["regresiones"]) or "ninguna"),
                           "vinculos": ["competencia:" + m for m in materias],
                           "origen": "Entrenamiento aislado", "fecha": resultado.get("fecha")})
+            for leccion in resultado.get("lecciones_colectivas", []):
+                nodos.append({"id": f"leccion-colectiva:{i}:{leccion['especialista']}",
+                              "tipo": "aprendizaje", "grupo": leccion["especialista"],
+                              "estado": "verificada", "accion": "practicar", "titulo": leccion["pregunta"],
+                              "detalle": leccion["respuesta"] + " · " + leccion["criterio"],
+                              "origen": "Protocolo colectivo v1", "fecha": resultado.get("fecha"),
+                              "vinculos": [f"entrenamiento:{i}"]})
         for categoria, relacionados in categorias.items():
             if len(relacionados) > 1:
                 nodos.append({"id": "categoria:" + categoria, "tipo": "relaciones", "titulo": categoria,

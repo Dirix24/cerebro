@@ -7,6 +7,8 @@ from core.respuestas_con_fuentes import concepto_definicion, normalizar
 def preparar(pregunta):
     texto = normalizar(pregunta)
     # Conserva la consulta original cuando ya está bien segmentada.
+    if re.match(r"^ques (?:el|la|un|una|los|las) \S", texto):
+        return "¿Qué es " + texto.removeprefix("ques ") + "?", None
     if texto.startswith("ques "):
         return pregunta, "¿Qué quieres decir con «" + texto.removeprefix("ques ")[:60] + "»?"
     fusion = re.fullmatch(r"que es([a-zñ]{3,})", texto)
@@ -33,3 +35,11 @@ def intencion_comun(texto):
         return texto
     palabras = {"aser": "hacer", "pajina": "pagina", "pograma": "programa"}
     return " ".join(palabras.get(palabra, palabra) for palabra in texto.split())
+
+
+
+def conserva_contexto(respuesta, referencia):
+    """Descarta reformulaciones vacías cuando existe una ficha local de respaldo."""
+    principal = set(palabra for palabra in normalizar(referencia).split() if len(palabra) >= 5)
+    salida = set(normalizar(respuesta).split())
+    return len(principal & salida) >= 2

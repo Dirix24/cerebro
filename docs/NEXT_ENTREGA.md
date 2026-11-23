@@ -1,5 +1,7 @@
 # CEREBRO Next
 
+La [continuación de Evolution](CEREBRO_EVOLUTION.md) recoge las pruebas más recientes y el estado para 1.0.
+
 Entrega incremental basada en `main` en `107c80f60499799b8a8d58cf322ea1a1c1bd0dff` (PR #42).
 
 ## Auditoría del punto de partida

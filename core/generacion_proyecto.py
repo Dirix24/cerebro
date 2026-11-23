@@ -5,11 +5,26 @@ import json
 from pathlib import Path
 import re
 
+PATRON_NOMBRE = r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,74}\.(py|html|css|js|ts|sql|sh|c|cpp|h|java|md|txt)$"
 EXTENSIONES = (".py", ".html", ".css", ".js", ".ts", ".sql", ".sh", ".c", ".cpp", ".h", ".java", ".md", ".txt")
 ESQUEMA = {"type": "object", "required": ["archivos"], "additionalProperties": False, "properties": {
     "archivos": {"type": "array", "minItems": 1, "maxItems": 6, "items": {
         "type": "object", "required": ["nombre", "texto"], "additionalProperties": False,
-        "properties": {"nombre": {"type": "string"}, "texto": {"type": "string"}}}}}}
+        "properties": {"nombre": {"type": "string", "pattern": PATRON_NOMBRE},
+                       "texto": {"type": "string", "minLength": 1}}}}}}
+
+
+def esquema_para(objetivo):
+    from copy import deepcopy
+
+    formato = deepcopy(ESQUEMA)
+    token = r"(?<![\w/])(" + PATRON_NOMBRE[1:-1] + r")(?![\w/])"
+    nombres = sorted({coincidencia[1] for coincidencia in re.finditer(token, objetivo)})
+    if len(nombres) == 1:
+        archivos = formato["properties"]["archivos"]
+        archivos["maxItems"] = 1
+        archivos["items"]["properties"]["nombre"] = {"enum": nombres}
+    return formato
 
 
 def validar(respuesta):

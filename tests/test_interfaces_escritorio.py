@@ -124,6 +124,7 @@ def test_lanzador_recupera_cierre_anticipado_al_cambiar_version(tmp_path, monkey
 
     def abrir(req, timeout):
         if req.full_url.endswith("/api/apagar"):
+            registro.unlink()
             raise IncompleteRead(b"", 18)
         return io.BytesIO(b'{"activa":"escritorio"}')
 

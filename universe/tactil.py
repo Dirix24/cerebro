@@ -72,7 +72,7 @@ def _detector(modelo):
 
     vision = mp.tasks.vision
     opciones = vision.HandLandmarkerOptions(
-        base_options=mp.tasks.BaseOptions(model_asset_path=modelo),
+        base_options=mp.tasks.BaseOptions(model_asset_path=modelo, delegate=mp.tasks.BaseOptions.Delegate.CPU),
         running_mode=vision.RunningMode.VIDEO, num_hands=2)
     return vision.HandLandmarker.create_from_options(opciones)
 

@@ -858,3 +858,13 @@ CAZEL y DARAS después de pedir autorización.
 - En **Modo gestual**, usa **Probar cámara y manos** para revisar
   la imagen y el detector, o **Iniciar control gestual** para autorizar
   el puntero. Esc pausa cualquiera de los dos modos.
+
+### Evolución del modelo propio
+
+Usa «Prepara entrenamiento autónomo corto colectivo» y «Confirma
+entrenamiento autónomo» para probar una mejora en una copia. CEREBRO
+comprueba los aportes de CAZEL y DARAS cuando sus adaptadores están
+disponibles. Las sesiones guardan progreso y conservan los pesos activos.
+«¿Qué has aprendido hoy?» muestra informes registrados. Para los comandos
+de reanudación, prácticas programadas, resultados y recuperación consulta
+la [guía de CEREBRO Evolution](docs/CEREBRO_EVOLUTION.md).

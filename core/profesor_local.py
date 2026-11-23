@@ -129,15 +129,16 @@ class ProfesorLocal:
         )
 
     def proponer_proyecto(self, objetivo):
-        from core.generacion_proyecto import ESQUEMA
+        from core.generacion_proyecto import esquema_para
 
         if not isinstance(objetivo, str) or not 4 <= len(objetivo.strip()) <= 350:
             raise ValueError("Describe el proyecto en 4 a 350 caracteres.")
         return self._consultar(
-            "Diseña una implementación pequeña y funcional. Devuelve JSON con archivos, cada uno con nombre y texto. "
+            "Diseña una implementación pequeña y funcional. Devuelve solo un objeto JSON con este formato: "
+            '{"archivos":[{"nombre":"ejemplo.py","texto":"print(1)"}]}. '
             "Usa nombres simples, sin subcarpetas. Para web solicita HTML y CSS separados. "
             "Para Python incluye pruebas unittest cuando sea posible. No incluyas instrucciones de instalación ni publicación.",
-            objetivo, esquema=ESQUEMA, max_tokens=1400,
+            objetivo, esquema=esquema_para(objetivo), max_tokens=1200,
         )
 
     def describir_imagen(self, imagen):
@@ -246,7 +247,8 @@ class ProfesorLocal:
                 ruta = "/v1/chat/completions"
                 carga = {"messages": mensajes, "max_tokens": max_tokens, "temperature": temperatura, "stream": False}
                 if esquema:
-                    carga["response_format"] = {"type": "json_schema", "schema": esquema}
+                    carga["response_format"] = {"type": "json_schema",
+                                            "json_schema": {"name": "cerebro", "strict": True, "schema": esquema}}
             conexion.request("POST", ruta, json.dumps(carga).encode(), {"Content-Type": "application/json"})
             with conexion.getresponse() as respuesta:
                 if respuesta.status != 200:
@@ -255,6 +257,8 @@ class ProfesorLocal:
             if len(datos) > MAX_RESPUESTA:
                 raise RuntimeError("La respuesta del profesor excede el límite.")
             carga = json.loads(datos)
+            if not self.ollama and esquema and carga["choices"][0].get("finish_reason") == "length":
+                raise RuntimeError("El motor agotó el presupuesto antes de completar la propuesta.")
             mensaje = carga["message"] if self.ollama else carga["choices"][0]["message"]
             texto = mensaje["content"]
             if mensaje.get("tool_calls") or not isinstance(texto, str) or not texto.strip() or len(texto) > 6000:
@@ -297,7 +301,7 @@ class ProfesorBajoDemanda(ProfesorLocal):
             self.puerto = local.getsockname()[1]
         self.proceso = subprocess.Popen(
             [str(self.motor), "-m", str(self.modelo), "--host", "127.0.0.1", "--port", str(self.puerto),
-             "-c", "1024", "-t", "2", "-ngl", "0", "--parallel", "1", "--no-webui"],
+             "-c", "2048", "-t", "2", "-ngl", "0", "--parallel", "1", "--no-webui"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         limite = monotonic() + 7

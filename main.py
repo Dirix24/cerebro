@@ -13,6 +13,8 @@ Usa herramientas locales si todavía no hay un checkpoint entrenado.
 import argparse
 import os
 import sys
+import warnings
+from zipfile import BadZipFile
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import config
@@ -26,7 +28,14 @@ def cargar_modelo(ruta=None):
     candidatos = [ruta] if ruta else [config.CKPT_MEJOR, config.CKPT_ULTIMO]
     for r in candidatos:
         if r and os.path.exists(r):
-            datos = cargar_checkpoint(r, con_optimizador=False)
+            try:
+                datos = cargar_checkpoint(r, con_optimizador=False)
+            except (OSError, ValueError, KeyError, TypeError, BadZipFile) as error:
+                if ruta:
+                    raise
+                warnings.warn(f"No se pudo cargar {os.path.basename(r)}. Se probará el siguiente checkpoint local: "
+                              f"{type(error).__name__}.", RuntimeWarning)
+                continue
             return datos["modelo"], datos["meta"], r
     return None, None, None
 

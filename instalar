@@ -7,7 +7,7 @@ cd "$raiz"
 preparar_sistema() {
     [ -t 0 ] && command -v apt-get >/dev/null 2>&1 && command -v dpkg-query >/dev/null 2>&1 || return 0
     faltantes=
-    for paquete in python3-venv python3-tk poppler-utils wmctrl xdotool alsa-utils libgles2; do
+    for paquete in python3-venv python3-tk poppler-utils wmctrl xdotool alsa-utils libgles2 libegl1; do
         if ! dpkg-query -W -f='${db:Status-Status}' "$paquete" 2>/dev/null | tr -d '\n' | grep -qx installed; then
             faltantes="$faltantes $paquete"
         fi
