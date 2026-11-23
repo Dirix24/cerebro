@@ -130,7 +130,11 @@ def main():
     ap.add_argument("--daras-raiz", help="autoriza y guarda la ruta del adaptador de DARAS")
     ap.add_argument("--proyecto-cazel", help="selecciona el proyecto local para CAZEL")
     ap.add_argument("--sin-diagnostico", action="store_true", help="omite el diagnóstico final")
+    ap.add_argument("--sin-red", action="store_true", help="Usa modelos y gestos ya disponibles localmente")
+    ap.add_argument("--ruedas", help="Carpeta local usada para preparar el entorno Python")
     args = ap.parse_args()
+    if args.sin_red and args.descargar_modelo_ligero:
+        ap.error("--descargar-modelo-ligero requiere conexión.")
     instalar(automatico=not args.sin_autoinicio)
     import config
     raiz = config.raiz_datos()
@@ -140,7 +144,10 @@ def main():
             configurar_modelo_manos(args.modelo_manos)
         except (OSError, ValueError) as error:
             print(f"No se registró el modelo de manos: {error}")
-    if args.gestos == "auto":
+    if args.sin_red:
+        if args.gestos != "ninguno":
+            print("Gestos sin red: se conservan los componentes locales y el modelo de manos configurado.")
+    elif args.gestos == "auto":
         print(preparar_gestos_automaticos())
     elif args.gestos != "ninguno" and not instalar_gestos(args.gestos):
         print("La instalación básica sigue disponible. El modo gestual elegido requiere revisión.")
@@ -167,7 +174,7 @@ def main():
                 finally:
                     if hasattr(motor, "cerrar"):
                         motor.cerrar()
-            elif not (leer(raiz) or args.modelo_ollama or args.descargar_modelo_ligero):
+            elif not args.sin_red and not (leer(raiz) or args.modelo_ollama or args.descargar_modelo_ligero):
                 print(ofrecer(raiz, confirmar))
         except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
             print(f"Modelo local: no se guardó la selección. {error}")

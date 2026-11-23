@@ -64,6 +64,28 @@ def diferencias(archivos):
                      for nombre, texto in archivos.items())
 
 
+def _es_archivo_de_pruebas(ruta):
+    return ruta.name.startswith("test_") and ruta.suffix == ".py"
+
+
+def _declara_pruebas(texto):
+    """Comprueba estructura mínima para discovery de unittest, sin ejecutar el código."""
+    arbol = ast.parse(texto)
+    for clase in arbol.body:
+        if not isinstance(clase, ast.ClassDef):
+            continue
+        es_caso = any(ast.unparse(base).endswith("TestCase") for base in clase.bases)
+        if not es_caso:
+            continue
+        for metodo in clase.body:
+            if isinstance(metodo, ast.FunctionDef) and metodo.name.startswith("test"):
+                if any(isinstance(nodo, ast.Assert) or (
+                        isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Attribute)
+                        and nodo.func.attr.startswith("assert")) for nodo in ast.walk(metodo)):
+                    return True
+    return False
+
+
 def generar_por_archivos(objetivo, proponer):
     """Compone archivos planificados explícitamente, con una inferencia acotada por archivo."""
     plan = re.search(r"\barchivos planificados:\s*(.+)$", objetivo, re.I | re.S)
@@ -81,9 +103,12 @@ def generar_por_archivos(objetivo, proponer):
 
     resultado = {}
     limite = monotonic() + 30
-    for ruta in rutas:
+    for ruta in sorted(rutas, key=_es_archivo_de_pruebas):
         vecinos = ", ".join(vecino.stem for vecino in rutas if vecino != ruta)
         final = f" Devuelve solo {ruta.name}. Otros módulos del plan: {vecinos}."
+        es_prueba = _es_archivo_de_pruebas(ruta)
+        if es_prueba:
+            final += " Importa el código real y escribe unittest.TestCase con método test y aserciones."
         if len(final) >= 350:
             raise ValueError("Acorta los nombres del plan.")
         correccion = ""
@@ -98,13 +123,18 @@ def generar_por_archivos(objetivo, proponer):
             if set(modulo) != {ruta.name}:
                 raise ValueError("El motor devolvió archivos que no corresponden al módulo solicitado.")
             faltan = nombres_sin_definir(modulo[ruta.name], ruta.name) if ruta.suffix == ".py" else []
-            if not faltan:
+            if faltan:
+                detalle = "nombres de módulo sin definir: " + ", ".join(faltan)
+                correccion = " Declara o importa antes de usar: " + ", ".join(faltan)[:100] + "."
+            elif es_prueba and not _declara_pruebas(modulo[ruta.name]):
+                detalle = "no contiene una prueba unittest con aserciones"
+                correccion = " Escribe una clase unittest.TestCase con test_ y self.assertEqual."
+            else:
                 break
             if intento == 1:
-                raise ValueError(f"{ruta}: nombres de módulo sin definir: {', '.join(faltan)}.")
-            correccion = " Declara o importa antes de usar: " + ", ".join(faltan)[:100] + "."
+                raise ValueError(f"{ruta}: {detalle}.")
         resultado[ruta.as_posix()] = modulo[ruta.name]
-    return resultado
+    return {ruta.as_posix(): resultado[ruta.as_posix()] for ruta in rutas}
 
 
 def nombres_sin_definir(texto, nombre):

@@ -886,3 +886,15 @@ locales incompletas en Studio. La
 [auditoría comparativa](docs/AUDITORIA_FINAL_1_0.md#ciclo-de-corrección-posterior-a-8edfcb6)
 recoge métricas de conversación, pruebas funcionales de Studio y límites de
 ejecución en este entorno.
+
+### Instalar y conversar sin internet
+
+Si ya tienes las dependencias instaladas, ejecuta `./instalar --sin-red`.
+Para preparar un entorno limpio, suministra las ruedas para tu versión de
+Python y arquitectura con `./instalar --sin-red --ruedas=/ruta/a/ruedas`.
+Este modo omite descargas y conserva los modelos y componentes locales.
+CEREBRO incluye un catálogo factual en español que puede consultar incluso
+sin un modelo generativo. Con un motor local ya instalado, la conversación
+generativa también puede funcionar desconectada. Consulta la
+[auditoría](docs/AUDITORIA_FINAL_1_0.md#misi%C3%B3n-final-posterior-a-8cf5b0a)
+para reproducir las pruebas y conocer el estado de Studio y el aislamiento.

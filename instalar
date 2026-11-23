@@ -28,7 +28,30 @@ preparar_sistema() {
     esac
 }
 
-preparar_sistema
+sin_red=0
+ruedas=
+descargar_modelo=0
+for argumento do
+    case "$argumento" in
+        --sin-red) sin_red=1 ;;
+        --descargar-modelo-ligero) descargar_modelo=1 ;;
+        --ruedas=*) ruedas=${argumento#--ruedas=} ;;
+        --ruedas)
+            printf '%s\n' 'Usa --ruedas=/ruta/a/las/ruedas junto con --sin-red.' >&2
+            exit 2 ;;
+    esac
+done
+if [ "$sin_red" -eq 1 ] && [ "$descargar_modelo" -eq 1 ]; then
+    printf '%s\n' '--descargar-modelo-ligero requiere conexión.' >&2
+    exit 2
+fi
+if [ "$sin_red" -eq 0 ]; then
+    if [ -n "$ruedas" ]; then
+        printf '%s\n' '--ruedas requiere --sin-red.' >&2
+        exit 2
+    fi
+    preparar_sistema
+fi
 python=python3
 # En una instalación nueva, el Python del sistema suele incluir el Tk de la distribución.
 if [ ! -e .venv ] && ! python3 -c 'import tkinter' >/dev/null 2>&1 &&
@@ -36,5 +59,13 @@ if [ ! -e .venv ] && ! python3 -c 'import tkinter' >/dev/null 2>&1 &&
     /usr/bin/python3 -c 'import sys, tkinter; assert sys.version_info >= (3, 10)' >/dev/null 2>&1; then
     python=/usr/bin/python3
 fi
-"$python" cerebro.py instalar
+if [ "$sin_red" -eq 1 ]; then
+    if [ -n "$ruedas" ]; then
+        "$python" cerebro.py instalar --sin-red --ruedas "$ruedas"
+    else
+        "$python" cerebro.py instalar --sin-red
+    fi
+else
+    "$python" cerebro.py instalar
+fi
 exec .venv/bin/python -m universe.instalar_escritorio "$@"

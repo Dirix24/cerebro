@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+from tempfile import TemporaryDirectory
 from threading import Lock, Timer
 from time import monotonic, sleep
 
@@ -61,6 +62,18 @@ def diagnostico(ruta):
             "ejecucion_prevista": "CPU; velocidad sin medir", "recomendacion": recomendacion}
 
 
+class _HTTPUnix(HTTPConnection):
+    def __init__(self, ruta, timeout):
+        super().__init__("localhost", timeout=timeout)
+        self.ruta = ruta
+
+    def connect(self):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as local:
+            local.settimeout(self.timeout)
+            local.connect(str(self.ruta))
+            self.sock = local.dup()
+
+
 class ProfesorLocal:
     def __init__(self, puerto=None, *, ollama=None):
         if puerto is not None and (type(puerto) is not int or not 1024 <= puerto <= 65535):
@@ -83,7 +96,7 @@ class ProfesorLocal:
         motor = os.environ.get("CEREBRO_PROFESOR_MOTOR")
         modelo = os.environ.get("CEREBRO_PROFESOR_MODELO")
         if motor and modelo:
-            return ProfesorBajoDemanda(motor, modelo)
+            return ProfesorBajoDemanda(motor, modelo, usar_socket_unix=os.environ.get("CEREBRO_LLAMA_UNIX") == "1")
         import config
         from core.configuracion_modelo_local import leer
 
@@ -219,6 +232,9 @@ class ProfesorLocal:
     def _consulta_terminada(self):
         pass
 
+    def _conexion(self, puerto, timeout):
+        return HTTPConnection("127.0.0.1", puerto, timeout=timeout)
+
     def _consultar(self, instruccion, mensaje_usuario, *, contexto=(), esquema=None, max_tokens=96, temperatura=None, imagen=None):
         if not self.configurado:
             raise RuntimeError("El profesor local no está configurado.")
@@ -227,7 +243,7 @@ class ProfesorLocal:
         conexion = None
         try:
             puerto = self._asegurar_servidor()
-            conexion = HTTPConnection("127.0.0.1", puerto, timeout=40)
+            conexion = self._conexion(puerto, timeout=40)
             mensajes = [
                 {"role": "system", "content": instruccion + " Responde solo con texto."},
                 *[{"role": rol, "content": contenido[:240]} for par in contexto[-6:]
@@ -278,10 +294,12 @@ class ProfesorLocal:
 
 class ProfesorBajoDemanda(ProfesorLocal):
     """Motor ya instalado, con un único proceso local que se cierra al quedar ocioso."""
-    def __init__(self, motor, modelo):
+    def __init__(self, motor, modelo, *, usar_socket_unix=False):
         super().__init__()
         self.motor = Path(motor).expanduser().resolve()
         self.modelo = Path(modelo).expanduser().resolve()
+        self.usar_socket_unix = usar_socket_unix
+        self.directorio_socket = None
         self.proceso = None
         self.temporizador = None
         self.ultimo = None
@@ -291,22 +309,37 @@ class ProfesorBajoDemanda(ProfesorLocal):
     def configurado(self):
         return self.motor.is_file() and os.access(self.motor, os.X_OK) and self.modelo.is_file()
 
+    def _conexion(self, puerto, timeout):
+        if self.directorio_socket is not None:
+            return _HTTPUnix(Path(self.directorio_socket.name) / "llama.sock", timeout)
+        return super()._conexion(puerto, timeout)
+
     def _asegurar_servidor(self):
         if self.temporizador:
             self.temporizador.cancel()
         if self.proceso is not None and self.proceso.poll() is None:
             return self.puerto
-        with socket.socket() as local:
-            local.bind(("127.0.0.1", 0))
-            self.puerto = local.getsockname()[1]
-        self.proceso = subprocess.Popen(
-            [str(self.motor), "-m", str(self.modelo), "--host", "127.0.0.1", "--port", str(self.puerto),
-             "-c", "2048", "-t", "2", "-ngl", "0", "--parallel", "1", "--no-webui"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
+        self._detener()
+        if self.usar_socket_unix:
+            self.directorio_socket = TemporaryDirectory(prefix="cerebro-llama-")
+            enlace = ["--host", str(Path(self.directorio_socket.name) / "llama.sock")]
+        else:
+            with socket.socket() as local:
+                local.bind(("127.0.0.1", 0))
+                self.puerto = local.getsockname()[1]
+            enlace = ["--host", "127.0.0.1", "--port", str(self.puerto)]
+        try:
+            self.proceso = subprocess.Popen(
+                [str(self.motor), "-m", str(self.modelo), *enlace,
+                 "-c", "2048", "-t", "2", "-ngl", "0", "--parallel", "1", "--no-webui"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            self._detener()
+            raise
         limite = monotonic() + 7
         while monotonic() < limite and self.proceso.poll() is None:
-            conexion = HTTPConnection("127.0.0.1", self.puerto, timeout=.5)
+            conexion = self._conexion(self.puerto, timeout=.5)
             try:
                 conexion.request("GET", "/health")
                 with conexion.getresponse() as respuesta:
@@ -344,6 +377,9 @@ class ProfesorBajoDemanda(ProfesorLocal):
             except subprocess.TimeoutExpired:
                 proceso.kill()
                 proceso.wait(timeout=2)
+        if self.directorio_socket is not None:
+            self.directorio_socket.cleanup()
+            self.directorio_socket = None
 
     def cerrar(self):
         with self.ocupado:

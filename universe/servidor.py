@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import sqlite3
 from threading import Thread
 from urllib.parse import parse_qs, urlsplit
@@ -19,7 +20,8 @@ ESTATICOS = {"/cerebro-logo.png": ("cerebro-logo.png", "image/png"), "/": ("inde
 
 
 def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=False, abrir_estudio=None,
-                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None, abrir_tactil=None, abrir_url=None):
+                   abrir_terminal=None, mostrar_acompanante=None, abrir_destino=None, abrir_universe=None, abrir_tactil=None, abrir_url=None,
+                   ruta_unix=None):
     terminal = None
 
     class Handler(BaseHTTPRequestHandler):
@@ -231,7 +233,20 @@ def crear_servidor(puerto, nucleo, clave, clave_robot="", *, permitir_cierre=Fal
                     }
                 return acciones[ruta]()
 
-    return ThreadingHTTPServer(("127.0.0.1", puerto), Handler)
+    if ruta_unix is None:
+        return ThreadingHTTPServer(("127.0.0.1", puerto), Handler)
+
+    class ServidorUnix(ThreadingHTTPServer):
+        address_family = socket.AF_UNIX
+
+        def server_bind(self):
+            # TCPServer no presupone una dirección IP ni un número de puerto.
+            from socketserver import TCPServer
+
+            TCPServer.server_bind(self)
+            self.server_name, self.server_port = "localhost", 0
+
+    return ServidorUnix(os.fspath(ruta_unix), Handler)
 
 
 def main():

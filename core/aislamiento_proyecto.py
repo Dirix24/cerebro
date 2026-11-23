@@ -124,6 +124,28 @@ def comando_aislado(copia, *, sonda=False):
     ]
 
 
+def limites_agregados(cgroup=Path("/proc/self/cgroup"), montaje=Path("/sys/fs/cgroup")):
+    """Verifica la cuota efectiva del cgroup v2 que heredan Bubblewrap y sus hijos."""
+    try:
+        relativo = next(linea[3:].strip() for linea in cgroup.read_text().splitlines()
+                        if linea.startswith("0::/"))
+        ruta = (montaje / relativo.lstrip("/")).resolve()
+        if not ruta.is_relative_to(montaje.resolve()):
+            raise ValueError("Ruta de cgroup v2 fuera del montaje.")
+        limites = {"memory.max": 768 * _MIB, "memory.swap.max": 0, "pids.max": 192}
+        ausentes = []
+        for nombre, maximo in limites.items():
+            valor = (ruta / nombre).read_text().strip()
+            if not valor.isdecimal() or int(valor) > maximo:
+                ausentes.append(nombre)
+        cuota, periodo = (ruta / "cpu.max").read_text().split()
+        if not cuota.isdecimal() or not periodo.isdecimal() or not 0 < int(cuota) <= int(periodo):
+            ausentes.append("cpu.max")
+        return ausentes
+    except (OSError, ValueError, StopIteration):
+        return ["cgroup v2 no verificable"]
+
+
 def diagnosticar():
     """Prueba el perfil real con Python de confianza y una carpeta vacía."""
     try:
@@ -134,7 +156,11 @@ def diagnosticar():
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
         return False, f"Aislamiento no disponible. No se ejecutaron pruebas. {error}"
     if resultado.returncode == 0 and resultado.stdout.strip() == "CEREBRO_AISLADO":
-        return True, "Perfil Bubblewrap, red, montaje y límites por proceso comprobados."
+        if faltan := limites_agregados():
+            return False, ("Bubblewrap inició, pero faltan límites agregados. No se ejecutaron pruebas. "
+                           + ", ".join(faltan)
+                           + ". Inicia Cerebro en un ámbito cgroup v2 limitado o usa Docker rootless verificado.")
+        return True, "Perfil Bubblewrap, red, montaje y límites por proceso y agregados comprobados."
     detalle = resultado.stdout.strip()[:500]
     if "uid map" in detalle and "Read-only file system" in detalle:
         motivo = "El entorno monta el mapa de usuarios como solo lectura."

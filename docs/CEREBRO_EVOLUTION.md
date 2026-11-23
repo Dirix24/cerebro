@@ -160,3 +160,11 @@ done
 La calidad conversacional general, la prueba de proyectos con el
 aislamiento habilitado y la validación del equipo de destino siguen
 abiertas. Esta entrega no etiqueta una versión estable.
+
+### Supervisión de competencias después de 8cf5b0a
+
+El [ciclo de aceptación](AUDITORIA_FINAL_1_0.md#misi%C3%B3n-final-posterior-a-8cf5b0a)
+compara el clasificador de intenciones contra el control y el validador
+independiente con tres semillas. El control y el candidato obtuvieron
+14/16, frente a los 16/16 del validador. Se mantuvieron los pesos activos. El
+catálogo de referencias locales pertenece a recuperación factual.

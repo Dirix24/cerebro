@@ -114,6 +114,8 @@ def main(argv=None):
     ap.add_argument("--motor", choices=("original", "clasico", "avanzado"), default="original")
     ap.add_argument("--sin-instalar", action="store_true",
                     help="No descargar dependencias; útil para entornos sin Internet")
+    ap.add_argument("--sin-red", action="store_true", help="Instala únicamente con dependencias locales")
+    ap.add_argument("--ruedas", help="Carpeta de ruedas Python para instalar sin red")
     ap.add_argument("--avanzado", action="store_true", help="Incluir PyTorch al instalar (descarga grande)")
     ap.add_argument("--confirmar", action="store_true", help="Confirmar desinstalación de entornos")
     ap.add_argument("--borrar-datos", action="store_true", help="Solicitar también borrar datos locales")
@@ -138,7 +140,7 @@ def main(argv=None):
     if args.accion == "instalar":
         from core.instalacion import instalar
         try:
-            return instalar(RAIZ, avanzado=args.avanzado)
+            return instalar(RAIZ, avanzado=args.avanzado, sin_red=args.sin_red, ruedas=args.ruedas)
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             print(f"No se pudo instalar Cerebro: {exc}", file=sys.stderr)
             return 1

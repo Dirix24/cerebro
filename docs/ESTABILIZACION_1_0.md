@@ -146,3 +146,20 @@ sigue pendiente.
 aislamiento operativo con límites efectivos y el comportamiento físico
 en el ASUS siguen abiertos. OAuth y la comparación de modelos
 adicionales quedan pendientes.
+
+### Aceptación con IP bloqueada y cgroups
+
+La [auditoría de la misión final](AUDITORIA_FINAL_1_0.md#misi%C3%B3n-final-posterior-a-8cf5b0a)
+incluye reproducción del servicio con sockets Unix y bloqueo IPv4/IPv6
+heredado. Para probar el aislamiento Bubblewrap en un Linux que admita
+namespaces y cgroup v2, inicia el proceso de prueba en un ámbito de
+usuario delegado. Por ejemplo:
+
+```sh
+systemd-run --user --scope -p CPUQuota=100% -p MemoryMax=768M \
+  -p MemorySwapMax=0 -p TasksMax=192 \
+  .venv/bin/python -m pytest -q tests/test_aislamiento_proyecto.py
+```
+
+La prueba física del perfil falta en el entorno actual. Docker rootless
+sigue siendo una alternativa solo si su sonda confirma controles efectivos.

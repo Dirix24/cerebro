@@ -72,19 +72,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--motor", required=True)
     parser.add_argument("--modelo", required=True)
-    parser.add_argument("--ampliado", action="store_true")
-    parser.add_argument("--ciclo-correccion", action="store_true", help="Evalúa las 15 preguntas adicionales.")
+    bancos = parser.add_mutually_exclusive_group()
+    bancos.add_argument("--ampliado", action="store_true")
+    bancos.add_argument("--ciclo-correccion", action="store_true", help="Evalúa las 15 preguntas adicionales.")
+    bancos.add_argument("--mision-reservada", action="store_true", help="Evalúa la cohorte de 22 casos.")
+    parser.add_argument("--socket-unix", action="store_true", help="Usa un llama.cpp compatible con sockets Unix.")
     parser.add_argument("--investigacion-publica", action="store_true",
                         help="Autoriza consultas públicas automáticas únicamente con los casos del banco.")
     parser.add_argument("--salida", type=Path, required=True)
     args = parser.parse_args()
-    if args.ampliado and args.ciclo_correccion:
-        parser.error("Evalúa ambos bancos en ejecuciones separadas.")
     with TemporaryDirectory(prefix="cerebro-banco-es-") as temporal:
         config.raiz_datos = lambda: temporal
         config.CEREBRO_HOME = temporal
         config.MEMORY_FILE = str(Path(temporal) / "memoria.json")
-        motor = ProfesorBajoDemanda(args.motor, args.modelo)
+        motor = ProfesorBajoDemanda(args.motor, args.modelo, usar_socket_unix=args.socket_unix)
         nucleo = Nucleo("local", profesor=motor, internet=args.investigacion_publica,
                         investigar_auto=args.investigacion_publica)
         try:
@@ -94,6 +95,9 @@ def main():
                 banco += tuple(casos())
             if args.ciclo_correccion:
                 from benchmarks.ciclo_correccion import CASOS
+                banco = CASOS
+            if args.mision_reservada:
+                from benchmarks.mision_reservada import CASOS
                 banco = CASOS
             informe = evaluar(nucleo, banco)
         finally:

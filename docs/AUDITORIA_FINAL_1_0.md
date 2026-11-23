@@ -182,3 +182,128 @@ objetivo supervisado por competencia con más pares verificados y varias semilla
 Suite completa con loopback habilitado: **524 aprobadas, 6 omitidas y 3 subpruebas**.
 Las omisiones corresponden a Bubblewrap y PyTorch opcional. El PR continúa
 como candidato a revisión.
+
+## Misión final posterior a `8cf5b0a`
+
+### Conversación y recuperación local
+
+El modelo pequeño rellenaba algunos huecos con afirmaciones falsas y el
+catálogo local tenía poca cobertura. Por ejemplo, la base situó la batalla
+de Lepanto en 1578. Las preguntas con «qué fue» pasan ahora por fuentes
+factuales. Sin red se abstienen cuando falta evidencia y con red la misma
+consulta devolvió una fuente con el año 1571.
+
+Se incluyen 41 extractos en español de seis áreas. Cada ficha conserva el
+artículo y su revisión de Wikipedia. Los extractos se distribuyen bajo
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), con
+atribución a los colaboradores de cada artículo mediante su enlace de
+revisión. Selección y recorte son las adaptaciones realizadas. El mismo
+buscador admite alias, plurales y una errata de edición si hay una sola
+coincidencia. No sustituye una pregunta específica por otra de tema parecido.
+Al pedir un resumen de una ficha, conserva una oración de la fuente. Las
+fichas no se usan para entrenar ni se consultan por red al arrancar.
+
+| Evaluación con Qwen2.5 0.5B | Útiles | Cobertura | Precisión de las emitidas | Abstenciones esperadas / adicionales | Mediana / P95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Base `8cf5b0a`, 101 casos, investigación desactivada | 34/101 | 34/101 | 34/34 | 11 / 56 | 0,4 / 1,3 ms |
+| Este ciclo, 101 casos, IP bloqueada | 37/101 | 39/101 | 37/39 | 11 / 51 | 0,4 / 0,8 ms |
+| Base `8cf5b0a`, 22 casos, investigación desactivada | 2/22 | 3/22 | 2/3 | 2 / 17 | 0,5 / 0,8 ms |
+| Este ciclo, 22 casos, IP bloqueada | 12/22 | 13/22 | 12/13 | 2 / 7 | 0,4 / 0,9 ms |
+| Este ciclo, 22 casos, investigación autorizada | 14/22 | 16/22 | 14/16 | 2 / 4 | 0,9 / 5942,8 ms |
+
+La base usó TCP local y este ciclo usó Unix para la prueba con IP bloqueada.
+Los tiempos incluyen las rutas de abstención y cálculo. La cohorte nueva
+incluye reformulaciones del catálogo y temas fuera de él, además de
+seguimiento, razonamiento y dos referencias ficticias. Ninguna pregunta
+se usó para entrenar. El aumento mide recuperación en un catálogo acotado.
+Dos extractos del banco original incumplen la rúbrica de palabras. El
+fallo grave identificado de Lepanto desapareció en esta comparación.
+Quedan pendientes una evaluación semántica independiente, mayor cobertura
+fuera del catálogo y la comparación con un modelo de mayor capacidad.
+No se descargó un modelo nuevo.
+
+### Aceptación del servicio y del instalador
+
+- **Offline, corregido y probado.** El kernel bloqueó la creación de sockets
+  IPv4 e IPv6 de flujo y datagrama, incluso en procesos hijos. El servidor
+  HTTP del núcleo y llama.cpp se comunicaron mediante sockets Unix privados.
+  Pasaron autenticación, conversación generativa, referencias, cálculo,
+  memoria, historial, acceso y edición en Studio, lectura de nodos de Universe,
+  rechazo de acceso no autorizado y nueva sesión del núcleo con datos
+  persistentes. CAZEL y DARAS ejecutaron prácticas locales y se validaron
+  con criterios independientes. El intento explícito de investigación por
+  red recibió 403. La sonda confirma el bloqueo del kernel. El host impide
+  usar `ptrace`, de modo que no se obtuvo el recuento de llamadas IP denegadas.
+- **Online, parcial.** El mismo servicio recurrió a Wikipedia cuando se
+  autorizó la investigación. DARAS ejecutó una consulta de historia de
+  la imprenta desde una copia temporal del adaptador y devolvió siete
+  referencias de Wikipedia y Wikidata. CEREBRO muestra extractos como
+  citas y señala posibles discrepancias cuando dos dominios dan cantidades
+  distintas en frases casi idénticas. La discrepancia se verificó con
+  fuentes sintéticas identificadas. Falta confirmar una contradicción
+  externa real y verificar pérdida y recuperación de conexión a mitad
+  de investigación.
+- **Studio, parcial.** Qwen generó dos archivos de la calculadora y
+  replicó la función de producción en el archivo de pruebas. Studio
+  ahora separa el papel de cada archivo, reintenta una vez y exige que
+  los módulos `test_*.py` del plan declaren un caso unittest con aserciones.
+  Tras la corrección, el mismo modelo no satisfizo el contrato en online
+  ni offline. Se rechazó sin publicar. Los casos funcionales de la suite
+  con código de confianza conservan la comprobación de comportamiento.
+  Falta ejecutar proyectos generados con un perfil efectivo y validar
+  las cinco aplicaciones previstas.
+- **Aislamiento, bloqueado por entorno.** Bubblewrap sigue fallando en el
+  mapa de usuarios de solo lectura. Docker rootless carece de daemon listo.
+  Bubblewrap exige ahora CPU agregada de hasta un núcleo, memoria de hasta
+  768 MiB, intercambio cero y hasta 192 tareas en el cgroup v2 efectivo.
+  Las comprobaciones de aceptación de límites se cubren con fixtures.
+  El bloqueo de pruebas de proyectos generados siguió activo.
+- **Instalador, corregido y probado.** En una copia limpia y con IP
+  bloqueada, la falta de ruedas produjo un error antes del registro del
+  lanzador. Se recuperó instalando desde una carpeta local y la
+  reinstalación posterior reutilizó las dependencias. La modalidad
+  `--sin-red` omite APT, el índice de pip y la preparación por descarga
+  de modelos y gestos. Se conservan componentes ya instalados. Quedan
+  pendientes instalación y actualización físicas en MX Linux.
+- **Recursos medidos.** Las dos suites del servicio usaron el mismo Qwen
+  en CPU. Offline consumió 24,62 s de pared, 0,36 s CPU Python y 20,02 s
+  CPU en hijos. Sus RSS máximos respectivos fueron 36,6 y 621,4 MiB.
+  Online fueron 30,70 s de pared, 0,37 y 25,34 s CPU, con 40,5 y 624,0 MiB.
+  Son máximos por grupo medidos con `getrusage`, no memoria simultánea de
+  todos los procesos ni medidas del ASUS.
+- **Hardware y escritorio, pendiente.** Universe, permisos e historial
+  se comprobaron por API y suite. Acompañante y gestos conservan sus
+  pruebas automatizadas. Sin cámara física ni acceso al ASUS para
+  controlar ventanas, medir batería o comprobar XFCE/X11.
+
+### Aprendizaje y decisión de publicación
+
+Se probó un objetivo supervisado acotado, clasificación de hora local,
+fecha local y abstención, en lugar de volver a afinar el generador. El
+Qwen real no produjo ejemplos aceptables para ambas clases bajo el
+validador. La comparación con ocho ejemplos contrastivos verificados,
+semillas 7, 29 y 103 y control sin esos ejemplos quedó en **14/16 en ambos
+grupos en las tres semillas**, frente a **16/16** del validador solo.
+No se promocionaron pesos. El generador propio sigue en 0/26 y 0/6 según
+la comprobación anterior. La comprobación supervisada se reproduce con
+`python -m benchmarks.diagnostico_neuronal --supervisado`.
+
+Para ejecutar la aceptación offline, usa un llama.cpp con sockets Unix y
+`libseccomp.so.2` en Linux. El subcomando online emplea fuentes públicas
+reales. `--adaptadores-configurados` requiere los adaptadores locales
+autorizados.
+
+```sh
+python -m benchmarks.red_bloqueada python -m benchmarks.aceptacion_local \
+  --modo offline --motor /ruta/llama-server --modelo /ruta/modelo.gguf
+python -m benchmarks.aceptacion_local \
+  --modo online --motor /ruta/llama-server --modelo /ruta/modelo.gguf
+```
+
+La suite completa terminó con **529 aprobadas, 6 omitidas y 3 subpruebas**.
+Las omisiones corresponden a Bubblewrap y PyTorch opcional. Se intentó
+repetir la prueba nativa de Studio y la máquina carece de Xvfb.
+
+**Estado: candidato a revisión.** El aislamiento efectivo, la calidad de
+generación modular y la validación física siguen bloqueando la declaración
+de estabilidad.

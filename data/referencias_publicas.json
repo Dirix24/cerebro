@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "licencia": "CC BY-SA 4.0",
+  "fichas": [
+    {
+      "tema": "Bacteria",
+      "area": "ciencia",
+      "texto": "Las bacterias son microorganismos procariotas que presentan un tamaño de unos pocos micrómetros (por lo general entre 0,5 y 5 μm de longitud)​ y diversas formas, incluyendo esferas (cocos), barras (bacilos), filamentos curvados (vibrios) y helicoidales (espirilos y espiroquetas).​ Las bacterias son células procariotas, por lo que, a diferencia de las células eucariotas (de animales, plantas, hongos, etc.), no tienen el núcleo definido ni presentan, en general, orgánulos membranosos internos. Generalmente poseen una pared celular y esta se compone de peptidoglicano (también llamado mureína). Muchas bacterias disponen de flagelos o de otros sistemas de locomoción para desplazarse.",
+      "fuente": "https://es.wikipedia.org/wiki/Bacteria",
+      "revision": 175691364
+    },
+    {
+      "tema": "Presión atmosférica",
+      "area": "ciencia",
+      "texto": "La presión atmosférica es la fuerza por unidad de superficie que ejerce el aire que forma la atmósfera sobre la superficie terrestre.​ El valor de la presión atmosférica sobre el nivel del mar es de 1013,25 hPa.​ La presión atmosférica en un punto coincide densamente con el peso de una columna estática de aire de sección recta unitaria que se extiende desde ese punto. Como la densidad del aire disminuye conforme aumenta la altura, no se puede calcular ese peso a menos que pudiera expresarse la variación de la densidad del aire en función de la altitud o de la presión, por lo que no resulta fácil hacer un cálculo exacto de la presión atmosférica sobre un lugar de la superficie terrestre. Además tanto la temperatura como la presión del aire varían continuamente, en una escala temporal como espacial, dificultando el cálculo.",
+      "fuente": "https://es.wikipedia.org/wiki/Presi%C3%B3n_atmosf%C3%A9rica",
+      "revision": 173425633
+    },
+    {
+      "tema": "Ósmosis",
+      "area": "ciencia",
+      "texto": "La ósmosis u osmosis es un fenómeno físico relacionado con el movimiento de un disolvente a través de una membrana semipermeable. Tal comportamiento supone una difusión simple a través de la membrana, sin gasto de energía. La ósmosis del agua es un fenómeno biológico importante para el metabolismo celular de los seres vivos.",
+      "fuente": "https://es.wikipedia.org/wiki/%C3%93smosis",
+      "revision": 174744310
+    },
+    {
+      "tema": "Placa tectónica",
+      "area": "ciencia",
+      "texto": "Una placa tectónica o placa litosférica es un fragmento de litosfera relativamente rígido que se mueve sobre la astenosfera, una zona relativamente plástica. Toda la litosfera está dividida en placas tectónicas, quince de ellas de gran tamaño y más de cuarenta microplacas. En los bordes de estas placas se concentra actividad sísmica, volcánica y tectónica.",
+      "fuente": "https://es.wikipedia.org/wiki/Placa_tect%C3%B3nica",
+      "revision": 176355467
+    },
+    {
+      "tema": "Marea",
+      "area": "ciencia",
+      "texto": "La marea es el cambio periódico del nivel del mar producido principalmente por las fuerzas de atracción gravitatoria que ejercen el Sol y la Luna sobre la Tierra.​ Aunque esta atracción es ejercida sobre todo el planeta, tanto en su parte sólida como líquida y gaseosa, este artículo se refiere a la atracción de la Luna y el Sol, juntos o por separado, sobre las aguas de los mares y océanos (ver también marea del planeta Tierra). Otros fenómenos ocasionales, como los vientos, las lluvias, el desborde de ríos y los tsunamis, provocan variaciones locales o regionales del nivel del mar, también ocasionales, pero que no pueden ser calificados de mareas, porque no están causados por la fuerza gravitatoria ni tienen periodicidad.",
+      "fuente": "https://es.wikipedia.org/wiki/Marea",
+      "revision": 173675839
+    },
+    {
+      "tema": "Efecto invernadero",
+      "area": "ciencia",
+      "texto": "El efecto invernadero es un proceso en el que la radiación térmica emitida por la superficie planetaria es absorbida por los gases de efecto invernadero (GEI) atmosféricos y es irradiada en todas las direcciones. Dado que parte de esta radiación es devuelta hacia la superficie terrestre y la atmósfera inferior, ello resulta en un incremento de la temperatura superficial media respecto a lo que habría en ausencia de los GEI.​​ Una parte de la radiación solar que llega a la Tierra atraviesa la atmósfera, es reflejada y vuelve al espacio; otra llega al suelo y lo calienta. Este emite calor (radiación infrarroja) y calienta la atmósfera, ya que el calor es retenido por los gases de efecto invernadero.​ La radiación solar en frecuencias de la luz visible pasa en su mayor parte a través de la atmósfera para calentar la superficie planetaria, emitiendo posteriormente esta energía en frecuencias menores de radiación térmica infrarroja.",
+      "fuente": "https://es.wikipedia.org/wiki/Efecto_invernadero",
+      "revision": 175987381
+    },
+    {
+      "tema": "Ciclo hidrológico",
+      "area": "ciencia",
+      "texto": "El ciclo hidrológico o ciclo del agua es el proceso de circulación del agua entre los distintos compartimentos que forman la hidrósfera. Se trata de un ciclo biogeoquímico en el que hay una intervención mínima de reacciones químicas, porque el agua solo se traslada de unos lugares a otros, o cambia de estado físico.​ El agua de la Tierra se encuentra en su mayor parte en forma líquida, en océanos y mares, como agua subterránea, o formando lagos, ríos y arroyos en la superficie continental. La segunda fracción, por su importancia, es la del agua acumulada como hielo(sólido) sobre los casquetes glaciares antártico y groenlandés, con una participación pequeña de los glaciares de montaña de latitudes altas y medias, y de la banquisa.​ Por último, una fracción menor está presente en la atmósfera en estado gaseoso (como vapor) o en estado líquido, formando nubes.",
+      "fuente": "https://es.wikipedia.org/wiki/Ciclo_hidrol%C3%B3gico",
+      "revision": 176222138
+    },
+    {
+      "tema": "Ecosistema",
+      "area": "ciencia",
+      "texto": "Un ecosistema es un sistema biológico constituido por una comunidad de organismos vivos (biocenosis) y el medio físico donde se relacionan (biotopo).​ Se trata de una unidad compuesta de organismos interdependientes que comparten el mismo hábitat.​ Los ecosistemas suelen formar una serie de cadenas que muestran la interdependencia de los organismos dentro del sistema.​",
+      "fuente": "https://es.wikipedia.org/wiki/Ecosistema",
+      "revision": 175913341
+    },
+    {
+      "tema": "Imprenta",
+      "area": "historia",
+      "texto": "La imprenta es un método mecánico destinado a reproducir textos e imágenes sobre papel, vitela, tela u otro material. En su forma clásica, consiste en aplicar una tinta, generalmente oleosa, sobre unas piezas metálicas (tipos) para transferirla o grabarla por presión. Aunque comenzó como un método artesanal, su implantación a mediados del siglo XV trajo consigo una gigantesca revolución cultural.",
+      "fuente": "https://es.wikipedia.org/wiki/Imprenta",
+      "revision": 175792048
+    },
+    {
+      "tema": "Imperio romano",
+      "area": "historia",
+      "texto": "El Imperio romano​ fue el periodo de la civilización romana posterior a la República y caracterizado por una forma de gobierno autocrática. En su apogeo controló un territorio que abarcaba desde el océano Atlántico al oeste hasta las orillas del mar Caspio y Rojo al este, y desde el desierto del Sahara al sur hasta las orillas de los ríos Rin y Danubio y la frontera con Caledonia al norte. Debido a su vasta extensión y duración, las instituciones y la cultura romana tuvieron una influencia profunda y duradera en el desarrollo de la lengua, religión, arquitectura, literatura y leyes en el territorio que gobernaba.",
+      "fuente": "https://es.wikipedia.org/wiki/Imperio_romano",
+      "revision": 176226236
+    },
+    {
+      "tema": "Renacimiento",
+      "area": "historia",
+      "texto": "Renacimiento es el nombre dado en el siglo XIX a un amplio movimiento cultural que se produjo en Europa Occidental durante los siglos XV y XVI.​ Fue un periodo de transición entre la Edad Media y los inicios de la Edad Moderna. Sus principales exponentes se hallan en el campo de las artes, aunque también se produjo una renovación en las ciencias, tanto naturales como humanas. La ciudad de Florencia, en Italia, fue el lugar de nacimiento y desarrollo de este movimiento, que se extendió después por toda Europa.",
+      "fuente": "https://es.wikipedia.org/wiki/Renacimiento",
+      "revision": 175926316
+    },
+    {
+      "tema": "Revolución Industrial",
+      "area": "historia",
+      "texto": "La Revolución Industrial​ o Primera Revolución Industrial fue el proceso de transformación económica, social y tecnológica que se inició en la segunda mitad del XVIII con la invención y aplicación práctica de la máquina de vapor perfeccionada por James Watt en el Reino de Gran Bretaña y que se extendió décadas después a gran parte de Europa Occidental y la América Anglosajona, concluyendo entre 1820 y 1840. Durante este periodo se vivió el mayor conjunto de transformaciones económicas y tecnológicas de la historia de la humanidad desde el Neolítico,​ que vio el paso desde una economía basada fundamentalmente en la agricultura, el comercio a una economía de carácter urbano, industrializada y mecanizada.​ La industrialización modificó profundamente la organización de las ciudades. El crecimiento de las fábricas atrajo a una gran cantidad de trabajadores procedentes de zonas rurales, lo que provocó un rápido aumento de la población urbana.",
+      "fuente": "https://es.wikipedia.org/wiki/Revoluci%C3%B3n_Industrial",
+      "revision": 176363091
+    },
+    {
+      "tema": "Revolución francesa",
+      "area": "historia",
+      "texto": "La Revolución francesa​ (en francés: Révolution française) fue un conflicto social y político, con diversos periodos de violencia, que convulsionó la Francia del Antiguo Régimen, y a otros países por extensión de sus implicaciones. Se inició con la autoproclamación del Tercer Estado como Asamblea Nacional en 1789 y finalizó con el golpe de Estado de Napoleón Bonaparte en 1799, culminando un proceso de diez años. Si bien después de que la Primera República cayó tras el golpe de Estado de Napoleón, la organización política de Francia durante el siglo XIX osciló entre república, imperio y monarquía constitucional, la revolución marcó el final definitivo del feudalismo y del absolutismo en el país,​ y dio a luz a un nuevo régimen donde la burguesía, que empleaba en ocasiones a las masas populares, se convirtió en la fuerza política dominante.",
+      "fuente": "https://es.wikipedia.org/wiki/Revoluci%C3%B3n_francesa",
+      "revision": 174942520
+    },
+    {
+      "tema": "Ruta de la Seda",
+      "area": "historia",
+      "texto": "La Ruta de la Seda es el nombre con que es conocida desde el siglo XIX​ una extensa red de rutas comerciales terrestres y marítimas, abiertas por China desde al menos el siglo I a. C., que conectaban la mayor parte del continente asiático con las islas del Sudeste Asiático, con el Mediterráneo europeo y con la costa oriental africana. Sus diversas rutas comenzaban en la ciudad de Chang'an (actualmente Xi'an), por entonces capital de China, pasando entre otras por Karakórum (Mongolia), el Paso de Khunjerab (China/Pakistán), Susa (Persia), el Valle de Ferganá (Tayikistán), Samarcanda (Uzbekistán), Taxila (Pakistán), Antioquía (Turquía), Alejandría (Egipto), Kazán (Rusia) y Constantinopla (actualmente Estambul, Turquía).",
+      "fuente": "https://es.wikipedia.org/wiki/Ruta_de_la_Seda",
+      "revision": 176362716
+    },
+    {
+      "tema": "Semiconductor",
+      "area": "electrónica",
+      "texto": "Un semiconductor es un elemento que se comporta o bien como un conductor o bien como un aislante dependiendo de diversos factores, por ejemplo: el campo eléctrico o magnético, la presión, la radiación que le incide, o la temperatura del ambiente en el que se encuentre.​ Los elementos químicos semiconductores de la tabla periódica se indican en la tabla adjunta. El elemento semiconductor más usado es el silicio,​ seguido del germanio, aunque presentan un idéntico comportamiento las combinaciones de elementos de los grupos 12 y 13 con los de los grupos 16 y 15 respectivamente (galio-arsénico, fósforo-indio, arsénico-galio-aluminio, telurio-cadmio, selenio-cadmio y azufre-cadmio). Posteriormente se ha comenzado a emplear también el azufre.",
+      "fuente": "https://es.wikipedia.org/wiki/Semiconductor",
+      "revision": 176347311
+    },
+    {
+      "tema": "Circuito integrado",
+      "area": "electrónica",
+      "texto": "Un circuito integrado (CI), también conocido como chip o microchip, es una estructura de pequeñas dimensiones de material semiconductor, habitualmente silicio, de algunos milímetros cuadrados de área, sobre la que se fabrican circuitos electrónicos generalmente mediante fotolitografía y que está protegida dentro de un encapsulado plástico o de cerámica.​ El encapsulado posee conductores metálicos apropiados para hacer conexión entre el circuito integrado y un circuito impreso. Los CI se hicieron posibles gracias a descubrimientos experimentales que mostraban que artefactos semiconductores podían realizar las funciones de los tubos de vacío, así como a los avances científicos de la fabricación de semiconductores a mediados del siglo XX. La integración de grandes cantidades de pequeños transistores dentro de un pequeño espacio fue un gran avance en la elaboración manual de circuitos utilizando componentes electrónicos discretos. La capacidad de producción masiva de los circuitos integrados, así como la fiabilidad y acercamiento a la construcción de un diagrama a bloques en circuitos, aseguraba la rápida adopción de los circuitos integrados estandarizados en lugar de diseños utilizando transistores discretos.",
+      "fuente": "https://es.wikipedia.org/wiki/Circuito_integrado",
+      "revision": 175416707
+    },
+    {
+      "tema": "Transistor",
+      "area": "electrónica",
+      "texto": "Un transistor es un componente semiconductor, generalmente con al menos tres terminales que se conectan a un circuito electrónico, que restringe o permite el flujo de corriente eléctrica entre dos contactos según la presencia o ausencia de corriente en un tercer contacto.​ El término transistor proviene del acrónimo transfer resistor (en español resistor de transferencia). Se pueden usar como amplificadores de corriente, porque una pequeña corriente recibida a través de su terminal de control permiten la circulación de una intensidad muy grande (proporcional a aquella hasta un máximo) entre sus dos terminales de salida.​ También se pueden usar como conmutador de corriente, ya que si su terminal de control no recibe ninguna intensidad de corriente, por entre los dos terminales de salida no fluye ninguna corriente tampoco (circuito abierto).​. También se puede configurar como oscilador o rectificador.",
+      "fuente": "https://es.wikipedia.org/wiki/Transistor",
+      "revision": 176270054
+    },
+    {
+      "tema": "Condensador eléctrico",
+      "area": "electrónica",
+      "texto": "Un condensador eléctrico (también conocido frecuentemente en Hispanoamérica con el anglicismo adaptado a la fonética del español capacitor) es un dispositivo electrónico pasivo, formado por un par de superficies conductoras en situación de influencia total (esto es, que todas las líneas de campo eléctrico que parten de una van a parar a la otra) separados entre sí por un medio dieléctrico o por vacío, capaz de almacenar carga y por tanto energía eléctrica.​​​​​ Las placas, sometidas a una diferencia de potencial, adquieren una determinada carga eléctrica, positiva en una de ellas y negativa en la otra, siendo nula la variación de carga total. Introducido en un circuito se comporta en la práctica como un elemento «capaz» de almacenar la energía eléctrica que recibe durante el período de carga, la misma energía que cede después durante el período de descarga. Además, es capaz de almacenar carga eléctrica luego de cargado y desconectado del circuito, por lo que es apropiado ser cuidadoso al manipular uno, ya que podría haber quedado cargado desde su uso anterior, lo adecuado es conectar siempre sus extremos mediante un elemento conductor por unos segundos antes de manipular un condensador.",
+      "fuente": "https://es.wikipedia.org/wiki/Condensador_el%C3%A9ctrico",
+      "revision": 175471836
+    },
+    {
+      "tema": "Diodo",
+      "area": "electrónica",
+      "texto": "Un diodo es un componente electrónico de dos terminales que permite la circulación de la corriente eléctrica a través de él en un solo sentido,​ bloqueando el paso si la corriente circula en sentido contrario, no solo sirve para la circulación de corriente eléctrica sino que este la controla y resiste. Esto hace que el diodo tenga dos posibles posiciones: una a favor de la corriente (polarización directa) y otra en contra de la corriente (polarización inversa).​ Este término generalmente se usa para referirse al diodo semiconductor, el más común en la actualidad; consta de una pieza de cristal semiconductor conectada a dos terminales eléctricos. El diodo de vacío (que actualmente ya no se usa, excepto para tecnologías de alta potencia) es un tubo de vacío con dos electrodos: una lámina como ánodo, y un cátodo.",
+      "fuente": "https://es.wikipedia.org/wiki/Diodo",
+      "revision": 175521519
+    },
+    {
+      "tema": "Corriente alterna",
+      "area": "electrónica",
+      "texto": "Se denomina corriente alterna (CA o AC, por sus siglas en inglés de alternating current) a la corriente eléctrica en la que la magnitud y el sentido varían cíclicamente.​​ La forma de oscilación de la corriente alterna más comúnmente utilizada es la oscilación sinusoidal​ con la que se consigue una transmisión más eficiente de la energía, a tal punto que al hablar de corriente alterna se sobrentiende que se refiere a la corriente alterna sinusoidal. Sin embargo, en ciertas aplicaciones se utilizan otras formas de oscilación periódicas, tales como la triangular o la rectangular. Utilizada genéricamente, la corriente alterna se refiere a la forma en la cual la electricidad llega a los hogares y a las industrias.",
+      "fuente": "https://es.wikipedia.org/wiki/Corriente_alterna",
+      "revision": 174769420
+    },
+    {
+      "tema": "Resistor",
+      "area": "electrónica",
+      "texto": "Se denomina resistencia o resistor al componente electrónico diseñado para introducir una resistencia eléctrica determinada entre dos puntos de un circuito eléctrico. En otros casos, como en las planchas, calentadores, etc., se emplean resistencias para producir calor aprovechando el efecto Joule. Se trata de un material formado por carbón y otros elementos resistivos para disminuir la corriente que lo atraviesa, oponiéndose al paso de la corriente.",
+      "fuente": "https://es.wikipedia.org/wiki/Resistor",
+      "revision": 174080496
+    },
+    {
+      "tema": "Compresión de datos",
+      "area": "tecnología",
+      "texto": "En ciencias de la computación, la compresión de datos es la reducción del volumen de datos tratables para representar una determinada información empleando una menor cantidad de espacio.​ Al acto de compresión de datos se denomina «compresión», y al contrario «descompresión». El espacio que ocupa una información codificada (datos, señal digital, etc.) sin compresión es el producto entre la frecuencia de muestreo y la resolución. Por tanto, cuantos más bits se empleen mayor será el tamaño del archivo.",
+      "fuente": "https://es.wikipedia.org/wiki/Compresi%C3%B3n_de_datos",
+      "revision": 175450360
+    },
+    {
+      "tema": "Sistema operativo",
+      "area": "tecnología",
+      "texto": "Un sistema operativo (SO) es el conjunto de programas de un sistema informático que gestiona los recursos del hardware y provee servicios a los programas de aplicación de software. Estos programas se ejecutan en modo privilegiado respecto de los restantes.​ Uno de los propósitos del sistema operativo que gestiona el núcleo intermediario consiste en gestionar los recursos de localización y protección de acceso del hardware, hecho que alivia a los programadores de aplicaciones de tener que tratar con estos detalles. La mayoría de los aparatos electrónicos que utilizan microprocesadores para funcionar, llevan incorporado un sistema operativo (teléfonos móviles, reproductores de DVD, computadoras, enrutadores, etc.).",
+      "fuente": "https://es.wikipedia.org/wiki/Sistema_operativo",
+      "revision": 176251363
+    },
+    {
+      "tema": "Sistema de nombres de dominio",
+      "area": "tecnología",
+      "texto": "El sistema de nombres de dominio (Domain Name System o DNS, por sus siglas en inglés)​ es un sistema de nomenclatura jerárquico descentralizado para dispositivos conectados a redes IP como Internet o una red privada. Este sistema asocia información variada con nombres de dominio asignados a cada uno de los participantes. Su función más importante es la resolución de nombres, «traducir» nombres inteligibles para las personas en identificadores binarios asociados con los equipos conectados a la red con el propósito de poder localizar y direccionar estos equipos mundialmente.​ El servidor DNS utiliza una base de datos distribuida y jerárquica que almacena información asociada a nombres de dominio en redes como Internet.",
+      "fuente": "https://es.wikipedia.org/wiki/Sistema_de_nombres_de_dominio",
+      "revision": 175850762
+    },
+    {
+      "tema": "Máquina virtual",
+      "area": "tecnología",
+      "texto": "El concepto de máquina virtual puede definirse como equipos virtuales o equipos definidos por software dentro de servidores físicos, donde solo existen como código.​ Una máquina virtual (Virtual machine en inglés abreviado VM) es una réplica, en cuanto a comportamiento, de un equipo físico, como una PC, teléfono inteligente o un servidor, etc. Una máquina virtual cuenta con componentes como lo son CPU, memoria, e incluso puede conectarse a internet. Dichos componentes toman recursos de los componentes físicos de donde se está llevando a cabo la virtualización, como puede ser una PC, laptop, servidor remoto o un servidor en el centro de datos de un proveedor de nube.",
+      "fuente": "https://es.wikipedia.org/wiki/M%C3%A1quina_virtual",
+      "revision": 176068618
+    },
+    {
+      "tema": "Código QR",
+      "area": "tecnología",
+      "texto": "Un código QR (del inglés Quick Response code, \"código de respuesta rápida\"), es un método para almacenar información por medio de contrastes de color y bidimensional, similar a Datamatrix, PDF417 o Código Azteca. La matriz se lee con un lector o software habilitado para reconocerlo, y puede contener la dirección de aplicación en Internet, un mapa de localización, un correo electrónico, una página web, un perfil en una red social o incluso datos binarios. Inventado en 1994 por el ingeniero japonés Masahiro Hara, fue desarrollado ese mismo año por la compañía japonesa Denso Corporation, una subsidiaria de Toyota.",
+      "fuente": "https://es.wikipedia.org/wiki/C%C3%B3digo_QR",
+      "revision": 176118091
+    },
+    {
+      "tema": "Fibra óptica",
+      "area": "tecnología",
+      "texto": "La fibra óptica es una fibra flexible, transparente, hecha al embutir o extrudir vidrio (sílice) en un diámetro ligeramente más grueso que el de un cabello humano promedio.​ Son utilizadas comúnmente como un medio para transmitir luz entre dos puntas de una fibra y tienen un amplio uso en las comunicaciones por fibra óptica, donde permiten la transmisión en distancias y en un ancho de banda (velocidad de datos) más grandes que los cables eléctricos. Se utilizan fibras en vez de alambres de metal porque las señales viajan a través de ellas con menos pérdida; además, las fibras son inmunes a la interferencia electromagnética, un problema del cual los cables de metal sufren ampliamente.​ Las fibras también se usan para la iluminación e imaginería, y normalmente se envuelven en paquetes para introducir o sacar luz de espacios reducidos, como en el caso de un fibroscopio.​ Algunas fibras diseñadas de manera especial se usan también para una amplia variedad de aplicaciones diversas, algunas de ellas son los sensores de fibra óptica y los láseres de fibra.​ Típicamente, las fibras ópticas tienen un núcleo rodeado de un material de revestimiento transparente con un índice de refracción más bajo. La luz se mantiene en el núcleo debido al fenómeno de reflexión interna total que causa que la fibra actúe como una guía de ondas.​ Las fibras que permiten muchos caminos de propagación o modos",
+      "fuente": "https://es.wikipedia.org/wiki/Fibra_%C3%B3ptica",
+      "revision": 176381477
+    },
+    {
+      "tema": "Algoritmo",
+      "area": "programación",
+      "texto": "En matemáticas, lógica, ciencias de la computación y disciplinas relacionadas, un algoritmo es un conjunto finito y ordenado de instrucciones o reglas precisas y no ambiguas que, aplicadas de manera lógica, permiten resolver un problema, realizar un cálculo, procesar datos o ejecutar diversas tareas.​ Partiendo de un estado inicial y una entrada determinada, la aplicación de los pasos sucesivos de un algoritmo conduce a un estado final que proporciona una solución al problema planteado. El estudio de los algoritmos constituye el objeto central de la algoritmia.​ En la vida cotidiana, se emplean algoritmos frecuentemente para resolver problemas determinados. Algunos ejemplos son los manuales de usuario, que muestran algoritmos para usar un aparato, o las instrucciones que recibe un trabajador de su patrón.",
+      "fuente": "https://es.wikipedia.org/wiki/Algoritmo",
+      "revision": 176161986
+    },
+    {
+      "tema": "Estructura de datos",
+      "area": "programación",
+      "texto": "En ciencias de la computación, una estructura de datos​ es una forma particular de organizar información en un computador para que pueda ser utilizada de manera eficiente.​​​ Diferentes tipos de estructuras de datos son adecuados para diferentes tipos de aplicaciones, y algunos son altamente especializados para tareas específicas.​ Las estructuras de datos son medios para manejar miles de grandes cantidades de información de manera eficiente para usos tales como grandes bases de datos y servicios de indización de Internet. Por lo general, las estructuras de datos eficientes son clave para diseñar algoritmos eficientes. Algunos métodos formales de diseño de lenguajes de programación destacan las estructuras de datos, en lugar de los algoritmos, como el factor clave de organización en el diseño de software.",
+      "fuente": "https://es.wikipedia.org/wiki/Estructura_de_datos",
+      "revision": 176262880
+    },
+    {
+      "tema": "Expresión regular",
+      "area": "programación",
+      "texto": "En cómputo teórico y teoría de lenguajes formales, una expresión regular o expresión racional ​​ (también son conocidas como regex o regexp,​ por su contracción de las palabras inglesas regular expression) es una secuencia de caracteres que conforma un patrón de búsqueda. Se utilizan principalmente para la búsqueda de patrones de cadenas de caracteres u operaciones de sustituciones. Las expresiones regulares son patrones utilizados para encontrar una determinada combinación de caracteres dentro de una cadena de texto.",
+      "fuente": "https://es.wikipedia.org/wiki/Expresi%C3%B3n_regular",
+      "revision": 174606996
+    },
+    {
+      "tema": "Recursión (ciencias de computación)",
+      "area": "programación",
+      "texto": "Para un tratamiento más general de los fenómenos recursivos, ver el artículo de Recursión. Recursión es, en ciencias de la computación, una forma de atajar y solventar problemas. De hecho, recursión es una de las ideas centrales de ciencia de computación.​ Resolver un problema mediante recursión significa que la solución depende de las soluciones de pequeñas instancias del mismo problema.​ La mayoría de los lenguajes de programación dan soporte a la recursión permitiendo a una función llamarse a sí misma desde el texto del programa.",
+      "fuente": "https://es.wikipedia.org/wiki/Recursi%C3%B3n_(ciencias_de_computaci%C3%B3n)",
+      "revision": 176329498
+    },
+    {
+      "tema": "Tabla hash",
+      "area": "programación",
+      "texto": "Una tabla hash, matriz asociativa, hashing, mapa hash, tabla de dispersión o tabla fragmentada es una estructura de datos que implementa el tipo de dato abstracto llamado diccionario (tipo de dato abstracto). Esta asocia llaves o claves con valores.​ La operación principal que soporta de manera eficiente es la búsqueda: permite el acceso a los elementos (teléfono y dirección, por ejemplo) almacenados a partir de una clave generada (usando el nombre o número de cuenta, por ejemplo). Funciona transformando la clave con una función hash en un hash, un número que identifica la posición (casilla o cubeta) donde la tabla hash localiza el valor deseado.​ Las tablas hash se suelen implementar sobre vectores de una dimensión, aunque se pueden hacer implementaciones multi-dimensionales basadas en varias claves.",
+      "fuente": "https://es.wikipedia.org/wiki/Tabla_hash",
+      "revision": 176249481
+    },
+    {
+      "tema": "Control de versiones",
+      "area": "programación",
+      "texto": "Se llama control de versiones a la gestión de los diversos cambios que se realizan sobre los elementos de algún producto o una configuración del mismo. Una versión, revisión o edición de un producto, es el estado en el que se encuentra el mismo en un momento dado de su desarrollo o modificación. En 1968, el sistema NLS (oN-Line System) presentado en «la madre de todas las demos», desarrollado por Douglas Engelbart, introdujo mecanismos tempranos de gestión de documentos digitales, incluyendo el registro y modificación estructurada de cambios, considerados antecedentes directos de los sistemas modernos de control de versiones.​ Aunque un sistema de control de versiones puede realizarse de forma manual, es muy aconsejable disponer de herramientas que faciliten esta gestión dando lugar a los llamados sistemas de control de versiones o VCS (del inglés Version Control System).",
+      "fuente": "https://es.wikipedia.org/wiki/Control_de_versiones",
+      "revision": 172710406
+    },
+    {
+      "tema": "Iterador",
+      "area": "programación",
+      "texto": "En programación de computadoras, un iterador se refiere al objeto que permite al programador recorrer un contenedor, (una colección de elementos) particularmente listas.​ ​ ​ Varios tipos de iteradores se suministran frecuentemente a través de una interfaz del contenedor. La interfaz y la semántica de un determinado iterador suelen ser fijas. Un iterador sigue una ruta y da acceso a elementos de datos del contenedor, pero no realiza iteración (es decir, no tiene total libertad, como sugiere su terminología).",
+      "fuente": "https://es.wikipedia.org/wiki/Iterador",
+      "revision": 173216572
+    },
+    {
+      "tema": "Fermentación",
+      "area": "vida cotidiana",
+      "texto": "La fermentación o metabolismo fermentativo es un proceso catabólico de oxidación incompleta, que no requiere oxígeno, y cuyo producto final es un compuesto orgánico.​ Es propio del metabolismo de muchos microorganismos y según los productos finales, existen diversos tipos de fermentación. La ciencia que estudia la fermentación es la cimología. Fue descubierta por Louis Pasteur, quien la describió como «la vie sans l'air» (la vida sin el aire).",
+      "fuente": "https://es.wikipedia.org/wiki/Fermentaci%C3%B3n",
+      "revision": 175150869
+    },
+    {
+      "tema": "Humedad relativa",
+      "area": "vida cotidiana",
+      "texto": "La humedad relativa (RH) es la relación entre la presión parcial del vapor de agua y la presión de vapor de equilibrio del agua a una temperatura dada. La humedad relativa depende de la temperatura y la presión del sistema de interés. La misma cantidad de vapor de agua produce una mayor humedad relativa en el aire frío que en el aire caliente.",
+      "fuente": "https://es.wikipedia.org/wiki/Humedad_relativa",
+      "revision": 166137445
+    },
+    {
+      "tema": "Cooperativa",
+      "area": "vida cotidiana",
+      "texto": "Una cooperativa es una asociación autónoma de personas unidas voluntariamente para formar una organización democrática cuya administración y gestión debe llevarse a cabo de la forma que acuerden los socios, generalmente en el contexto de la economía de mercado o la economía mixta, aunque las cooperativas se han dado también como parte complementaria de la economía planificada. Su intención es hacer frente a las necesidades y aspiraciones económicas, sociales y culturales comunes a todos los socios mediante una empresa. La diversidad de necesidades y aspiraciones (trabajo, consumo, comercialización conjunta, enseñanza, crédito, etc.) de los socios, que conforman el objeto social o actividad corporativizada de estas empresas, define una tipología muy variada de cooperativas.",
+      "fuente": "https://es.wikipedia.org/wiki/Cooperativa",
+      "revision": 175516632
+    },
+    {
+      "tema": "Aislamiento térmico",
+      "area": "vida cotidiana",
+      "texto": "Aislamiento térmico es el conjunto de materiales y técnicas de instalación que se aplican en los elementos constructivos que separan un espacio climatizado del exterior o de otros espacios para reducir la transmisión de calor entre ellos. Asimismo se utiliza para reducir la transmisión de calor desde conducciones que transportan fluidos a distinta temperatura de la ambiente. También se aplica a la acción y efecto de aislar térmicamente.",
+      "fuente": "https://es.wikipedia.org/wiki/Aislamiento_t%C3%A9rmico",
+      "revision": 175932419
+    },
+    {
+      "tema": "Extintor",
+      "area": "vida cotidiana",
+      "texto": "Un extintor de incendios, extinguidor de fuego o matafuego (Argentina, Bolivia y Paraguay) es un equipo que sirve para diferentes clases de fuego. Consiste en un recipiente metálico (bombona o cilindro de acero) que contiene un agente extintor de incendios a presión, de modo que al abrir una válvula el agente sale por una boquilla (a veces situada en el extremo de una manguera) que se debe dirigir a la base del fuego. Generalmente tienen un dispositivo para prevención de activado accidental, el cual debe ser deshabilitado antes de emplear el artefacto.",
+      "fuente": "https://es.wikipedia.org/wiki/Extintor",
+      "revision": 175365490
+    },
+    {
+      "tema": "Interés compuesto",
+      "area": "vida cotidiana",
+      "texto": "El 'interés compuesto es un mecanismo de cálculo de intereses en el que los rendimientos generados en cada período se añaden al capital inicial y pasan a producir, a su vez, nuevos intereses en los períodos siguientes. Permite la capitalización de intereses de forma periódica (día a día, mes a mes, año a año, etc.), de modo que tanto el capital como los intereses acumulados se van incrementando con cada período de liquidación. A diferencia del interés simple, en el interés compuesto los intereses no se retiran al final de cada período, sino que se reinvierten e incorporan al capital, lo que aumenta el importe total acumulado a lo largo del tiempo.",
+      "fuente": "https://es.wikipedia.org/wiki/Inter%C3%A9s_compuesto",
+      "revision": 175256906
+    },
+    {
+      "tema": "Etiqueta de información nutricional",
+      "area": "vida cotidiana",
+      "texto": "La etiqueta de información nutricional o de valor nutricional, o simplemente etiqueta nutricional es una etiqueta requerida en la mayoría de los alimentos envasados en muchos países, que muestra qué nutrientes contiene y en qué cantidad. Las etiquetas generalmente se basan en estándares oficiales, y la mayoría de estados también publican pautas genéricas nutricionales. En algunos casos, estas guías se basan en objetivos dietéticos para diversos nutrientes que las etiquetas de alimentos especifican.",
+      "fuente": "https://es.wikipedia.org/wiki/Etiqueta_de_informaci%C3%B3n_nutricional",
+      "revision": 176266101
+    }
+  ]
+}

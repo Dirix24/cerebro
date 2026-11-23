@@ -53,5 +53,38 @@ def main():
     print(json.dumps(informe, indent=2, ensure_ascii=False))
 
 
+def evaluar_supervisado():
+    """Control y candidato contrastivo sin escribir checkpoints."""
+    import numpy as np
+
+    from core import alumno_supervisado as alumno
+
+    contrastes = (
+        ("indícame la hora de hoy", "hora"), ("dame la hora de este equipo", "hora"),
+        ("dame la fecha exacta", "fecha"), ("indica la fecha del sistema", "fecha"),
+        ("consulta la hora en el museo mañana", "abstener"), ("no necesito saber la fecha", "abstener"),
+        ("necesito la hora de mi turno de trabajo", "abstener"), ("fecha de vencimiento del pasaporte", "abstener"),
+    )
+    assert all(alumno.verificar(frase) == etiqueta for frase, etiqueta in contrastes)
+    reserva = {alumno.normalizar(frase) for frase, _ in alumno.RESERVA}
+    assert not reserva.intersection(alumno.normalizar(frase) for frase, _ in contrastes)
+    salidas = []
+    for semilla in (7, 29, 103):
+        inicio = process_time()
+        inicial = np.random.default_rng(semilla).normal(0, .005, (alumno.DIM + 3, len(alumno.ETIQUETAS)))
+        control = alumno.evaluar(alumno._ajustar(alumno.SEMILLAS, inicial))
+        candidato = alumno.evaluar(alumno._ajustar((*alumno.SEMILLAS, *contrastes), inicial))
+        salidas.append({"semilla": semilla, "control": control, "candidato": candidato,
+                        "segundos_cpu": process_time() - inicio})
+    print(json.dumps(salidas, ensure_ascii=False, indent=2))
+
+
 if __name__ == "__main__":
-    main()
+    from argparse import ArgumentParser
+
+    cli = ArgumentParser(description=__doc__)
+    cli.add_argument("--supervisado", action="store_true", help="Compara el clasificador de intenciones.")
+    if cli.parse_args().supervisado:
+        evaluar_supervisado()
+    else:
+        main()

@@ -1063,11 +1063,17 @@ class Nucleo:
                     DEFINICIONES_BASE, concepto_definicion, responder_definicion, respuesta_clara,
                 )
 
+                from core.referencias_locales import buscar as buscar_referencia
+
                 pregunta_busqueda, aclaracion = preparar(pregunta)
                 if pregunta.lower().startswith("cerebro"):
                     sin_mencion = re.sub(r"^cerebro[, ]+", "", pregunta, flags=re.I)
                     if sin_mencion != pregunta:
                         pregunta_busqueda, aclaracion = preparar(sin_mencion)
+                if aclaracion and intencion.startswith("ques "):
+                    posible_tema = intencion.removeprefix("ques ")
+                    if buscar_referencia(posible_tema):
+                        pregunta_busqueda, aclaracion = f"¿Qué es {posible_tema}?", None
                 if intencion == "quien eres":
                     respuesta = "Soy CEREBRO, un asistente local para conversar, usar herramientas y coordinar especialistas."
                     origen = "identidad_local"
@@ -1107,6 +1113,9 @@ class Nucleo:
                     elif local := responder_definicion(consulta, buscar_hechos=ficha):
                         respuesta = respuesta_clara(local[0]) + "\nFuente: " + local[1]
                         origen = "conocimiento_local"
+                    elif incluida := buscar_referencia(concepto_definicion(consulta) or "", pregunta=pregunta_busqueda):
+                        respuesta = incluida[0] + "\nFuente: " + incluida[1]
+                        origen = "referencia_local"
                     else:
                         aviso = "No tengo una respuesta fiable con mis datos locales."
                         concepto_publico = tema_publico(consulta_factual(pregunta_busqueda) or "")
@@ -1131,6 +1140,17 @@ class Nucleo:
                             origen = "evidencia_insuficiente"
                             self._diagnostico_turno(clave_dialogo, "No encontré una referencia local o pública aplicable a la pregunta.")
                     contexto = self._contexto_modelo(clave_dialogo)
+                    self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
+                elif (pide_seguimiento(pregunta_busqueda)
+                      and re.match(r"^(?:resumelo|resumemelo|explicalo|explicamelo)\b", intencion)
+                      and self.agente.tiene_permisos("READ")
+                      and (contexto := self._contexto_modelo(clave_dialogo))
+                      and (anterior := contexto[-1][1].rpartition("\nFuente: "))[1]
+                      and anterior[2].startswith("https://es.wikipedia.org/w/index.php?oldid=")):
+                    pasaje = anterior[0].split(". ", 1)[0].rstrip(". ")
+                    # Mantiene las palabras de la fuente y reduce la extensión del pasaje.
+                    respuesta = pasaje + ".\nFuente: " + anterior[2]
+                    origen = "referencia_local"
                     self._guardar_contexto_modelo(clave_dialogo, contexto, pregunta_busqueda, respuesta)
                 elif (2 <= len(pregunta_busqueda) <= 700 and (pide_explicacion(pregunta_busqueda)
                            or pide_seguimiento(pregunta_busqueda))

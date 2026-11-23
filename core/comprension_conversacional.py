@@ -49,7 +49,7 @@ def pide_dato(pregunta):
     if consulta_factual(pregunta):
         return True
     texto = normalizar(pregunta)
-    return bool(re.match(r"^(?:que (?:es|son|hace|significa|paso|ocurrio)|"
+    return bool(re.match(r"^(?:que (?:es|son|fue|fueron|era|eran|hace|significa|paso|ocurrio)|"
                          r"quien(?:es)?|cuando|donde|cual(?:es)?|cuanto(?:s|a|as)?|"
                          r"como (?:funciona|se|ocurrio)|por que|para que sirve|explicame|explica)\b", texto))
 
@@ -84,7 +84,7 @@ def consulta_factual(pregunta):
     """Separa el tema de la forma conversacional sin borrar sus calificadores."""
     texto = normalizar(pregunta)
     tema = re.fullmatch(
-        r"(?:(?:dime |me puedes decir |sabes )?(?:que (?:es|son|significa)|"
+        r"(?:(?:dime |me puedes decir |sabes )?(?:que (?:es|son|fue|fueron|era|eran|significa)|"
         r"como funciona|para que sirve)|(?:me puedes )?explica(?:r|me)?) (.{2,110})",
         texto,
     )

@@ -213,6 +213,8 @@ class Experiencias:
 
 
 def sintetizar(resultados):
+    from core.investigador_local import diferencias_numericas
+
     partes = []
     for resultado in resultados:
         region = resultado["especialista"]
@@ -224,9 +226,14 @@ def sintetizar(resultados):
         if simulacion := resultado.get("simulacion"):
             detalles.append(f"Simulación, p50 {simulacion['p50_horas']} h y p90 {simulacion['p90_horas']} h. "
                             + simulacion["supuestos"])
+        fuentes = []
         for evidencia in resultado.get("evidencia", []):
             if evidencia["tipo"] == "fuente":
                 detalles.append(f"Fuente: {evidencia['titulo']} · {evidencia['url']}")
+                fuentes.append(evidencia)
+                cita = evidencia.get("extracto")
+                if isinstance(cita, str) and cita.strip():
+                    detalles.append("Extracto: «" + " ".join(cita.split())[:300] + "».")
             elif evidencia["tipo"] == "analisis":
                 errores = evidencia["errores"]
                 detalles.append(f"{evidencia['path']}: {evidencia['language']}, "
@@ -236,6 +243,9 @@ def sintetizar(resultados):
             elif evidencia["tipo"] in {"prueba", "prueba_registrada"}:
                 nombre = "Prueba registrada" if evidencia["tipo"] == "prueba_registrada" else "Prueba ejecutada"
                 detalles.append(f"{nombre}: {evidencia['state']} (código {evidencia['returncode']}).")
+        if discrepancia := diferencias_numericas(fuentes):
+            detalles.append("Posible discrepancia numérica entre " + " y ".join(discrepancia)
+                            + ". Comprueba que se refieran a las mismas condiciones.")
         detalles.extend(resultado.get("avisos", []))
         if resultado.get("sesion"):
             detalles.append("Sesión de revisión en CAZEL Studio: " + resultado["sesion"] + ".")
