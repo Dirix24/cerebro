@@ -28,6 +28,13 @@ def _modelos_ollama(puerto):
         conexion.close()
 
 
+def _adaptador_vecino(nombre, modulo):
+    base = Path(__file__).resolve().parents[2]
+    carpeta = {"CAZEL": "CAZEL_IA", "DARAS": "Daras-IA"}[nombre]
+    ruta = base / carpeta
+    return ruta if (ruta / modulo).is_file() else None
+
+
 def descubrir(profesor):
     try:
         puerto = int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434"))
@@ -53,6 +60,8 @@ def descubrir(profesor):
         raiz = os.environ.get("CEREBRO_" + nombre + "_RAIZ")
         presente = bool(raiz and (Path(raiz).expanduser() / modulo).is_file())
         estado = "adaptador v1 presente" if presente else "falta configurar el adaptador v1"
+        if not raiz and (vecino := _adaptador_vecino(nombre, modulo)):
+            estado = f"adaptador v1 detectado en {vecino}; requiere configuración"
         if nombre == "CAZEL" and presente and not os.environ.get("CEREBRO_CAZEL_PROYECTO"):
             estado += "; falta seleccionar el proyecto"
         resultado.append({"nombre": nombre, "estado": estado, "modelos": [], "capacidades": capacidad})

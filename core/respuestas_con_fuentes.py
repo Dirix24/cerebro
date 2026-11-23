@@ -6,6 +6,13 @@ import re
 import unicodedata
 
 ALIAS = {"ia": "inteligencia artificial", "i a": "inteligencia artificial"}
+DEFINICIONES_BASE = {
+    "portatil": "Un portátil es un ordenador compacto que puedes transportar. "
+                 "Normalmente incluye una batería, una pantalla y un teclado.",
+    "fotosintesis": "La fotosíntesis es el proceso por el que las plantas usan luz, agua y dióxido de carbono "
+                     "para producir azúcares y liberar oxígeno.",
+}
+
 VACIAS = {"que", "es", "son", "un", "una", "el", "la", "los", "las", "de", "del", "en", "por"}
 
 
@@ -60,6 +67,8 @@ def responder_definicion(pregunta, buscador=None, buscar_hechos=None):
         respuesta = _extraer_respuesta(texto, concepto)
         if respuesta:
             return respuesta, origen
+    if concepto in DEFINICIONES_BASE:
+        return DEFINICIONES_BASE[concepto], "Glosario local de Cerebro"
     return None
 
 

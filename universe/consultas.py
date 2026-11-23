@@ -333,7 +333,13 @@ def alternativa_publica(nucleo, pregunta, respuesta):
         return respuesta
     if re.match(r"¿?\s*cu[aá]l es la capital de", pregunta, re.I):
         tema = "capital de " + tema
-    return nucleo.chat.procesar(f"/internet {tema}")[0]
+    resultado = nucleo.chat.procesar(f"/internet {tema}")[0]
+    cuerpo, marca, fuente = resultado.rpartition("\n\nFuente: ")
+    if not marca:
+        return resultado
+    from core.respuestas_con_fuentes import respuesta_clara
+
+    return respuesta_clara(cuerpo.split("\n\n", 1)[-1]) + "\nFuente: " + fuente
 
 
 def _leer_texto(ruta):

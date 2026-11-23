@@ -917,6 +917,42 @@ def estado_servicio():
 
 def main():
     modo = sys.argv[1] if len(sys.argv) > 1 else "terminal"
+    if modo == "configurar-modelo":
+        import config
+        from core.configuracion_modelo_local import configurar
+        from core.motores_instalados import _modelos_ollama
+
+        try:
+            puerto = int(os.environ.get("CEREBRO_OLLAMA_PUERTO", "11434"))
+            if not 1024 <= puerto <= 65535:
+                raise ValueError("Puerto de Ollama inválido.")
+            if len(sys.argv) == 2:
+                modelos = _modelos_ollama(puerto)
+                if not modelos:
+                    print("Ollama no devolvió modelos locales. Inicia Ollama y prepara un modelo compatible.")
+                    return 1
+                for indice, nombre in enumerate(modelos, 1):
+                    print(f"{indice}. {nombre}")
+                if not sys.stdin.isatty():
+                    print("Uso: cerebro configurar-modelo NOMBRE")
+                    return 0
+                eleccion = input("Elige un número de la lista o pulsa Enter para salir: ").strip()
+                if not eleccion:
+                    return 0
+                if not eleccion.isdecimal() or not 1 <= int(eleccion) <= len(modelos):
+                    raise ValueError("Elige un número de la lista.")
+                nombre = modelos[int(eleccion) - 1]
+            elif len(sys.argv) == 3:
+                nombre = sys.argv[2]
+            else:
+                raise ValueError("Uso: cerebro configurar-modelo NOMBRE")
+            respuesta = configurar(config.raiz_datos(), nombre, puerto)
+        except (OSError, RuntimeError, ValueError, EOFError) as error:
+            print(f"No guardé el modelo: {error}")
+            return 1
+        print("Inferencia de prueba: " + respuesta)
+        print("Modelo guardado. Reinicia Cerebro para usarlo.")
+        return 0
     if modo == "estado":
         return estado_servicio()
     if modo == "autoinicio" and len(sys.argv) == 3 and sys.argv[2] in {"activar", "desactivar"}:

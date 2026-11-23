@@ -910,7 +910,7 @@ class Nucleo:
             respuesta = self.chat.responder_modelo(texto)
             origen = "alumno_neuronal"
         else:
-            from universe.consultas import alternativa_publica, consulta_directa, tema_publico
+            from universe.consultas import PRIVADO, alternativa_publica, consulta_directa, tema_publico
 
             explicacion = re.fullmatch(r"(?:explicame|explica) (.+)", intencion) if not comando else None
             tema = tema_publico(explicacion[1]) if explicacion else None
@@ -918,8 +918,37 @@ class Nucleo:
             if respuesta is not None and re.match(
                     r"(?:busca|encuentra)(?:me)?\s+(?:(?:un|el|mi)\s+)?documento\b", pregunta, re.I):
                 return {"respuesta": respuesta, "compartir_temporal": True}
+            pregunta_busqueda = pregunta
+            modelo_intentado = False
+            if respuesta is None and not comando:
+                from core.comprension_conversacional import pide_explicacion, preparar
+
+                pregunta_busqueda, aclaracion = preparar(pregunta)
+                if aclaracion:
+                    respuesta = aclaracion
+                    origen = "aclaracion"
+                elif (2 <= len(pregunta_busqueda) <= 700 and pide_explicacion(pregunta_busqueda)
+                      and not PRIVADO.search(pregunta_busqueda)
+                      and self.profesor.configurado and self.agente.tiene_permisos("READ")
+                      and hasattr(self.profesor, "conversar")):
+                    modelo_intentado = True
+                    clave_dialogo = (cliente, self.conversaciones.activa())
+                    with self.cerrojo:
+                        contexto = self.dialogos_profesor.get(clave_dialogo, ())
+                    try:
+                        explicada = self.profesor.conversar(pregunta_busqueda, contexto)
+                    except (RuntimeError, ValueError):
+                        pass
+                    else:
+                        with self.cerrojo:
+                            self.dialogos_profesor[clave_dialogo] = (*contexto, (pregunta, explicada))[-6:]
+                            self.dialogos_profesor.move_to_end(clave_dialogo)
+                            if len(self.dialogos_profesor) > 64:
+                                self.dialogos_profesor.popitem(last=False)
+                        respuesta = "Profesor local: " + explicada
+                        origen = "profesor_local"
             if respuesta is None:
-                respuesta, _ = self.chat.procesar(pregunta)
+                respuesta, _ = self.chat.procesar(pregunta_busqueda)
                 memoria_solicitada = comando == "/recuerdo" or re.fullmatch(
                     r"que recuerdas(?: (?:sobre|de) .+)?", intencion)
                 if memoria_solicitada:
@@ -940,10 +969,10 @@ class Nucleo:
                 explicita = bool(re.match(r"^(?:cuentame |conversa conmigo sobre |dialoga conmigo sobre )", intencion))
                 evidencia_publica = None
                 if not comando:
-                    alternativa = alternativa_publica(self, pregunta, respuesta)
+                    alternativa = alternativa_publica(self, pregunta_busqueda, respuesta)
                     if alternativa != respuesta:
                         evidencia_publica = alternativa
-                if (falta_respuesta or explicita) and self.profesor.configurado and (tema or conversacion):
+                if not modelo_intentado and (falta_respuesta or explicita) and self.profesor.configurado and (tema or conversacion):
                     self.exigir_permisos("READ")
                     publicar("razonando", "profesor_local")
                     clave_dialogo = (cliente, self.conversaciones.activa())
@@ -959,7 +988,7 @@ class Nucleo:
                             explicada = self.profesor.conversar(pregunta, contexto)
                         with self.cerrojo:
                             previos = self.dialogos_profesor.get(clave_dialogo, ())
-                            self.dialogos_profesor[clave_dialogo] = (*previos, (pregunta, explicada))[-2:]
+                            self.dialogos_profesor[clave_dialogo] = (*previos, (pregunta, explicada))[-6:]
                             self.dialogos_profesor.move_to_end(clave_dialogo)
                             if len(self.dialogos_profesor) > 64:
                                 self.dialogos_profesor.popitem(last=False)
@@ -1107,6 +1136,17 @@ class Nucleo:
         self.exigir_permisos("READ")
         self.memoria.cargar_memoria()
         nodos = []
+        if self.profesor.configurado:
+            nombre = getattr(self.profesor, "ollama", None)
+            nodos.append({"id": "motor:profesor-local", "tipo": "razonamiento", "grupo": "PROFESOR",
+                          "titulo": "Motor generativo local configurado",
+                          "detalle": nombre or "Servidor local compatible con llama.cpp.",
+                          "origen": "Configuración del núcleo"})
+        if self.chat.modelo is not None:
+            nodos.append({"id": "motor:cerebro-propio", "tipo": "aprendizaje", "grupo": "CEREBRO",
+                          "titulo": "Modelo neuronal propio cargado",
+                          "detalle": "Disponible mediante /modelo y las evaluaciones locales.",
+                          "origen": "Checkpoint de Cerebro"})
         from core.alumno_supervisado import cargar_activo
 
         _, activo = cargar_activo(self.raiz_alumno)

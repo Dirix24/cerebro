@@ -748,3 +748,31 @@ de Cerebro prepara los paquetes Python dentro del entorno virtual.
   Dirix24/cerebro». También puedes pedir ramas, issues o pull requests.
 
 Ver [alcance y validación](docs/STUDIO_CONTEXTO_UNIVERSE.md).
+
+### Activar la conversación con un modelo local
+
+Si Ollama ya está iniciado y tiene un modelo descargado, ejecuta
+`cerebro configurar-modelo` y elige su número. Cerebro le pide
+un saludo de prueba a través de loopback y guarda la selección
+solo si recibe una respuesta. Reinicia Cerebro una vez para
+aplicarla. También puedes ejecutar
+`cerebro configurar-modelo NOMBRE`. El selector no descarga
+pesos. La configuración explícita de Ollama o llama.cpp mediante
+las variables ya documentadas sigue teniendo prioridad.
+
+Las preguntas informativas reconocidas pasan primero al modelo
+configurado. Los permisos, operaciones exactas y acciones de
+escritorio siguen pasando por las herramientas existentes.
+El contexto del modelo conserva hasta seis pares recientes por
+cliente y conversación. «Que esportatil» se interpreta como una
+definición y «ques tayo» pide aclaración. Si la definición usa
+el respaldo de consulta pública, se muestra un extracto corto
+junto a su fuente.
+
+Universe distingue el checkpoint propio cargado del motor
+generativo configurado. «Detecta inteligencias instaladas» también
+puede mostrar un adaptador v1 de CAZEL o DARAS en un repositorio
+hermano. Para usar esos adaptadores sigue siendo necesario
+configurar y autorizar sus rutas de trabajo.
+
+Consulta [pruebas y estados de los modelos](docs/CONVERSACION_MODELO_LOCAL.md).
